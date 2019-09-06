@@ -8,9 +8,11 @@ README = (HERE / "README.md").read_text()
 
 requirements = ["tqdm", "python_binance"]
 
+packages = setuptools.find_packages()
+print("packages:", packages)
 setuptools.setup(
     name="deep_orderbook",
-    version="1.0.0",
+    version="0.0.1",
     description="Transforms orders books in temporally and spatially local-correlated images",
     long_description=README,
     long_description_content_type="text/markdown",
@@ -23,7 +25,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7",
     ],
-    packages=setuptools.find_packages(),
+    packages=packages,
     include_package_data=True,
     install_requires=requirements,
     entry_points={"console_scripts": ["deepbook=deep_orderbook.__main__:main"]},
