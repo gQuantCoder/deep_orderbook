@@ -242,6 +242,28 @@ def sampleImages(books, prices, trades):
     plt.show()
     
 
+def build_time_level_trade(books, prices, filename='data/timeUpDn.npy'):
+    pricestep = 0.000001
+    sidesteps = books.shape[1] // 2
+    FUTURE = 1200*10
+    timeUpDn = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
+    #########################################################
+                            #######
+    for i in tqdm(range(prices.shape[0])):
+                            #######
+        #########################################################
+        timeupdn = []
+        for j in range(sidesteps):
+            thresh = j * pricestep
+            p, e, b, a, t = prices[i]
+            waitUp = prices[i:i+FUTURE, 2] < a + thresh
+            waitDn = prices[i:i+FUTURE, 3] > b - thresh
+            timeUp = np.argmin(waitUp) or FUTURE*10
+            timeDn = np.argmin(waitDn) or FUTURE*10
+            timeupdn.insert(0, [timeDn])
+            timeupdn.append([timeUp])
+        timeUpDn[i] = timeupdn
+    np.save(filename, timeUpDn.astype(np.float32))
 
 
 def multireplayL2(pairs, emaNew=1/64):
