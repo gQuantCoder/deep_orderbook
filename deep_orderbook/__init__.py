@@ -1,2 +1,2 @@
-from . import replay
+from . import replayer
 from . import recorder
