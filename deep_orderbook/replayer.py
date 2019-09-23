@@ -8,8 +8,7 @@ import pandas as pd
 import numpy as np
 import asyncio
 import matplotlib.pyplot as plt
-from tqdm import tqdm as tqdm
-from tqdm import tqdm_notebook as tqdm
+from tqdm.auto import tqdm
 
 from pylab import rcParams
 rcParams['figure.figsize'] = 20, 4
@@ -57,13 +56,12 @@ class Replayer:
 
 
     @staticmethod
-    def json2df(js, mult=1000):
+    def json2df(js):
         try:
             df = pd.DataFrame(js, columns=['price', 'size']).astype(np.float64).set_index('price')
         except:
             df = pd.DataFrame(js, columns=['price', 'size', 'none']).drop(['none'], axis=1).astype(np.float64).set_index('price')
-        #df.index = (df.index * mult).astype(int)
-    #    assert((df.index > 4).all())
+        # assert((df.index > 4).all())
         return df
 
     @staticmethod
@@ -71,7 +69,7 @@ class Replayer:
         df = df.append(upd_df)
         df = df[~df.index.duplicated(keep='last')]
         df = df[(df!=0).any(axis=1)]
-    #    assert((df.index > 4).all())
+        # assert((df.index > 4).all())
         return df.sort_index(ascending=is_ask)
 
     @staticmethod
@@ -86,7 +84,7 @@ class Replayer:
     def buildL2(snapshot_file):
         snap = json.load(open(snapshot_file))
         lastUpdateId = snap['lastUpdateId']
-        #print(snapshot_file, "lastUpdateId:", lastUpdateId)
+        # print(snapshot_file, "lastUpdateId:", lastUpdateId)
         bids = Replayer.json2df(snap['bids'])
         asks = Replayer.json2df(snap['asks'])
         return bids, asks, lastUpdateId
@@ -104,24 +102,12 @@ class Replayer:
 
         bids, asks, lastUpdateId = self.buildL2(snapshot_file)
 
-    #    textsnap = Label("Hello")
-    #    textupds = Label("World")
-        
+
         emaPrice = None
         file_updates = tqdm(self.updates(pair))
         for fupdate in file_updates:
-    #        cache = fupdate.replace('update.json', 'cache.h5')
-    #        with pd.HDFStore(cache) as store:
-    #            try:
-    #                #for (path, subgroups, subkeys) in tqdm(store.walk(), leave=False):
-    #                #    if path:
-    #                #        yield store.get(path+'/b'), store.get(path+'/a'), store.get(path+'/p'), store.get(path+'/t')
-    #                pass
-    #            except:
-    #                pass
                 ftrades = fupdate.replace('update', 'trades')
-                file_updates.set_description(fupdate.replace(self.data_folder, ''))# + " " + ftrades.replace(self.data_folder, ''))
-    #            textsnap.value = fupdate+" & "+ftrades
+                file_updates.set_description(fupdate.replace(self.data_folder, ''))
                 alltrdf = self.tradesframe(ftrades)
                 js = json.load(open(fupdate))
                 allupdates = tqdm(js, leave=False)
@@ -158,7 +144,6 @@ class Replayer:
                     else:
                         trdf = trdf.loc[[prev_px]]
                     emaPrice = px * emaNew + (emaPrice if emaPrice is not None else px) * (1-emaNew)
-    #                textupds.value = f"{datetime.datetime.fromtimestamp(ts)}  = {ts},   u={u}<{next_snap}  px={px}"
                     assert ask >= bid, f"{bid} > {ask}\n{ub}\n{ua}\n{bids}\n{asks}"
                     oneSec = bids.cumsum(), \
                             asks.cumsum(), \
@@ -179,7 +164,6 @@ class Replayer:
     NUM_LEVEL_BINS = 128
     SPACING = np.cumsum(0+np.linspace(0, NUM_LEVEL_BINS, NUM_LEVEL_BINS, endpoint=False))# * 4
     SPACING = SPACING / SPACING[-1]
-    #print(SPACING)
     @staticmethod
     def bin_books(dfb, dfa, tr, ref_price, zoom_frac=FRAC_LEVELS, spacing=SPACING):
         b_idx = np.round(pd.Index(ref_price * (1-spacing*zoom_frac)), 7)
@@ -244,7 +228,7 @@ class Replayer:
         #im[im == 0] = 3
         plt.imshow(im.T, cmap='nipy_spectral', origin="lower")
         plt.show()
-        im0 = books[:, :, 0].T/10#20
+        im0 = books[:, :, 0].T/10
         im1 = trades[:, :, 0].T/1
         im2 = trades[:, :, 2].T/1
         im3 = np.stack([im0, im1, im2], -1)+0.5
@@ -292,7 +276,7 @@ class Replayer:
                     try:
                         nexs[pair] = next(gens[pair])
                     except StopIteration:
-                        return#break
+                        return # break
             yield curs
             tall += 1
 
