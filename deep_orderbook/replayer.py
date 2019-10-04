@@ -27,15 +27,20 @@ class Replayer:
     def snapshots(self, pair):
         return sorted(glob.glob(f'{self.data_folder}/{pair}/2019*snapshot.json'))
 
-
     def updates(self, pair):
         BTs = sorted(glob.glob(f'{self.data_folder}/{pair}/2019*update.json'))
         return BTs
 
-
     def trades_file(self, pair):
         BTs = sorted(glob.glob(f'{self.data_folder}/{pair}/2019*trades.json'))
         return BTs
+
+    def training_file(self, pair):
+        BTs = sorted(glob.glob(f'{self.data_folder}/training/*{pair}*time2level.npy'))
+        for fn_ts in BTs:
+            fn_bs = fn_ts.replace('time2level', 'bs')
+            fn_ps = fn_ts.replace('time2level', 'ps')
+            yield (fn_bs, fn_ps, fn_ts)
 
     @staticmethod
     def sample(of_file):
@@ -286,9 +291,9 @@ class Replayer:
         FUTURE = 1200*10
         timeUpDn = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
         #########################################################
-                                #######
+                                    #######
         for i in tqdm(range(prices.shape[0])):
-                                #######
+                                    #######
             #########################################################
             timeupdn = []
             for j in range(sidesteps):
