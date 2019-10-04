@@ -150,7 +150,7 @@ class Replayer:
                             pd.Series({'time': ts, 'price': px, 'emaPrice': emaPrice, 'bid': bid, 'ask': ask}), \
                             trdf
 
-                    allupdates.set_description(f"ts={ts}, E={E}, trades={len(trdf)}")
+                    allupdates.set_description(f"ts={ts}, E={E}, trades={len(trdf):02}, px={px:16.12f}")
                     # assert not prev_ts or ts == 1 + prev_ts
                     prev_ts = ts
 
@@ -235,31 +235,6 @@ class Replayer:
         print(im3.shape)
         plt.imshow(im3[:,:,:], origin="lower")
         plt.show()
-        
-
-    @staticmethod
-    def build_time_level_trade(books, prices, filename='data/timeUpDn.npy'):
-        pricestep = 0.000001
-        sidesteps = books.shape[1] // 2
-        FUTURE = 1200*10
-        timeUpDn = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
-        #########################################################
-                                #######
-        for i in tqdm(range(prices.shape[0])):
-                                #######
-            #########################################################
-            timeupdn = []
-            for j in range(sidesteps):
-                thresh = j * pricestep
-                p, e, b, a, t = prices[i]
-                waitUp = prices[i:i+FUTURE, 2] < a + thresh
-                waitDn = prices[i:i+FUTURE, 3] > b - thresh
-                timeUp = np.argmin(waitUp) or FUTURE*10
-                timeDn = np.argmin(waitDn) or FUTURE*10
-                timeupdn.insert(0, [timeDn])
-                timeupdn.append([timeUp])
-            timeUpDn[i] = timeupdn
-        np.save(filename, timeUpDn.astype(np.float32))
 
 
     def multireplayL2(self, pairs, emaNew=1/64):
@@ -305,6 +280,31 @@ class Replayer:
 
 
     @staticmethod
+    def build_time_level_trade(books, prices, filename='data/timeUpDn.npy'):
+        pricestep = 0.000001
+        sidesteps = books.shape[1] // 2
+        FUTURE = 1200*10
+        timeUpDn = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
+        #########################################################
+                                #######
+        for i in tqdm(range(prices.shape[0])):
+                                #######
+            #########################################################
+            timeupdn = []
+            for j in range(sidesteps):
+                thresh = j * pricestep
+                p, e, b, a, t = prices[i]
+                waitUp = prices[i:i+FUTURE, 2] < a + thresh
+                waitDn = prices[i:i+FUTURE, 3] > b - thresh
+                timeUp = np.argmin(waitUp) or FUTURE*10
+                timeDn = np.argmin(waitDn) or FUTURE*10
+                timeupdn.insert(0, [timeDn])
+                timeupdn.append([timeUp])
+            timeUpDn[i] = timeupdn
+        np.save(filename, timeUpDn.astype(np.float32))
+
+
+    @staticmethod
     def build(total, element):
         for market,second in element.items():
     #        print('total', total[market]['ps'][-1])
@@ -312,13 +312,26 @@ class Replayer:
             datetotal = datetime.datetime.fromtimestamp(int(total[market]['ps'][-1][-1])).date()
             dateeleme = datetime.datetime.fromtimestamp(int(element[market]['ps'][-1][-1])).date()
             newDay = datetotal < dateeleme
-            for name,arrs in second.items():
-                if newDay:
+            if not newDay:
+                for name,arrs in second.items():
+                    total[market][name] += arrs
+            else:
+                for name,arrs in second.items():
                     arrday = np.stack(total[market][name]).astype(np.float32)
                     np.save(f'data/{datetotal}-{market}-{name}.npy', arrday)
+                from multiprocessing import Process
+                thread = Process(
+                    target=Replayer.build_time_level_trade,
+                    args=(
+                        np.stack(total[market]['bs']).astype(np.float32),
+                        np.stack(total[market]['ps']).astype(np.float32),
+                        f'data/{datetotal}-{market}-time2level.npy'
+                    ))
+                thread.start()
+
+            if newDay:
+                for name,arrs in second.items():
                     total[market][name] = arrs
-                else:
-                    total[market][name] += arrs
         return total
 
 
