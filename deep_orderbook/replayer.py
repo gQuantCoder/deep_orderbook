@@ -21,18 +21,19 @@ MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
 
 
 class Replayer:
-    def __init__(self, data_folder):
+    def __init__(self, data_folder, date_regexp='2019'):
         self.data_folder = data_folder
+        self.date_regexp = date_regexp
 
     def snapshots(self, pair):
-        return sorted(glob.glob(f'{self.data_folder}/{pair}/2019*snapshot.json'))
+        return sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*snapshot.json'))
 
     def updates(self, pair):
-        BTs = sorted(glob.glob(f'{self.data_folder}/{pair}/2019*update.json'))
+        BTs = sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*update.json'))
         return BTs
 
     def trades_file(self, pair):
-        BTs = sorted(glob.glob(f'{self.data_folder}/{pair}/2019*trades.json'))
+        BTs = sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*trades.json'))
         return BTs
 
     def training_file(self, pair):
@@ -286,7 +287,7 @@ class Replayer:
 
     @staticmethod
     def build_time_level_trade(books, prices, filename='data/timeUpDn.npy'):
-        pricestep = 0.000001
+        pricestep = 0.000001 * prices[0][0] / 0.02
         sidesteps = books.shape[1] // 2
         FUTURE = 1200*10
         timeUpDn = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
@@ -294,7 +295,7 @@ class Replayer:
                                     #######
         for i in tqdm(range(prices.shape[0])):
                                     #######
-            #########################################################
+        #########################################################
             timeupdn = []
             for j in range(sidesteps):
                 thresh = j * pricestep
