@@ -37,7 +37,7 @@ class Replayer:
         return BTs
 
     def training_file(self, pair):
-        BTs = sorted(glob.glob(f'{self.data_folder}/training/*{pair}*time2level.npy'))
+        BTs = sorted(glob.glob(f'{self.data_folder}/training/{self.date_regexp}*{pair}*time2level.npy'))
         for fn_ts in BTs:
             fn_bs = fn_ts.replace('time2level', 'bs')
             fn_ps = fn_ts.replace('time2level', 'ps')
