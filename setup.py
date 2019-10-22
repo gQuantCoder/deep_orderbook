@@ -20,7 +20,7 @@ if __name__ == "__main__":
     setup(
         name=PACKAGE_NAME,
         version=VERSION,
-        description="This is a description.",
+        description="Transforms orders books in temporally and spatially local-correlated images.",
         long_description=long_description,
         long_description_content_type="text/markdown",
         url="https://github.com/gQuantCoder/deep_orderbook",
