@@ -43,6 +43,13 @@ class Replayer:
             fn_ps = fn_ts.replace('time2level', 'ps')
             yield (fn_bs, fn_ps, fn_ts)
 
+    def training_samples(self, pair):
+        for (fn_bs, fn_ps, fn_ts) in self.training_file(pair):
+            arr_books = np.load(fn_bs)
+            arr_prices = np.load(fn_ps)
+            arr_time2level = np.load(fn_ts)
+            yield arr_books, arr_prices, arr_time2level
+
     @staticmethod
     def sample(of_file):
         return json.load(open(of_file))[0]
