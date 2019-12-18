@@ -31,6 +31,7 @@ class Receiver:
 
     def on_depth(self, msg):
         symbol = msg["s"]
+#        print('no bid' if not msg['b'] else '', 'no ask' if not msg['a'] else '')
         self.nummsg[symbol] += 1
         print(', '.join([f'{s}: {self.nummsg[s]:06}' for s in self.markets]), end='\r')
 
@@ -121,31 +122,36 @@ class Writer(Receiver):
         th = 0
         prev_th = 0
 
-        for s in range(999999999):
-            t = time.time()
-            # print("t", t)
-            await asyncio.sleep(PERIOD_L2 - t % PERIOD_L2)
-            ti = int(time.time())
-            # print("ti", ti)
-            new_th = int(ti // SAVE_PERIOD) * SAVE_PERIOD
+        try:
+            for s in range(999999999):
+                t = time.time()
+                # print("t", t)
+                await asyncio.sleep(PERIOD_L2 - t % PERIOD_L2)
+                ti = int(time.time())
+                # print("ti", ti)
+                new_th = int(ti // SAVE_PERIOD) * SAVE_PERIOD
 
-            print(self.bm._conns)
+                if not self.bm.is_alive():
+                    break
 
-            if datetime.datetime.now() >= stopat:
-                # saves for next period that will be overwritten by next script
-                self.save_snapshot(0, prev_th)
-                print("\nexiting\n", "s =", s, "\n")
-                break
+                if datetime.datetime.now() >= stopat:
+                    # saves for next period that will be overwritten by next script
+                    self.save_snapshot(0, prev_th)
+                    print("\nexiting\n", "s =", s, "\n")
+                    break
 
-            if new_th > th:
-                print("\n", ti, datetime.datetime.fromtimestamp(ti))
-                if th == 0:
-                    self.save_snapshot(ti, ti)
-                    prev_th = ti
-                else:
-                    self.save_snapshot(new_th, prev_th)
-                    prev_th = new_th
-                th = new_th
+                if new_th > th:
+                    print("\n", ti, datetime.datetime.fromtimestamp(ti))
+                    if th == 0:
+                        self.save_snapshot(ti, ti)
+                        prev_th = ti
+                    else:
+                        self.save_snapshot(new_th, prev_th)
+                        prev_th = new_th
+                    th = new_th
+        except Exception as e:
+            print(e.__class__, e)
+            os._exit(1)
 
         print("\nexited writting loop\n")
         # self.stoprestart(dorestart=False)

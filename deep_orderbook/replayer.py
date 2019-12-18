@@ -106,7 +106,8 @@ class Replayer:
 
     def replayL2(self, pair, emaNew=1/256):
         snapshotupdates = {}
-        for snapshot_file in self.snapshots(pair):
+        files = tqdm(self.snapshots(pair))
+        for snapshot_file in files:
             snap = json.load(open(snapshot_file))
             lastUpdateId = snap['lastUpdateId']
             snapshotupdates[lastUpdateId] = snapshot_file
@@ -163,7 +164,7 @@ class Replayer:
                             pd.Series({'time': ts, 'price': px, 'emaPrice': emaPrice, 'bid': bid, 'ask': ask}), \
                             trdf
 
-                    allupdates.set_description(f"ts={ts}, E={E}, trades={len(trdf):02}, px={px:16.12f}")
+                    allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, E={E}, trades={len(trdf):02}, px={px:16.12f}")
                     # assert not prev_ts or ts == 1 + prev_ts
                     prev_ts = ts
 
