@@ -125,7 +125,7 @@ class Replayer:
                 alltrdf = self.tradesframe(ftrades)
                 js = json.load(open(fupdate))
                 allupdates = tqdm(js, leave=False)
-                prev_ts = None
+                # prev_ts = None
                 for upds in allupdates:
                     if upds['e'] != 'depthUpdate':
                         continue
@@ -166,7 +166,7 @@ class Replayer:
 
                     allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, E={E}, trades={len(trdf):02}, px={px:16.12f}")
                     # assert not prev_ts or ts == 1 + prev_ts
-                    prev_ts = ts
+                    # prev_ts = ts
 
                     yield oneSec
 

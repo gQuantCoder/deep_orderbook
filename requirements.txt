@@ -1,2 +1,3 @@
 tqdm
 python_binance
+pyarrow
