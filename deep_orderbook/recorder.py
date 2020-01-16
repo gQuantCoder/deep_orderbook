@@ -25,7 +25,7 @@ class Receiver:
     async def setup(self):
         # Instantiate a Client
         self.client = await AsyncClient.create()
-        print(json.dumps(await self.client.get_exchange_info(), indent=2))
+        #print(json.dumps(await self.client.get_exchange_info(), indent=2))
         for m in self.markets:
             print(json.dumps(await self.client.get_symbol_ticker(symbol=m), indent=2))
 
@@ -38,9 +38,9 @@ class Receiver:
     async def on_depth(self, depth_cache):
 #        print(f"symbol {depth_cache.symbol} updated:{depth_cache.update_time}")
 #        print("Top 5 asks:", len(depth_cache.get_asks()))
-        print(depth_cache.get_asks()[:5])
+#        print(depth_cache.get_asks()[:5])
 #        print("Top 5 bids:", len(depth_cache.get_bids()))
-        print(depth_cache.get_bids()[:5])
+#        print(depth_cache.get_bids()[:5])
         symbol = depth_cache.symbol
         # print('no bid' if not depth_cache.get_bids() else '', 'no ask' if not depth_cache.get_asks() else '')
         self.nummsg[symbol] += 1
