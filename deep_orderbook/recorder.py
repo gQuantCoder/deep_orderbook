@@ -44,11 +44,16 @@ class MessageDepthCacheManager(DepthCacheManager):
         await self._msg_coro(msg)
 
 class Receiver:
-    def __init__(self, markets):
-        self.markets = markets
-        asyncio.get_event_loop().run_until_complete(self.setup())
 
-    async def setup(self):
+    @classmethod
+    async def create(cls, **kwargs):
+        print(cls)
+        self = cls()
+        await self.setup(**kwargs)
+        return self
+
+    async def setup(self, markets):
+        self.markets = markets
         # Instantiate a Client
         self.client = await AsyncClient.create()
         #print(json.dumps(await self.client.get_exchange_info(), indent=2))
@@ -60,6 +65,8 @@ class Receiver:
         self.nummsg = collections.defaultdict(int)
         self.conn_keys = []
         self.depth_managers = {}
+
+        await self.stoprestart()
 
     async def on_depth_msg(self, msg):
         symbol = msg['s']
@@ -114,8 +121,8 @@ class Receiver:
             #await self.bm.start()
 
 class Writer(Receiver):
-    def __init__(self, markets, data_folder):
-        super().__init__(markets)
+    async def setup(self, markets, data_folder):
+        await super().setup(markets)
         self.store = collections.defaultdict(list)
         self.lock = threading.Lock()
         self.tradestore = collections.defaultdict(list)
@@ -131,9 +138,6 @@ class Writer(Receiver):
         symbol = msg['s']
         with self.lock:
             self.store[symbol].append(msg)
-
-    async def on_depth(self, depth_cache):
-        await super().on_depth(depth_cache)
 
     async def on_aggtrades(self, msg):
         await super().on_aggtrades(msg)
@@ -213,8 +217,7 @@ class Writer(Receiver):
         print("\nexited writting loop\n")
 
 if __name__ == '__main__':
-    rec = Receiver(['ETHBTC'])
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(rec.stoprestart())
+    rec = loop.run_until_complete(Receiver.create(markets=['ETHBTC']))
     while True:
         loop.run_until_complete(asyncio.sleep(10))
