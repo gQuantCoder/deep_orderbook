@@ -13,9 +13,35 @@ from binance import AsyncClient, DepthCacheManager # Import the Binance Client
 # Import the Binance Socket Manager
 from binance.websockets import BinanceSocketManager
 from binance.exceptions import BinanceAPIException
+from binance.depthcache import DepthCache
 
 # https://github.com/binance-exchange/binance-official-api-docs/blob/master/web-socket-streams.md#how-to-manage-a-local-order-book-correctly
 
+class MessageDepthCacheManager(DepthCacheManager):
+    _default_refresh = 60 * 30  # 30 minutes
+    @classmethod
+    async def create(cls, client, loop, symbol, coro=None, refresh_interval=_default_refresh, bm=None, limit=500, msg_coro=None):
+        self = MessageDepthCacheManager()
+        self._client = client
+        self._loop = loop
+        self._symbol = symbol
+        self._limit = limit
+        self._coro = coro
+        self._msg_coro = msg_coro
+        self._last_update_id = None
+        self._depth_message_buffer = []
+        self._bm = bm
+        self._depth_cache = DepthCache(self._symbol)
+        self._refresh_interval = refresh_interval
+
+        await self._start_socket()
+        await self._init_cache()
+
+        return self
+
+    async def _depth_event(self, msg):
+        await super()._depth_event(msg)
+        await self._msg_coro(msg)
 
 class Receiver:
     def __init__(self, markets):
@@ -35,6 +61,12 @@ class Receiver:
         self.conn_keys = []
         self.depth_managers = {}
 
+    async def on_depth_msg(self, msg):
+        symbol = msg['s']
+        # print('no bid' if not depth_cache.get_bids() else '', 'no ask' if not depth_cache.get_asks() else '')
+        #self.nummsg[symbol] += 1
+        #print(', '.join([f'{s}: {self.nummsg[s]:06}' for s in self.markets]), end='\r')
+
     async def on_depth(self, depth_cache):
 #        print(f"symbol {depth_cache.symbol} updated:{depth_cache.update_time}")
 #        print("Top 5 asks:", len(depth_cache.get_asks()))
@@ -42,21 +74,19 @@ class Receiver:
 #        print("Top 5 bids:", len(depth_cache.get_bids()))
 #        print(depth_cache.get_bids()[:5])
         symbol = depth_cache.symbol
-        # print('no bid' if not depth_cache.get_bids() else '', 'no ask' if not depth_cache.get_asks() else '')
-        self.nummsg[symbol] += 1
-        print(', '.join([f'{s}: {self.nummsg[s]:06}' for s in self.markets]), end='\r')
 
 
     async def on_aggtrades(self, msg):
         #print(msg)
         symbol = msg["s"]
         self.nummsg[symbol] += 1
+        print(', '.join([f'{s}: {self.nummsg[s]:06}' for s in self.markets]), end='\r')
 
     async def stoprestart(self, dorestart=True):
         # stop the socket manager
         for conn_key in self.conn_keys:
             print(f"stopping socket {conn_key}\n")
-            await self.bm.stop_socket(conn_key)
+            #await self.bm.stop_socket(conn_key)
         self.depth_managers = {}
         conn_keys = []
 #        await self.bm.close()
@@ -71,11 +101,13 @@ class Receiver:
                 print("start", key)
                 conn_keys.append(key)
                 # create the Depth Cache
-                depthmanager = await DepthCacheManager.create(self.client, asyncio.get_event_loop(), 
+            for symbol in self.markets:
+                depthmanager = await MessageDepthCacheManager.create(self.client, asyncio.get_event_loop(), 
                                                                                 symbol, 
                                                                                 self.on_depth,
                                                                                 bm=self.bm,
-                                                                                limit=5000
+                                                                                limit=1000,
+                                                                                msg_coro=self.on_depth_msg
                                                                                 )
                 self.depth_managers[symbol] = depthmanager
 
@@ -94,14 +126,17 @@ class Writer(Receiver):
         for symbol in self.markets:
             os.makedirs(f"{self.L2folder}/{symbol}", exist_ok=True)
 
-    def on_depth(self, depth_cache):
-        super().on_depth(depth_cache)
-        symbol = depth_cache.symbol
+    async def on_depth_msg(self, msg):
+        await super().on_depth_msg(msg)
+        symbol = msg['s']
         with self.lock:
-            self.store[symbol].append(depth_cache.msg)
+            self.store[symbol].append(msg)
 
-    def on_aggtrades(self, msg):
-        super().on_aggtrades(msg)
+    async def on_depth(self, depth_cache):
+        await super().on_depth(depth_cache)
+
+    async def on_aggtrades(self, msg):
+        await super().on_aggtrades(msg)
         symbol = msg["s"]
         with self.tradelock:
             self.tradestore[symbol].append(msg)
@@ -153,8 +188,8 @@ class Writer(Receiver):
                 # print("ti", ti)
                 new_th = int(ti // SAVE_PERIOD) * SAVE_PERIOD
 
-                if not self.bm.is_alive():
-                    break
+                #if not self.bm.is_alive():
+                #    break
 
                 if datetime.datetime.now() >= stopat:
                     # saves for next period that will be overwritten by next script
@@ -176,7 +211,6 @@ class Writer(Receiver):
             os._exit(1)
 
         print("\nexited writting loop\n")
-        # self.stoprestart(dorestart=False)
 
 if __name__ == '__main__':
     rec = Receiver(['ETHBTC'])
