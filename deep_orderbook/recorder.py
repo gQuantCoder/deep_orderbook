@@ -8,6 +8,7 @@ import copy
 import threading
 import tqdm
 import asyncio
+import aiofiles
 from binance import AsyncClient, DepthCacheManager # Import the Binance Client
 
 # Import the Binance Socket Manager
@@ -84,7 +85,6 @@ class Receiver:
 
 
     async def on_aggtrades(self, msg):
-        #print(msg)
         symbol = msg["s"]
         self.nummsg[symbol] += 1
         print(', '.join([f'{s}: {self.nummsg[s]:06}' for s in self.markets]), end='\r')
@@ -94,8 +94,8 @@ class Receiver:
         for conn_key in self.conn_keys:
             print(f"stopping socket {conn_key}\n")
             #await self.bm.stop_socket(conn_key)
-        self.depth_managers = {}
         conn_keys = []
+        self.depth_managers = {}
 #        await self.bm.close()
 
         if dorestart:
@@ -122,45 +122,43 @@ class Receiver:
 
 class Writer(Receiver):
     async def setup(self, markets, data_folder):
-        await super().setup(markets)
         self.store = collections.defaultdict(list)
-        self.lock = threading.Lock()
         self.tradestore = collections.defaultdict(list)
-        self.tradelock = threading.Lock()
-
         self.L2folder = f"{data_folder}/L2"
         
-        for symbol in self.markets:
+        for symbol in markets:
             os.makedirs(f"{self.L2folder}/{symbol}", exist_ok=True)
+
+        await super().setup(markets)
 
     async def on_depth_msg(self, msg):
         await super().on_depth_msg(msg)
         symbol = msg['s']
-        with self.lock:
+        if True:#with self.lock:
             self.store[symbol].append(msg)
 
     async def on_aggtrades(self, msg):
         await super().on_aggtrades(msg)
         symbol = msg["s"]
-        with self.tradelock:
-            self.tradestore[symbol].append(msg)
+        if True:#with self.tradelock:
+            self.tradestore[symbol].append(copy.deepcopy(msg))
 
     async def save_snapshot(self, cur_ts, prev_ts):
         progressbar = self.markets
         for symbol in progressbar:
             snap = datetime.datetime.utcfromtimestamp(cur_ts).isoformat().replace(":", "-")  # .replace('-',"_")
             upds = datetime.datetime.utcfromtimestamp(prev_ts).isoformat().replace(":", "-")  # .replace('-',"_")
-            with self.lock:
+            if True:#with self.lock:
                 tosave = copy.deepcopy(self.store[symbol])
                 self.store[symbol] = list()
                 self.nummsg[symbol] = 0
-            with self.tradelock:
+            if True:#with self.tradelock:
                 tradetosave = copy.deepcopy(self.tradestore[symbol])
                 self.tradestore[symbol] = list()
 
-            with open(f"{self.L2folder}/{symbol}/{upds}_update.json", "w") as fp:
+            async with aiofiles.open(f"{self.L2folder}/{symbol}/{upds}_update.json", "w") as fp:
                 json.dump(tosave, fp)
-            with open(f"{self.L2folder}/{symbol}/{upds}_trades.json", "w") as fp:
+            async with aiofiles.open(f"{self.L2folder}/{symbol}/{upds}_trades.json", "w") as fp:
                 json.dump(tradetosave, fp)
 
         if cur_ts:
@@ -169,7 +167,7 @@ class Writer(Receiver):
                 print(symbol)
                 # time.sleep(1)
                 L2 = await self.client.get_order_book(symbol=symbol, limit=1000)
-                with open(f"{self.L2folder}/{symbol}/{snap}_snapshot.json", "w") as fp:
+                async with aiofiles.open(f"{self.L2folder}/{symbol}/{snap}_snapshot.json", "w") as fp:
                     json.dump(L2, fp)
         print("\nsaved_snapshot \n")
 
@@ -218,6 +216,7 @@ class Writer(Receiver):
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    rec = loop.run_until_complete(Receiver.create(markets=['ETHBTC']))
+    MARKETS = ["BNBUSDT", "BTCUSDT", "ETHUSDT", "BNBBTC", "ETHBTC", "BNBETH"]
+    rec = loop.run_until_complete(Receiver.create(markets=MARKETS))#['ETHBTC', 'BTCUSDT']))
     while True:
         loop.run_until_complete(asyncio.sleep(10))
