@@ -34,6 +34,7 @@ class MessageDepthCacheManager(DepthCacheManager):
         self._bm = bm
         self._depth_cache = DepthCache(self._symbol)
         self._refresh_interval = refresh_interval
+        self.trades = None
 
         await self._start_socket()
         await self._init_cache()
@@ -48,7 +49,7 @@ class Receiver:
 
     @classmethod
     async def create(cls, **kwargs):
-        print(cls)
+        # print(cls)
         self = cls()
         await self.setup(**kwargs)
         return self
@@ -66,6 +67,7 @@ class Receiver:
         self.nummsg = collections.defaultdict(int)
         self.conn_keys = []
         self.depth_managers = {}
+        self.trade_managers = collections.defaultdict(list)
 
         await self.stoprestart()
 
@@ -82,10 +84,12 @@ class Receiver:
 #        print("Top 5 bids:", len(depth_cache.get_bids()))
 #        print(depth_cache.get_bids()[:5])
         symbol = depth_cache.symbol
-
+        self.depth_managers[symbol].trades = copy.deepcopy(self.trade_managers[symbol])
+        self.trade_managers[symbol] = list()
 
     async def on_aggtrades(self, msg):
         symbol = msg["s"]
+        self.trade_managers[symbol].append(copy.deepcopy(msg))
         self.nummsg[symbol] += 1
         print(', '.join([f'{s}: {self.nummsg[s]:06}' for s in self.markets]), end='\r')
 
