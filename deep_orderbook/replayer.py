@@ -21,7 +21,7 @@ MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
 
 
 class Replayer:
-    def __init__(self, data_folder, date_regexp='2019'):
+    def __init__(self, data_folder, date_regexp='2020'):
         self.data_folder = data_folder
         self.date_regexp = date_regexp
 
@@ -94,12 +94,11 @@ class Replayer:
 
 
     @staticmethod
-    def buildL2(snapshot_file):
-        snap = json.load(open(snapshot_file))
-        lastUpdateId = snap['lastUpdateId']
+    def buildL2(snapshot):
+        lastUpdateId = snapshot['lastUpdateId']
         # print(snapshot_file, "lastUpdateId:", lastUpdateId)
-        bids = Replayer.json2df(snap['bids'])
-        asks = Replayer.json2df(snap['asks'])
+        bids = Replayer.json2df(snapshot['bids'])
+        asks = Replayer.json2df(snapshot['asks'])
         return bids, asks, lastUpdateId
 
 
@@ -107,14 +106,15 @@ class Replayer:
     def replayL2(self, pair, emaNew=1/256):
         snapshotupdates = {}
         files = tqdm(self.snapshots(pair))
-        for snapshot_file in files:
-            snap = json.load(open(snapshot_file))
+        for snap_file in files:
+            snap = json.load(open(snap_file))
             lastUpdateId = snap['lastUpdateId']
-            snapshotupdates[lastUpdateId] = snapshot_file
+            snapshotupdates[lastUpdateId] = snap_file
         snapshotupdates = iter(sorted(snapshotupdates.items()))
         next_snap,snapshot_file = next(snapshotupdates)
 
-        bids, asks, lastUpdateId = self.buildL2(snapshot_file)
+        snapshot = json.load(open(snapshot_file))
+        bids, asks, lastUpdateId = self.buildL2(snapshot)
 
 
         emaPrice = None
@@ -126,20 +126,21 @@ class Replayer:
                 js = json.load(open(fupdate))
                 allupdates = tqdm(js, leave=False)
                 # prev_ts = None
-                for upds in allupdates:
-                    if upds['e'] != 'depthUpdate':
+                for book_upd in allupdates:
+                    if book_upd['e'] != 'depthUpdate':
                         continue
-                    U = upds['U']
-                    u = upds['u']
-                    E = upds['E']
+                    U = book_upd['U']
+                    u = book_upd['u']
+                    E = book_upd['E']
                     ts = 1 + E // 1000
 
                     if u >= next_snap:
-                        bids, asks, lastUpdateId = self.buildL2(snapshot_file)
+                        snapshot = json.load(open(snapshot_file))
+                        bids, asks, lastUpdateId = self.buildL2(snapshot)
                         next_snap,snapshot_file = next(snapshotupdates)
 
-                    ub = self.json2df(upds['b'])
-                    ua = self.json2df(upds['a'])
+                    ub = self.json2df(book_upd['b'])
+                    ua = self.json2df(book_upd['a'])
                     #print(asks.head())
                     bids = self.merge(bids, ub, False)
                     asks = self.merge(asks, ua, True)
