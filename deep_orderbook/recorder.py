@@ -34,7 +34,7 @@ class MessageDepthCacheManager(DepthCacheManager):
         self._bm = bm
         self._depth_cache = DepthCache(self._symbol)
         self._refresh_interval = refresh_interval
-        self.trades = None
+        self.trades = list()
 
         await self._start_socket()
         await self._init_cache()
@@ -141,11 +141,16 @@ class Writer(Receiver):
         if True:#with self.lock:
             self.store[symbol].append(msg)
 
-    async def on_aggtrades(self, msg):
-        await super().on_aggtrades(msg)
-        symbol = msg["s"]
-        if True:#with self.tradelock:
-            self.tradestore[symbol].append(copy.deepcopy(msg))
+    async def on_depth(self, depth_cache):
+        await super().on_depth(depth_cache)
+        symbol = depth_cache.symbol
+        self.tradestore[symbol] += self.depth_managers[symbol].trades
+
+#    async def on_aggtrades(self, msg):
+#        await super().on_aggtrades(msg)
+#        symbol = msg["s"]
+#        if True:#with self.tradelock:
+#            self.tradestore[symbol].append(copy.deepcopy(msg))
 
     async def save_snapshot(self, cur_ts, prev_ts):
         progressbar = self.markets
@@ -161,9 +166,9 @@ class Writer(Receiver):
                 self.tradestore[symbol] = list()
 
             async with aiofiles.open(f"{self.L2folder}/{symbol}/{upds}_update.json", "w") as fp:
-                json.dump(tosave, fp)
+                await fp.write(json.dumps(tosave))
             async with aiofiles.open(f"{self.L2folder}/{symbol}/{upds}_trades.json", "w") as fp:
-                json.dump(tradetosave, fp)
+                await fp.write(json.dumps(tradetosave))
 
         if cur_ts:
             progressbar = self.markets
@@ -172,7 +177,7 @@ class Writer(Receiver):
                 # time.sleep(1)
                 L2 = await self.client.get_order_book(symbol=symbol, limit=1000)
                 async with aiofiles.open(f"{self.L2folder}/{symbol}/{snap}_snapshot.json", "w") as fp:
-                    json.dump(L2, fp)
+                    await fp.write(json.dumps(L2))
         print("\nsaved_snapshot \n")
 
     async def run_writer(self, SAVE_PERIOD=60*60, stoptime=datetime.time(23, 58, 30)):
