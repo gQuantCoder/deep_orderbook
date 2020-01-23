@@ -54,55 +54,6 @@ class Replayer:
     def sample(of_file):
         return json.load(open(of_file))[0]
 
-    @staticmethod
-    def tradesframe(file):
-        ts = pd.DataFrame(json.load(open(file)))
-        if ts.empty:
-            return ts
-        ts = ts.drop(['M', 's', 'e', 'a'], axis=1).astype(np.float64)
-        ts['t'] = 1 + ts['E'] // 1000
-        ts['delay'] = ts['E'] - ts['T']
-        ts['num'] = ts['l'] - ts['f'] + 1
-        ts['up'] = 1 - 2*ts['m']
-        ts = ts.drop(['E', 'T', 'f', 'l', 'm'], axis=1).set_index(['t'])
-        return ts
-
-
-    @staticmethod
-    def json2df(js):
-        try:
-            df = pd.DataFrame(js, columns=['price', 'size']).astype(np.float64).set_index('price')
-        except:
-            df = pd.DataFrame(js, columns=['price', 'size', 'none']).drop(['none'], axis=1).astype(np.float64).set_index('price')
-        # assert((df.index > 4).all())
-        return df
-
-    @staticmethod
-    def merge(df, upd_df, is_ask):
-        df = df.append(upd_df)
-        df = df[~df.index.duplicated(keep='last')]
-        df = df[(df!=0).any(axis=1)]
-        # assert((df.index > 4).all())
-        return df.sort_index(ascending=is_ask)
-
-    @staticmethod
-    def price(bids, asks):
-        bbp, bbs = bids.index[0], bids['size'].iloc[0]
-        bap, bas = asks.index[0], asks['size'].iloc[0]
-        price = (bbp * bas + bap * bbs) / (bbs + bas)
-        return round(price, 8)
-
-
-    @staticmethod
-    def buildL2(snapshot):
-        lastUpdateId = snapshot['lastUpdateId']
-        # print(snapshot_file, "lastUpdateId:", lastUpdateId)
-        bids = Replayer.json2df(snapshot['bids'])
-        asks = Replayer.json2df(snapshot['asks'])
-        return bids, asks, lastUpdateId
-
-
-
     def replayL2(self, pair, emaNew=1/256):
         snapshotupdates = {}
         files = tqdm(self.snapshots(pair))
@@ -170,6 +121,58 @@ class Replayer:
                     # prev_ts = ts
 
                     yield oneSec
+
+
+#class Shapper:
+    @staticmethod
+    def tradesframe(file):
+        ts = pd.DataFrame(json.load(open(file)))
+        if ts.empty:
+            return ts
+        ts = ts.drop(['M', 's', 'e', 'a'], axis=1).astype(np.float64)
+        ts['t'] = 1 + ts['E'] // 1000
+        ts['delay'] = ts['E'] - ts['T']
+        ts['num'] = ts['l'] - ts['f'] + 1
+        ts['up'] = 1 - 2*ts['m']
+        ts = ts.drop(['E', 'T', 'f', 'l', 'm'], axis=1).set_index(['t'])
+        return ts
+
+
+    @staticmethod
+    def json2df(js):
+        try:
+            df = pd.DataFrame(js, columns=['price', 'size']).astype(np.float64).set_index('price')
+        except:
+            df = pd.DataFrame(js, columns=['price', 'size', 'none']).drop(['none'], axis=1).astype(np.float64).set_index('price')
+        # assert((df.index > 4).all())
+        return df
+
+    @staticmethod
+    def merge(df, upd_df, is_ask):
+        df = df.append(upd_df)
+        df = df[~df.index.duplicated(keep='last')]
+        df = df[(df!=0).any(axis=1)]
+        # assert((df.index > 4).all())
+        return df.sort_index(ascending=is_ask)
+
+    @staticmethod
+    def price(bids, asks):
+        bbp, bbs = bids.index[0], bids['size'].iloc[0]
+        bap, bas = asks.index[0], asks['size'].iloc[0]
+        price = (bbp * bas + bap * bbs) / (bbs + bas)
+        return round(price, 8)
+
+
+    @staticmethod
+    def buildL2(snapshot):
+        lastUpdateId = snapshot['lastUpdateId']
+        # print(snapshot_file, "lastUpdateId:", lastUpdateId)
+        bids = Replayer.json2df(snapshot['bids'])
+        asks = Replayer.json2df(snapshot['asks'])
+        return bids, asks, lastUpdateId
+
+
+
 
 
 
