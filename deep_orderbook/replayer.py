@@ -113,6 +113,60 @@ class Replayer:
                     # prev_ts = ts
 
                     yield oneSec
+    async def replayL2_async(self, pair, shapper):
+        snapshotupdates = {}
+        files = tqdm(self.snapshots(pair))
+        for snap_file in files:
+            snap = json.load(open(snap_file))
+            lastUpdateId = snap['lastUpdateId']
+            snapshotupdates[lastUpdateId] = snap_file
+        snapshotupdates = iter(sorted(snapshotupdates.items()))
+        next_snap,snapshot_file = next(snapshotupdates)
+
+        snapshot = json.load(open(snapshot_file))
+        lastUpdateId = snapshot['lastUpdateId']
+        await shapper.on_snaphsot_async(snapshot)
+
+
+        file_updates = tqdm(self.updates(pair))
+        for fupdate in file_updates:
+                ftrades = fupdate.replace('update', 'trades')
+                file_updates.set_description(fupdate.replace(self.data_folder, ''))
+                alltrdf = self.tradesframe(ftrades)
+                js = json.load(open(fupdate))
+                allupdates = tqdm(js, leave=False)
+                # prev_ts = None
+                for book_upd in allupdates:
+                    if book_upd['e'] != 'depthUpdate':
+                        continue
+                    U = book_upd['U']
+                    u = book_upd['u']
+                    E = book_upd['E']
+                    ts = 1 + E // 1000
+
+                    if u >= next_snap:
+                        snapshot = json.load(open(snapshot_file))
+                        lastUpdateId = snapshot['lastUpdateId']
+                        await shapper.on_snaphsot_async(snapshot)
+                        next_snap,snapshot_file = next(snapshotupdates)
+
+                    px = await shapper.on_depth_msg_async(book_upd)
+
+                    if not alltrdf.empty:
+                        trdf = alltrdf.iloc[alltrdf.index==ts]
+                        trdf = trdf.set_index(['p'])
+                        trdf.loc[px] = 0
+                        trdf.sort_index(inplace=True)
+                        prev_px = px
+                    else:
+                        trdf = trdf.loc[[prev_px]]
+                    oneSec = await shapper.on_trades_async(trdf)
+
+                    allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, E={E}, trades={len(trdf):02}, px={px:16.12f}")
+                    # assert not prev_ts or ts == 1 + prev_ts
+                    # prev_ts = ts
+
+                    yield oneSec
 
     @staticmethod
     def multireplayL2(replayers):
