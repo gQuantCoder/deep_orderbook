@@ -52,8 +52,9 @@ class MessageDepthCacheManager(DepthCacheManager):
 
         self._last_update_id = None
         self._depth_message_buffer = []
-
         res = snapshot
+        self._depth_cache.bids = {}
+        self._depth_cache.asks = {}
 
         # process bid and asks from the order book
         for bid in res['bids']:

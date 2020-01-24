@@ -66,8 +66,8 @@ class BookShapper:
         return self.px
 
     def on_trades(self, trdf):
-        oneSec = self.bids.cumsum(), \
-                self.asks.cumsum(), \
+        oneSec = self.bids, \
+                self.asks, \
                 pd.Series({'time': self.ts, 'price': self.px, 'emaPrice': self.emaPrice, 'bid': self.bids.index[0], 'ask': self.asks.index[0]}), \
                 trdf
         return oneSec
@@ -75,8 +75,8 @@ class BookShapper:
     async def on_trades_async(self, trdf):
         bids = self._depth_manager.get_depth_cache().get_bids()
         asks = self._depth_manager.get_depth_cache().get_asks()
-        oneSec = pd.DataFrame(bids, columns=['price', 'size']).set_index('price').cumsum(), \
-                pd.DataFrame(asks, columns=['price', 'size']).set_index('price').cumsum(), \
+        oneSec = pd.DataFrame(bids, columns=['price', 'size']).set_index('price'), \
+                pd.DataFrame(asks, columns=['price', 'size']).set_index('price'), \
                 {'time': self.ts, 'price': self.px, 'emaPrice': self.emaPrice, 'bid': bids[0][0], 'ask': asks[0][0]}, \
                 trdf
         return oneSec
