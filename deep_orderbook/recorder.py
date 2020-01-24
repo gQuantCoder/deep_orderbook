@@ -36,10 +36,44 @@ class MessageDepthCacheManager(DepthCacheManager):
         self._refresh_interval = refresh_interval
         self.trades = list()
 
-        await self._start_socket()
-        await self._init_cache()
+        if self._client:
+            await self._start_socket()
+            await self._init_cache()
 
         return self
+        
+    async def _init_cache(self, snapshot=None):
+        if self._client:
+            await super()._init_cache()
+            return
+
+        if not snapshot:
+            return
+
+        self._last_update_id = None
+        self._depth_message_buffer = []
+
+        res = snapshot
+
+        # process bid and asks from the order book
+        for bid in res['bids']:
+            self._depth_cache.add_bid(bid)
+        for ask in res['asks']:
+            self._depth_cache.add_ask(ask)
+
+        # set first update id
+        self._last_update_id = res['lastUpdateId']
+
+#        # set a time to refresh the depth cache
+#        if self._refresh_interval:
+#            self._refresh_time = int(time.time()) + self._refresh_interval
+
+        # Apply any updates from the websocket
+        for msg in self._depth_message_buffer:
+            await self._process_depth_message(msg, buffer=True)
+
+        # clear the depth buffer
+        del self._depth_message_buffer
 
     async def _depth_event(self, msg):
         await super()._depth_event(msg)
