@@ -43,7 +43,8 @@ class MessageDepthCacheManager(DepthCacheManager):
 
     async def _depth_event(self, msg):
         await super()._depth_event(msg)
-        await self._msg_coro(msg)
+        if self._msg_coro:
+            await self._msg_coro(msg)
 
 class Receiver:
 
