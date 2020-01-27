@@ -7,6 +7,7 @@ import numpy as np
 import asyncio
 from tqdm.auto import tqdm
 from deep_orderbook.recorder import MessageDepthCacheManager
+from aioitertools import accumulate
 
 pd.set_option('precision', 12)
 
@@ -199,19 +200,20 @@ class BookShapper:
 
 
 
-    def gen_array(self, markets, width_per_side=64, zoom_frac=1/256):
-        market_replay = self.multireplayL2(markets)
-        prev_price = {p: None for p in markets}
+    @staticmethod
+    async def gen_array(market_replay, markets, width_per_side=64, zoom_frac=1/256):
+        #market_replay = self.multireplayL2(markets)
+        prev_price = {p: None for p in range(len(markets))}
         spacing = np.arange(width_per_side)
         #spacing = np.square(spacing) + spacing
         spacing = spacing / spacing[-1]
         spacing = np.arcsin(spacing)*3-spacing*2
-        for second in market_replay:
+        async for second in market_replay:
             market_second = {}#collections.defaultdict(list)
-            for pair in markets:
+            for pair in range(len(markets)):
                 bi,ai,tpi,tri = second[pair]
                 prev_price[pair] = prev_price[pair] or tpi['price']
-                bib,aib,trb,tra  = self.bin_books(bi,ai,tri, ref_price=prev_price[pair], zoom_frac=zoom_frac, spacing=spacing)
+                bib,aib,trb,tra  = BookShapper.bin_books(bi,ai,tri, ref_price=prev_price[pair], zoom_frac=zoom_frac, spacing=spacing)
                 prev_price[pair] = tpi['emaPrice']
                 arr0 = bib.values - aib.values
                 arr1 = tra.values - trb.values
@@ -276,9 +278,9 @@ class BookShapper:
                     total[market][name] = arrs
         return total
 
-
-    def accumulate_array(self, markets):
-        genacc = itertools.accumulate(self.gen_array(markets), self.build)
+    @staticmethod
+    def accumulate_array(genarr, markets):
+        genacc = accumulate(genarr, BookShapper.build)
         return genacc
 
 

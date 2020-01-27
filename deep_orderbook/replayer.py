@@ -90,11 +90,14 @@ class Replayer:
                     E = book_upd['E']
                     ts = 1 + E // 1000
 
-                    if u >= next_snap:
+                    if next_snap and u >= next_snap:
                         snapshot = json.load(open(snapshot_file))
                         lastUpdateId = snapshot['lastUpdateId']
                         shapper.on_snaphsot(snapshot)
-                        next_snap,snapshot_file = next(snapshotupdates)
+                        try:
+                            next_snap,snapshot_file = next(snapshotupdates)
+                        except StopIteration as e:
+                            next_snap = None
 
                     px = shapper.on_depth_msg(book_upd)
 
@@ -144,11 +147,14 @@ class Replayer:
                     E = book_upd['E']
                     ts = 1 + E // 1000
 
-                    if u >= next_snap:
+                    if next_snap and u >= next_snap:
                         snapshot = json.load(open(snapshot_file))
                         lastUpdateId = snapshot['lastUpdateId']
                         await shapper.on_snaphsot_async(snapshot)
-                        next_snap,snapshot_file = next(snapshotupdates)
+                        try:
+                            next_snap,snapshot_file = next(snapshotupdates)
+                        except StopIteration as e:
+                            next_snap = None
 
                     px = await shapper.on_depth_msg_async(book_upd)
 
@@ -162,7 +168,7 @@ class Replayer:
                         trdf = trdf.loc[[prev_px]]
                     oneSec = await shapper.on_trades_async(trdf)
 
-                    allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, E={E}, trades={len(trdf):02}, px={px:16.12f}")
+                    allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, tr={len(trdf):02}")#", px={px:16.12f}")
                     # assert not prev_ts or ts == 1 + prev_ts
                     # prev_ts = ts
 
@@ -184,6 +190,26 @@ class Replayer:
                     try:
                         nexs[pair] = next(gens[pair])
                     except StopIteration:
+                        return # break
+            yield curs
+            tall += 1
+
+    @staticmethod
+    async def multireplayL2_async(replayers):
+        pairs = range(len(replayers))
+        gens = {pair: replayers[pair] for pair in pairs}
+        nexs = {pair: await gens[pair].__anext__() for pair in pairs}
+        def secs(pair): return nexs[pair][2]['time']
+        tall = max([secs(p) for p in pairs])
+        curs = {pair: nexs[pair] for pair in pairs}
+        print('tall', tall)
+        while True:
+            for pair in pairs:
+                while secs(pair) < tall:
+                    curs[pair] = nexs[pair]
+                    try:
+                        nexs[pair] = await gens[pair].__anext__()
+                    except StopAsyncIteration:
                         return # break
             yield curs
             tall += 1
