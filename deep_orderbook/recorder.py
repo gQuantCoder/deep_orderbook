@@ -258,6 +258,7 @@ class Writer(Receiver):
             os._exit(1)
 
         print("\nexited writting loop\n")
+        os._exit(1)
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
