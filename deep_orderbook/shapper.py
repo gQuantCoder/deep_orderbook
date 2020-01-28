@@ -5,9 +5,11 @@ import time, datetime
 import pandas as pd
 import numpy as np
 import asyncio
+import aiofiles
+
 from tqdm.auto import tqdm
 from deep_orderbook.recorder import MessageDepthCacheManager
-from aioitertools import accumulate
+import aioitertools
 
 pd.set_option('precision', 12)
 
@@ -17,12 +19,14 @@ class BookShapper:
     async def create(cls):
         self = cls()
         self._depth_manager = await MessageDepthCacheManager.create(client=None, loop=None, symbol=None, refresh_interval=None)
+        self.sec_trades = dict()
         self.bids = None
         self.asks = None
         self.tpr = None
         self.trdf = None
         self.ts = None
         self.px = None
+        self.prev_px = None
         self.emaPrice = None
         self.emaNew = 1/256
         return self
@@ -66,6 +70,21 @@ class BookShapper:
         self.px += 1e-12
         return self.px
 
+    @staticmethod
+    def secondAvail(tr_dict):
+        return 1 + tr_dict['E'] // 1000
+
+    async def on_trades_bunch(self, trades_file):
+        async with aiofiles.open(trades_file, 'r') as fp:
+            contents = await fp.read()
+            list_trades = json.loads(contents)
+
+        grp_sec = itertools.groupby(list_trades, self.secondAvail)
+        for i,l in grp_sec:
+            # print(i, list(l))
+            self.sec_trades[i] = list(l)
+        return
+
     def on_trades(self, trdf):
         oneSec = self.bids, \
                 self.asks, \
@@ -73,13 +92,37 @@ class BookShapper:
                 trdf
         return oneSec
 
-    async def on_trades_async(self, trdf):
+    async def make_frames_async(self, book_upd):
+        t_grp = self.secondAvail(book_upd)
+        list_trades = self.sec_trades.pop(t_grp, [])
+        #print(t_grp, list_trades)
+        #list_trades = list(list_trades)
+        #print(t_grp, list_trades)
+        if list_trades:
+            ts = pd.DataFrame(list_trades).drop(['M', 's', 'e', 'a'], axis=1)
+            ts = ts.astype(np.float64)
+            #ts['t'] = 1 + ts['E'] // 1000
+            ts['delay'] = ts['E'] - ts['T']
+            ts['num'] = ts['l'] - ts['f'] + 1
+            ts['up'] = 1 - 2*ts['m']
+            ts.drop(['E', 'T', 'f', 'l', 'm'], axis=1, inplace=True)
+            #ts.set_index(['t'], inplace=True)
+
+            self.trdf = ts.set_index(['p'])
+            self.trdf.loc[self.px] = 0
+            self.trdf.sort_index(inplace=True)
+            self.prev_px = self.px
+
+        else:
+            self.trdf = pd.DataFrame(columns=['p', 'q', 'delay', 'num', 'up']).set_index(['p'])
+#            self.trdf = self.trdf.loc[[self.prev_px]]
+
         bids = self._depth_manager.get_depth_cache().get_bids()
         asks = self._depth_manager.get_depth_cache().get_asks()
         oneSec = pd.DataFrame(bids, columns=['price', 'size']).set_index('price'), \
                 pd.DataFrame(asks, columns=['price', 'size']).set_index('price'), \
                 {'time': self.ts, 'price': self.px, 'emaPrice': self.emaPrice, 'bid': bids[0][0], 'ask': asks[0][0]}, \
-                trdf
+                self.trdf
         return oneSec
 
     @staticmethod
@@ -198,10 +241,31 @@ class BookShapper:
         plt.show()
 
 
+    @staticmethod
+    def gen_array(market_replay, markets, width_per_side=64, zoom_frac=1/256):
+        #market_replay = self.multireplayL2(markets)
+        prev_price = {p: None for p in range(len(markets))}
+        spacing = np.arange(width_per_side)
+        #spacing = np.square(spacing) + spacing
+        spacing = spacing / spacing[-1]
+        spacing = np.arcsin(spacing)*3-spacing*2
+        for second in market_replay:
+            market_second = {}#collections.defaultdict(list)
+            for pair in range(len(markets)):
+                bi,ai,tpi,tri = second[pair]
+                prev_price[pair] = prev_price[pair] or tpi['price']
+                bib,aib,trb,tra  = BookShapper.bin_books(bi,ai,tri, ref_price=prev_price[pair], zoom_frac=zoom_frac, spacing=spacing)
+                prev_price[pair] = tpi['emaPrice']
+                arr0 = bib.values - aib.values
+                arr1 = tra.values - trb.values
+                tp = np.array([tpi['price'], tpi['emaPrice'], tpi['bid'], tpi['ask'], tpi['time']])
+                arr3d = np.concatenate([arr0, arr1[:,::2]], axis=-1)
+                market_second[pair] = {'ps': [tp], 'bs': [arr3d]}
+            yield market_second
 
 
     @staticmethod
-    async def gen_array(market_replay, markets, width_per_side=64, zoom_frac=1/256):
+    async def gen_array_async(market_replay, markets, width_per_side=64, zoom_frac=1/256):
         #market_replay = self.multireplayL2(markets)
         prev_price = {p: None for p in range(len(markets))}
         spacing = np.arange(width_per_side)
@@ -280,8 +344,9 @@ class BookShapper:
 
     @staticmethod
     def accumulate_array(genarr, markets):
-        genacc = accumulate(genarr, BookShapper.build)
+        genacc = aioitertools.accumulate(genarr, BookShapper.build)
         return genacc
+
 
 
 if __name__ == '__main__':

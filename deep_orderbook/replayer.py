@@ -133,9 +133,9 @@ class Replayer:
 
         file_updates = tqdm(self.updates(pair))
         for fupdate in file_updates:
-                ftrades = fupdate.replace('update', 'trades')
+                trades_file = fupdate.replace('update', 'trades')
                 file_updates.set_description(fupdate.replace(self.data_folder, ''))
-                alltrdf = self.tradesframe(ftrades)
+                alltrades = await shapper.on_trades_bunch(trades_file)
                 js = json.load(open(fupdate))
                 allupdates = tqdm(js, leave=False)
                 # prev_ts = None
@@ -144,8 +144,8 @@ class Replayer:
                         continue
                     U = book_upd['U']
                     u = book_upd['u']
-                    E = book_upd['E']
-                    ts = 1 + E // 1000
+                    eventTime = book_upd['E']
+                    ts = 1 + eventTime // 1000
 
                     if next_snap and u >= next_snap:
                         snapshot = json.load(open(snapshot_file))
@@ -158,17 +158,9 @@ class Replayer:
 
                     px = await shapper.on_depth_msg_async(book_upd)
 
-                    if not alltrdf.empty:
-                        trdf = alltrdf.iloc[alltrdf.index==ts]
-                        trdf = trdf.set_index(['p'])
-                        trdf.loc[px] = 0
-                        trdf.sort_index(inplace=True)
-                        prev_px = px
-                    else:
-                        trdf = trdf.loc[[prev_px]]
-                    oneSec = await shapper.on_trades_async(trdf)
+                    oneSec = await shapper.make_frames_async(book_upd)
 
-                    allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, tr={len(trdf):02}")#", px={px:16.12f}")
+                    allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, tr={len(shapper.trdf):02}")#", px={px:16.12f}")
                     # assert not prev_ts or ts == 1 + prev_ts
                     # prev_ts = ts
 
