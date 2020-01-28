@@ -200,6 +200,32 @@ class Receiver:
 
             #await self.bm.start()
 
+    async def multi_generator(self, symbol_shappers):
+        tall = time.time()
+        tall = tall // 1
+        while True:
+            twake = tall
+            timesleep = twake - time.time()
+            print(twake, timesleep)
+            if timesleep > 0:
+                await asyncio.sleep(timesleep)
+            else:
+                print(f"time sleep is negative: {timesleep}")
+
+            oneSec = {}
+            i = 0
+            for symbol,shapper in symbol_shappers.items():
+                bids = self.depth_managers[symbol].get_depth_cache().get_bids()
+                asks = self.depth_managers[symbol].get_depth_cache().get_asks()
+                await shapper.update_ema(bids, asks, twake)
+                list_trades = self.depth_managers[symbol].trades
+                await shapper.on_trades_bunch(list_trades, force_t_avail=twake)
+                oneSec[i] = await shapper.make_frames_async(t_avail=twake, bids=bids, asks=asks)
+                i += 1
+            yield oneSec
+            tall += 1
+
+
 class Writer(Receiver):
     async def setup(self, markets, data_folder):
         self.store = collections.defaultdict(list)

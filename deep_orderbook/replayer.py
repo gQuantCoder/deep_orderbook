@@ -5,6 +5,7 @@ import time, datetime
 import pandas as pd
 import numpy as np
 import asyncio
+import aiofiles
 from tqdm.auto import tqdm
 from deep_orderbook.shapper import BookShapper
 
@@ -135,7 +136,9 @@ class Replayer:
         for fupdate in file_updates:
                 trades_file = fupdate.replace('update', 'trades')
                 file_updates.set_description(fupdate.replace(self.data_folder, ''))
-                alltrades = await shapper.on_trades_bunch(trades_file)
+                async with aiofiles.open(trades_file, 'r') as fp:
+                    list_trades = json.loads(await fp.read())
+                    await shapper.on_trades_bunch(list_trades)
                 js = json.load(open(fupdate))
                 allupdates = tqdm(js, leave=False)
                 # prev_ts = None
@@ -158,7 +161,8 @@ class Replayer:
 
                     px = await shapper.on_depth_msg_async(book_upd)
 
-                    oneSec = await shapper.make_frames_async(book_upd)
+                    t_avail = shapper.secondAvail(book_upd)
+                    oneSec = await shapper.make_frames_async(t_avail)
 
                     allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, tr={len(shapper.trdf):02}")#", px={px:16.12f}")
                     # assert not prev_ts or ts == 1 + prev_ts

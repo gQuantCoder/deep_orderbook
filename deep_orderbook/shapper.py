@@ -58,12 +58,16 @@ class BookShapper:
         return self.px
 
     async def on_depth_msg_async(self, msg):
-        E = msg['E']
-        self.ts = 1 + E // 1000
-
         await self._depth_manager._depth_event(msg)
-        bbp, bbs = self._depth_manager.get_depth_cache().get_bids()[0]
-        bap, bas = self._depth_manager.get_depth_cache().get_asks()[0]
+        bids = self._depth_manager.get_depth_cache().get_bids()
+        asks = self._depth_manager.get_depth_cache().get_asks()
+        ts = self.secondAvail(msg)
+        await self.update_ema(bids, asks, ts)
+
+    async def update_ema(self, bids, asks, ts):
+        self.ts = ts
+        bbp, bbs = bids[0]
+        bap, bas = bids[0]
         price = (bbp * bas + bap * bbs) / (bbs + bas)
         self.px = round(price, 8)
         self.emaPrice = self.px * self.emaNew + (self.emaPrice if self.emaPrice is not None else self.px) * (1-self.emaNew)
@@ -74,11 +78,10 @@ class BookShapper:
     def secondAvail(tr_dict):
         return 1 + tr_dict['E'] // 1000
 
-    async def on_trades_bunch(self, trades_file):
-        async with aiofiles.open(trades_file, 'r') as fp:
-            contents = await fp.read()
-            list_trades = json.loads(contents)
-
+    async def on_trades_bunch(self, list_trades, force_t_avail=None):
+        if force_t_avail:
+            self.sec_trades[force_t_avail] = list(list_trades)
+            return
         grp_sec = itertools.groupby(list_trades, self.secondAvail)
         for i,l in grp_sec:
             # print(i, list(l))
@@ -92,13 +95,10 @@ class BookShapper:
                 trdf
         return oneSec
 
-    async def make_frames_async(self, book_upd):
-        t_grp = self.secondAvail(book_upd)
-        list_trades = self.sec_trades.pop(t_grp, [])
-        #print(t_grp, list_trades)
-        #list_trades = list(list_trades)
-        #print(t_grp, list_trades)
+    async def make_frames_async(self, t_avail, bids=None, asks=None):
+        list_trades = self.sec_trades.pop(t_avail, [])
         if list_trades:
+            # print("past trades available: ", len(self.sec_trades))
             ts = pd.DataFrame(list_trades).drop(['M', 's', 'e', 'a'], axis=1)
             ts = ts.astype(np.float64)
             #ts['t'] = 1 + ts['E'] // 1000
@@ -117,8 +117,8 @@ class BookShapper:
             self.trdf = pd.DataFrame(columns=['p', 'q', 'delay', 'num', 'up']).set_index(['p'])
 #            self.trdf = self.trdf.loc[[self.prev_px]]
 
-        bids = self._depth_manager.get_depth_cache().get_bids()
-        asks = self._depth_manager.get_depth_cache().get_asks()
+        bids = bids or self._depth_manager.get_depth_cache().get_bids()
+        asks = asks or self._depth_manager.get_depth_cache().get_asks()
         oneSec = pd.DataFrame(bids, columns=['price', 'size']).set_index('price'), \
                 pd.DataFrame(asks, columns=['price', 'size']).set_index('price'), \
                 {'time': self.ts, 'price': self.px, 'emaPrice': self.emaPrice, 'bid': bids[0][0], 'ask': asks[0][0]}, \
