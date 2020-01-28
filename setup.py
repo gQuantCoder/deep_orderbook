@@ -28,6 +28,6 @@ if __name__ == "__main__":
         author_email="gquantcoder@gmail.com",
         packages=find_packages(),
         install_requires=parse_requirements("requirements.txt"),
-        python_requires=">=3.6.3",
+        python_requires=">=3.7.4",
         entry_points={"console_scripts": ["deepbook=deep_orderbook.__main__:main"]},
     )
