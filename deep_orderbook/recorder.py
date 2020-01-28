@@ -108,7 +108,31 @@ class Receiver:
         await self.stoprestart()
 
     async def on_depth_msg(self, msg):
+        """
+        {
+            "e": "depthUpdate", # Event type
+            "E": 123456789,     # Event time
+            "s": "BNBBTC",      # Symbol
+            "U": 157,           # First update ID in event
+            "u": 160,           # Final update ID in event
+            "b": [              # Bids to be updated
+                [
+                    "0.0024",   # price level to be updated
+                    "10",       # quantity
+                    []          # ignore
+                ]
+            ],
+            "a": [              # Asks to be updated
+                [
+                    "0.0026",   # price level to be updated
+                    "100",      # quantity
+                    []          # ignore
+                ]
+            ]
+        }
+        """
         symbol = msg['s']
+        #print(time.time(), msg['E']/1000)
         # print('no bid' if not depth_cache.get_bids() else '', 'no ask' if not depth_cache.get_asks() else '')
         #self.nummsg[symbol] += 1
         #print(', '.join([f'{s}: {self.nummsg[s]:06}' for s in self.markets]), end='\r')
@@ -124,6 +148,21 @@ class Receiver:
         self.trade_managers[symbol] = list()
 
     async def on_aggtrades(self, msg):
+        """
+        {
+            "e": "aggTrade",                # event type
+            "E": 1499405254326,             # event time
+            "s": "ETHBTC",                  # symbol
+            "a": 70232,                             # aggregated tradeid
+            "p": "0.10281118",              # price
+            "q": "8.15632997",              # quantity
+            "f": 77489,                             # first breakdown trade id
+            "l": 77489,                             # last breakdown trade id
+            "T": 1499405254324,             # trade time
+            "m": false,                             # whether buyer is a maker
+            "M": true                               # can be ignored
+        }
+        """
         symbol = msg["s"]
         self.trade_managers[symbol].append(copy.deepcopy(msg))
         self.nummsg[symbol] += 1
@@ -149,13 +188,14 @@ class Receiver:
                 conn_keys.append(key)
                 # create the Depth Cache
             for symbol in self.markets:
-                depthmanager = await MessageDepthCacheManager.create(self.client, asyncio.get_event_loop(), 
-                                                                                symbol, 
-                                                                                self.on_depth,
-                                                                                bm=self.bm,
-                                                                                limit=1000,
-                                                                                msg_coro=self.on_depth_msg
-                                                                                )
+                depthmanager = await MessageDepthCacheManager.create(self.client,
+                                                                     asyncio.get_event_loop(), 
+                                                                     symbol, 
+                                                                     self.on_depth,
+                                                                     bm=self.bm,
+                                                                     limit=1000,
+                                                                     msg_coro=self.on_depth_msg
+                                                                     )
                 self.depth_managers[symbol] = depthmanager
 
             #await self.bm.start()
