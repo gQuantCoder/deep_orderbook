@@ -174,10 +174,11 @@ class BookShapper:
         a_idx = np.round(pd.Index(ref_price * (1+spacing*zoom_frac)), 7)
 
         t_idx = b_idx[::-1].append(a_idx)
+        t_idx_inv = t_idx[::-1]
         
-        reind_b = dfb.reindex(t_idx[::-1], method='ffill', fill_value=0)[::-1]
-        reind_a = dfa.reindex(t_idx, method='ffill', fill_value=0)
-        treind_b = tr[tr['up']<=0].groupby(level=0).sum()[::-1].cumsum()[::-1].reindex(t_idx, method='bfill', fill_value=0).diff(-1).fillna(0)
+        reind_b = dfb.cumsum().reindex(t_idx_inv, method='ffill', fill_value=0).diff().fillna(0)[::-1]
+        reind_a = dfa.cumsum().reindex(t_idx, method='ffill', fill_value=0).diff().fillna(0)
+        treind_b = tr[tr['up']<=0].groupby(level=0).sum()[::-1].cumsum().reindex(t_idx_inv, method='ffill', fill_value=0).diff().fillna(0)[::-1]
         treind_a = tr[tr['up']>=0].groupby(level=0).sum().cumsum().reindex(t_idx, method='ffill', fill_value=0).diff().fillna(0)
         
         treind_b = np.arcsinh(treind_b)
