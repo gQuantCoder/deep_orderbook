@@ -12,6 +12,7 @@ from deep_orderbook.recorder import MessageDepthCacheManager
 import aioitertools
 
 pd.set_option('precision', 12)
+import matplotlib.pyplot as plt
 
 
 class BookShapper:
@@ -189,8 +190,7 @@ class BookShapper:
 
 
 
-    def sampleArrays(self, market, numpoints=None, apply_fnct=None):
-        replayer = self.replayL2(market, emaNew=1/64)
+    def sampleArrays(self, replayer, numpoints=None, apply_fnct=None):
         arrs = []
         trrs = []
         pric = []
@@ -292,7 +292,7 @@ class BookShapper:
     def build_time_level_trade(books, prices, filename='data/timeUpDn.npy'):
         pricestep = 0.000001 * prices[0][0] / 0.02
         sidesteps = books.shape[1] // 2
-        FUTURE = 1200*10
+        FUTURE = 120#0*10
         timeUpDn = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
         #########################################################
                                     #######
@@ -315,22 +315,22 @@ class BookShapper:
 
     @staticmethod
     def build(total, element):
+        force_save = element is None
+        element = element or total
         for market,second in element.items():
-    #        print('total', total[market]['ps'][-1])
-    #        print('element', element[market]['ps'][-1])
             datetotal = datetime.datetime.fromtimestamp(int(total[market]['ps'][-1][-1])).date()
             dateeleme = datetime.datetime.fromtimestamp(int(element[market]['ps'][-1][-1])).date()
             newDay = datetotal < dateeleme
-            if not newDay:
+            if not (newDay or force_save):
                 for name,arrs in second.items():
                     total[market][name] += arrs
             else:
                 for name,arrs in second.items():
                     arrday = np.stack(total[market][name]).astype(np.float32)
                     np.save(f'data/{datetotal}-{market}-{name}.npy', arrday)
-                from multiprocessing import Process
-                thread = Process(
-                    target=Replayer.build_time_level_trade,
+                from threading import Thread
+                thread = Thread(
+                    target=BookShapper.build_time_level_trade,
                     args=(
                         np.stack(total[market]['bs']).astype(np.float32),
                         np.stack(total[market]['ps']).astype(np.float32),
