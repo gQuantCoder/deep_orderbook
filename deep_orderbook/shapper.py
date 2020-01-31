@@ -68,7 +68,7 @@ class BookShapper:
     async def update_ema(self, bids, asks, ts):
         self.ts = ts
         bbp, bbs = bids[0]
-        bap, bas = bids[0]
+        bap, bas = asks[0]
         price = (bbp * bas + bap * bbs) / (bbs + bas)
         self.px = round(price, 8)
         self.emaPrice = self.px * self.emaNew + (self.emaPrice if self.emaPrice is not None else self.px) * (1-self.emaNew)
