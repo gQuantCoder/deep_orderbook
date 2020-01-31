@@ -268,14 +268,14 @@ class BookShapper:
     @staticmethod
     async def gen_array_async(market_replay, markets, width_per_side=64, zoom_frac=1/256):
         #market_replay = self.multireplayL2(markets)
-        prev_price = {p: None for p in range(len(markets))}
+        prev_price = {p: None for p in markets}
         spacing = np.arange(width_per_side)
         #spacing = np.square(spacing) + spacing
         spacing = spacing / spacing[-1]
         spacing = np.arcsin(spacing)*3-spacing*2
         async for second in market_replay:
             market_second = {}#collections.defaultdict(list)
-            for pair in range(len(markets)):
+            for pair in markets:
                 bi,ai,tpi,tri = second[pair]
                 prev_price[pair] = prev_price[pair] or tpi['price']
                 bib,aib,trb,tra  = BookShapper.bin_books(bi,ai,tri, ref_price=prev_price[pair], zoom_frac=zoom_frac, spacing=spacing)

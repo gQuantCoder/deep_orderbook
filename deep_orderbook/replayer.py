@@ -118,6 +118,7 @@ class Replayer:
 
                     yield oneSec
     async def replayL2_async(self, pair, shapper):
+        yield pair
         snapshotupdates = {}
         files = tqdm(self.snapshots(pair))
         for snap_file in files:
@@ -192,8 +193,8 @@ class Replayer:
 
     @staticmethod
     async def multireplayL2_async(replayers):
-        pairs = range(len(replayers))
-        gens = {pair: replayers[pair] for pair in pairs}
+        pairs = [await replayer.__anext__() for replayer in replayers]
+        gens = {pairs[i]: replayers[i] for i in range(len(pairs))}
         nexs = {pair: await gens[pair].__anext__() for pair in pairs}
         def secs(pair): return nexs[pair][2]['time']
         tall = max([secs(p) for p in pairs])
