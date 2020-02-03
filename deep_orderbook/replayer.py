@@ -130,6 +130,7 @@ class Replayer:
         next_snap,snapshot_file = next(snapshotupdates)
 
         snapshot = json.load(open(snapshot_file))
+        print("\nsnapshot_file", snapshot_file)
         lastUpdateId = snapshot['lastUpdateId']
         await shapper.on_snaphsot_async(snapshot)
 
@@ -142,10 +143,12 @@ class Replayer:
                     list_trades = json.loads(await fp.read())
                     await shapper.on_trades_bunch(list_trades)
                 js = json.load(open(fupdate))
+                print("\nfupdate", fupdate)
                 allupdates = tqdm(js, leave=False)
                 # prev_ts = None
                 for book_upd in allupdates:
                     if book_upd['e'] != 'depthUpdate':
+                        print("not update:", book_upd['e'])
                         continue
                     U = book_upd['U']
                     u = book_upd['u']
@@ -154,6 +157,8 @@ class Replayer:
 
                     if next_snap and u >= next_snap:
                         snapshot = json.load(open(snapshot_file))
+                        print("\nsnapshot_file", snapshot_file)
+
                         lastUpdateId = snapshot['lastUpdateId']
                         await shapper.on_snaphsot_async(snapshot)
                         try:
@@ -165,8 +170,9 @@ class Replayer:
 
                     t_avail = shapper.secondAvail(book_upd)
                     oneSec = await shapper.make_frames_async(t_avail)
+                    BBO = oneSec[2]['bid'], oneSec[2]['ask']
 
-                    allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, tr={len(shapper.trdf):02}")#", px={px:16.12f}")
+                    allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, tr={len(shapper.trdf):02}, BBO:{BBO}")#", px={px:16.12f}")
                     # assert not prev_ts or ts == 1 + prev_ts
                     # prev_ts = ts
 
