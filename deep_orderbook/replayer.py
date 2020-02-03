@@ -196,20 +196,26 @@ class Replayer:
         pairs = [await replayer.__anext__() for replayer in replayers]
         gens = {pairs[i]: replayers[i] for i in range(len(pairs))}
         nexs = {pair: await gens[pair].__anext__() for pair in pairs}
-        def secs(pair): return nexs[pair][2]['time']
-        tall = max([secs(p) for p in pairs])
+        def next_sec(pair): return nexs[pair][2]['time']
+        tall = max([next_sec(p) for p in pairs])
         curs = {pair: nexs[pair] for pair in pairs}
         print('tall', tall)
         while True:
             for pair in pairs:
-                while secs(pair) < tall:
+                while next_sec(pair) < tall:
                     curs[pair] = nexs[pair]
                     try:
                         nexs[pair] = await gens[pair].__anext__()
                     except StopAsyncIteration:
                         return # break
             yield curs
-            tall += 1
+            next_overall_sec = min([next_sec(pair) for pair in pairs])
+            jump = next_overall_sec - tall
+            if jump > 60:
+                print(f"\njumping {datetime.timedelta(seconds=jump)} seconds to have an update from one of the symbols")
+                tall += jump
+            else:
+                tall += 1
 
 
 if __name__ == '__main__':

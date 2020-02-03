@@ -337,7 +337,7 @@ class BookShapper:
                         f'data/{datetotal}-{market}-time2level.npy'
                     ))
                 thread.start()
-
+                thread.join()
             if newDay:
                 for name,arrs in second.items():
                     total[market][name] = arrs
