@@ -118,8 +118,8 @@ class BookShapper:
             self.trdf = pd.DataFrame(columns=['p', 'q', 'delay', 'num', 'up']).set_index(['p'])
 #            self.trdf = self.trdf.loc[[self.prev_px]]
 
-        bids = bids or self._depth_manager.get_depth_cache().get_bids()
-        asks = asks or self._depth_manager.get_depth_cache().get_asks()
+        if bids is None or asks is None:
+            bids, asks = self._depth_manager.get_depth_cache().get_bids_asks()
         oneSec = pd.DataFrame(bids, columns=['price', 'size']).set_index('price'), \
                 pd.DataFrame(asks, columns=['price', 'size']).set_index('price'), \
                 {'time': self.ts, 'price': self.px, 'emaPrice': self.emaPrice, 'bid': bids[0][0], 'ask': asks[0][0]}, \
@@ -315,6 +315,7 @@ class BookShapper:
 
     @staticmethod
     def build(total, element):
+        bipsSide = 32
         force_save = element is None
         element = element or total
         for market,second in element.items():
@@ -334,6 +335,7 @@ class BookShapper:
                     args=(
                         np.stack(total[market]['bs']).astype(np.float32),
                         np.stack(total[market]['ps']).astype(np.float32),
+                        bipsSide,
                         f'data/{datetotal}-{market}-time2level.npy'
                     ))
                 thread.start()
