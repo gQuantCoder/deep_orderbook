@@ -265,7 +265,9 @@ class Writer(Receiver):
         self.store = collections.defaultdict(list)
         self.tradestore = collections.defaultdict(list)
         self.L2folder = f"{data_folder}/L2"
-        
+        self.lock = threading.Lock()
+        self.tradelock = threading.Lock()
+
         for symbol in markets:
             os.makedirs(f"{self.L2folder}/{symbol}", exist_ok=True)
 
@@ -274,13 +276,14 @@ class Writer(Receiver):
     async def on_depth_msg(self, msg):
         await super().on_depth_msg(msg)
         symbol = msg['s']
-        if True:#with self.lock:
+        with self.lock:
             self.store[symbol].append(msg)
 
     async def on_depth(self, depth_cache):
         await super().on_depth(depth_cache)
         symbol = depth_cache.symbol
-        self.tradestore[symbol] += self.depth_managers[symbol].trades
+        with self.tradelock:
+            self.tradestore[symbol] += self.depth_managers[symbol].trades
 
 #    async def on_aggtrades(self, msg):
 #        await super().on_aggtrades(msg)
@@ -293,11 +296,11 @@ class Writer(Receiver):
         snap = datetime.datetime.utcfromtimestamp(cur_ts).isoformat().replace(":", "-")  # .replace('-',"_")
         upds = datetime.datetime.utcfromtimestamp(prev_ts).isoformat().replace(":", "-")  # .replace('-',"_")
         for symbol in progressbar:
-            if True:#with self.lock:
+            with self.lock:
                 tosave = copy.deepcopy(self.store[symbol])
                 self.store[symbol] = list()
                 self.nummsg[symbol] = 0
-            if True:#with self.tradelock:
+            with self.tradelock:
                 tradetosave = copy.deepcopy(self.tradestore[symbol])
                 self.tradestore[symbol] = list()
 

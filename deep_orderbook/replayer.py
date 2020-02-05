@@ -130,7 +130,7 @@ class Replayer:
         next_snap,snapshot_file = next(snapshotupdates)
 
         snapshot = json.load(open(snapshot_file))
-        print("\nsnapshot_file", snapshot_file)
+#        print("\nsnapshot_file", snapshot_file)
         lastUpdateId = snapshot['lastUpdateId']
         await shapper.on_snaphsot_async(snapshot)
 
@@ -143,7 +143,7 @@ class Replayer:
                     list_trades = json.loads(await fp.read())
                     await shapper.on_trades_bunch(list_trades)
                 js = json.load(open(fupdate))
-                print("\nfupdate", fupdate)
+#                print("\nfupdate", fupdate)
                 allupdates = tqdm(js, leave=False)
                 # prev_ts = None
                 for book_upd in allupdates:
@@ -157,7 +157,7 @@ class Replayer:
 
                     if next_snap and u >= next_snap:
                         snapshot = json.load(open(snapshot_file))
-                        print("\nsnapshot_file", snapshot_file)
+#                        print("\nsnapshot_file", snapshot_file)
 
                         lastUpdateId = snapshot['lastUpdateId']
                         await shapper.on_snaphsot_async(snapshot)
