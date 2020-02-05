@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import asyncio
 import aiofiles
+import aioitertools
 from tqdm.auto import tqdm
 from deep_orderbook.shapper import BookShapper
 
@@ -218,16 +219,24 @@ class Replayer:
                 tall += 1
 
 
+async def main():
+    markets = ['ETHBTC']
+    file_replayer = Replayer('../crypto-trading/data/L2')
+    replay = file_replayer.replayL2('ETHBTC', await BookShapper.create())
+    for d in replay:
+        pass
+        break
+    
+    replay = file_replayer.replayL2_async('ETHBTC', await BookShapper.create())
+    async for d in replay:
+        pass
+        break
+
+    replayers = [file_replayer.replayL2_async(pair, await BookShapper.create()) for pair in markets]
+    multi_replay = file_replayer.multireplayL2_async(replayers)
+    async for d in multi_replay:
+        pass
+
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    shapper = loop.run_until_complete(BookShapper.create())
-    file_replayer = Replayer('../crypto-trading/data/L2')
-    replay = file_replayer.replayL2('ETHBTC', shapper)
-    while True:
-        b, a, tp, tr = next(replay)
-
-        print(f"bids:\n{b.head()}")
-        print(f"asks:\n{a.head()}")
-        print(f"prices:\n{tp}")
-        print(f"trades:\n{tr}")
-        loop.run_until_complete(asyncio.sleep(1))
+    shapper = loop.run_until_complete(main())

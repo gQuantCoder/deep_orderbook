@@ -18,6 +18,42 @@ from binance.depthcache import DepthCache
 
 # https://github.com/binance-exchange/binance-official-api-docs/blob/master/web-socket-streams.md#how-to-manage-a-local-order-book-correctly
 
+class DepthCachePlus(DepthCache):
+    def add_bid(self, bid):
+        pr = float(bid[0])
+        sz = float(bid[1])
+        self._bids[pr] = sz
+        if sz == 0.0:
+            del self._bids[pr]
+
+    def add_ask(self, ask):
+        pr = float(ask[0])
+        sz = float(ask[1])
+        self._asks[pr] = sz
+        if sz == 0.0:
+            del self._asks[pr]
+
+    def get_bids_asks(self):
+        bids = self.get_bids()
+        asks = self.get_asks()
+        if bids[0][0] >= asks[0][0]:
+            print(f"\ncleaning the crossed BBO \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
+            for p in list(self._bids.keys()):
+                if p >= asks[0][0]:
+                    print(f"del bids[{p}]")
+                    del self._bids[p]
+            for p in list(self._asks.keys()):
+                if p <= bids[0][0]:
+                    print(f"del asks[{p}]")
+                    del self._asks[p]
+            bids = self.get_bids()
+            asks = self.get_asks()
+            print(f"result: \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
+
+        assert bids[0][0] < asks[0][0]
+        return bids, asks
+
+
 class MessageDepthCacheManager(DepthCacheManager):
     _default_refresh = 60 * 30  # 30 minutes
     @classmethod
@@ -32,7 +68,7 @@ class MessageDepthCacheManager(DepthCacheManager):
         self._last_update_id = None
         self._depth_message_buffer = []
         self._bm = bm
-        self._depth_cache = DepthCache(self._symbol)
+        self._depth_cache = DepthCachePlus(self._symbol)
         self._refresh_interval = refresh_interval
         self.trades = list()
 
@@ -53,8 +89,8 @@ class MessageDepthCacheManager(DepthCacheManager):
         self._last_update_id = None
         self._depth_message_buffer = []
         res = snapshot
-        self._depth_cache.bids = {}
-        self._depth_cache.asks = {}
+        self._depth_cache._bids = {}
+        self._depth_cache._asks = {}
 
         # process bid and asks from the order book
         for bid in res['bids']:
@@ -206,22 +242,19 @@ class Receiver:
         while True:
             twake = tall
             timesleep = twake - time.time()
-            print(twake, timesleep)
+            # print(twake, timesleep)
             if timesleep > 0:
                 await asyncio.sleep(timesleep)
             else:
                 print(f"time sleep is negative: {timesleep}")
 
             oneSec = {}
-            i = 0
             for symbol,shapper in symbol_shappers.items():
-                bids = self.depth_managers[symbol].get_depth_cache().get_bids()
-                asks = self.depth_managers[symbol].get_depth_cache().get_asks()
+                bids, asks = self.depth_managers[symbol].get_depth_cache().get_bids_asks()
                 await shapper.update_ema(bids, asks, twake)
                 list_trades = self.depth_managers[symbol].trades
                 await shapper.on_trades_bunch(list_trades, force_t_avail=twake)
-                oneSec[i] = await shapper.make_frames_async(t_avail=twake, bids=bids, asks=asks)
-                i += 1
+                oneSec[symbol] = await shapper.make_frames_async(t_avail=twake, bids=bids, asks=asks)
             yield oneSec
             tall += 1
 
@@ -256,9 +289,9 @@ class Writer(Receiver):
 
     async def save_snapshot(self, cur_ts, prev_ts):
         progressbar = self.markets
+        snap = datetime.datetime.utcfromtimestamp(cur_ts).isoformat().replace(":", "-")  # .replace('-',"_")
+        upds = datetime.datetime.utcfromtimestamp(prev_ts).isoformat().replace(":", "-")  # .replace('-',"_")
         for symbol in progressbar:
-            snap = datetime.datetime.utcfromtimestamp(cur_ts).isoformat().replace(":", "-")  # .replace('-',"_")
-            upds = datetime.datetime.utcfromtimestamp(prev_ts).isoformat().replace(":", "-")  # .replace('-',"_")
             if True:#with self.lock:
                 tosave = copy.deepcopy(self.store[symbol])
                 self.store[symbol] = list()
@@ -282,7 +315,8 @@ class Writer(Receiver):
                     await fp.write(json.dumps(L2))
         print("\nsaved_snapshot \n")
 
-    async def run_writer(self, SAVE_PERIOD=60*60, stoptime=datetime.time(23, 58, 30)):
+    async def run_writer(self, save_period_minutes=60, stoptime=datetime.time(23, 58, 30)):
+        save_period_seconds = save_period_minutes * 60
         stopat = datetime.datetime.combine(
             (datetime.datetime.now() + datetime.timedelta(hours=1)).date(), stoptime
         )
@@ -299,7 +333,7 @@ class Writer(Receiver):
                 await asyncio.sleep(PERIOD_L2 - t % PERIOD_L2)
                 ti = int(time.time())
                 # print("ti", ti)
-                new_th = int(ti // SAVE_PERIOD) * SAVE_PERIOD
+                new_th = int(ti // save_period_seconds) * save_period_seconds
 
                 #if not self.bm.is_alive():
                 #    break

@@ -48,9 +48,10 @@ class BookShapper:
         self.asks = self.merge(self.asks, ua, True)
 
         bid, ask = self.bids.index[0], self.asks.index[0]
+        #assert bid < ask
         if bid > ask:
-            print(u, bid, ">", ask, fupdate, datetime.datetime.fromtimestamp(ts))
-            bids, asks = self.bids[self.bids.index < ask], self.asks[self.asks.index > bid]
+            print(u, bid, ">", ask, datetime.datetime.fromtimestamp(self.ts))
+            self.bids, self.asks = self.bids[self.bids.index < ask], self.asks[self.asks.index > bid]
             bid, ask = self.bids.index[0], self.asks.index[0]
         self.px = self.price(self.bids, self.asks)
         self.emaPrice = self.px * self.emaNew + (self.emaPrice if self.emaPrice is not None else self.px) * (1-self.emaNew)
@@ -60,8 +61,7 @@ class BookShapper:
 
     async def on_depth_msg_async(self, msg):
         await self._depth_manager._depth_event(msg)
-        bids = self._depth_manager.get_depth_cache().get_bids()
-        asks = self._depth_manager.get_depth_cache().get_asks()
+        bids, asks = self._depth_manager.get_depth_cache().get_bids_asks()
         ts = self.secondAvail(msg)
         await self.update_ema(bids, asks, ts)
 
@@ -289,9 +289,9 @@ class BookShapper:
 
 
     @staticmethod
-    def build_time_level_trade(books, prices, filename='data/timeUpDn.npy'):
-        pricestep = 0.000001 * prices[0][0] / 0.02
+    def build_time_level_trade(books, prices, bipsSide=32, filename='data/timeUpDn.npy'):
         sidesteps = books.shape[1] // 2
+        pricestep = prices[0][0] * 0.0001 * bipsSide / sidesteps
         FUTURE = 120#0*10
         timeUpDn = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
         #########################################################
