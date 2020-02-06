@@ -123,7 +123,10 @@ class Replayer:
         snapshotupdates = {}
         files = tqdm(self.snapshots(pair))
         for snap_file in files:
-            snap = json.load(open(snap_file))
+            try:
+                snap = json.load(open(snap_file))
+            except:
+                continue
             lastUpdateId = snap['lastUpdateId']
             snapshotupdates[lastUpdateId] = snap_file
         snapshotupdates = iter(sorted(snapshotupdates.items()))

@@ -291,9 +291,9 @@ class Writer(Receiver):
 #        if True:#with self.tradelock:
 #            self.tradestore[symbol].append(copy.deepcopy(msg))
 
-    async def save_snapshot(self, cur_ts, prev_ts):
+    async def save_updates_since(self, prev_ts=None):
+        prev_ts = prev_ts or self.prev_th
         progressbar = self.markets
-        snap = datetime.datetime.utcfromtimestamp(cur_ts).isoformat().replace(":", "-")  # .replace('-',"_")
         upds = datetime.datetime.utcfromtimestamp(prev_ts).isoformat().replace(":", "-")  # .replace('-',"_")
         for symbol in progressbar:
             with self.lock:
@@ -308,61 +308,51 @@ class Writer(Receiver):
                 await fp.write(json.dumps(tosave))
             async with aiofiles.open(f"{self.L2folder}/{symbol}/{upds}_trades.json", "w") as fp:
                 await fp.write(json.dumps(tradetosave))
+        print(f"\nsaved_updates since {upds}")
 
+    async def save_snapshot(self, cur_ts, max_levels=1000):
+        snap = datetime.datetime.utcfromtimestamp(cur_ts).isoformat().replace(":", "-")  # .replace('-',"_")
         if cur_ts:
-            progressbar = self.markets
-            for symbol in progressbar:
-                print(symbol)
-                # time.sleep(1)
-                L2 = await self.client.get_order_book(symbol=symbol, limit=1000)
+            L2s_coro = [self.client.get_order_book(symbol=pair, limit=max_levels) for pair in self.markets]
+            L2s = await asyncio.gather(*L2s_coro)
+            for symbol, L2 in zip(self.markets, L2s):
                 async with aiofiles.open(f"{self.L2folder}/{symbol}/{snap}_snapshot.json", "w") as fp:
                     await fp.write(json.dumps(L2))
-        print("\nsaved_snapshot \n")
+        print("\nsaved_snapshot")
 
-    async def run_writer(self, save_period_minutes=60, stoptime=datetime.time(23, 58, 30)):
+    async def run_writer(self, save_period_minutes=60):
         save_period_seconds = save_period_minutes * 60
-        stopat = datetime.datetime.combine(
-            (datetime.datetime.now() + datetime.timedelta(hours=1)).date(), stoptime
-        )
-        print("\nstopping at", stopat, "in", stopat - datetime.datetime.now())
 
         PERIOD_L2 = 10
-        th = 0
-        prev_th = 0
+        self.th = 0
+        self.prev_th = 0
 
         try:
-            for s in range(999999999):
+            while True:
                 t = time.time()
                 # print("t", t)
                 await asyncio.sleep(PERIOD_L2 - t % PERIOD_L2)
-                ti = int(time.time())
+                t_ini = int(time.time())
                 # print("ti", ti)
-                new_th = int(ti // save_period_seconds) * save_period_seconds
+                self.new_th = int(t_ini // save_period_seconds) * save_period_seconds
 
-                #if not self.bm.is_alive():
-                #    break
-
-                if datetime.datetime.now() >= stopat:
-                    # saves for next period that will be overwritten by next script
-                    await self.save_snapshot(0, prev_th)
-                    print("\nexiting\n", "s =", s, "\n")
-                    break
-
-                if new_th > th:
-                    print("\n", ti, datetime.datetime.fromtimestamp(ti))
-                    if th == 0:
-                        await self.save_snapshot(ti, ti)
-                        prev_th = ti
+                if self.new_th > self.th:
+                    #print("\n", t_ini, datetime.datetime.fromtimestamp(t_ini))
+                    if self.th == 0:
+                        await self.save_updates_since(t_ini)
+                        await self.save_snapshot(t_ini)
+                        self.prev_th = t_ini
                     else:
-                        await self.save_snapshot(new_th, prev_th)
-                        prev_th = new_th
-                    th = new_th
+                        await self.save_updates_since()
+                        await self.save_snapshot(self.new_th)
+                        self.prev_th = self.new_th
+                    self.th = self.new_th
+        except asyncio.CancelledError as e:
+            await self.save_updates_since()
         except Exception as e:
             print(e.__class__, e)
-            os._exit(1)
+            raise e
 
-        print("\nexited writting loop\n")
-        os._exit(1)
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
