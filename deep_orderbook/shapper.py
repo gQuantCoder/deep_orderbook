@@ -272,7 +272,7 @@ class BookShapper:
         spacing = np.arange(width_per_side)
         #spacing = np.square(spacing) + spacing
         spacing = spacing / spacing[-1]
-        spacing = np.arcsin(spacing)*3-spacing*2
+        spacing = np.arcsin(spacing)*3 - spacing*2
         async for second in market_replay:
             market_second = {}#collections.defaultdict(list)
             for pair in markets:
@@ -289,11 +289,11 @@ class BookShapper:
 
 
     @staticmethod
-    def build_time_level_trade(books, prices, bipsSide=32, filename='data/timeUpDn.npy'):
-        sidesteps = books.shape[1] // 2
+    def build_time_level_trade(books, prices, bipsSide=32, sidesteps=64):
+#        sidesteps = books.shape[1] // 2
         pricestep = prices[0][0] * 0.0001 * bipsSide / sidesteps
         FUTURE = 120#0*10
-        timeUpDn = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
+        time2levels = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
         #########################################################
                                     #######
         for i in tqdm(range(prices.shape[0])):
@@ -309,13 +309,14 @@ class BookShapper:
                 timeDn = np.argmin(waitDn) or FUTURE*10
                 timeupdn.insert(0, [timeDn])
                 timeupdn.append([timeUp])
-            timeUpDn[i] = timeupdn
-        np.save(filename, timeUpDn.astype(np.float32))
+            time2levels[i] = timeupdn
+        return time2levels.astype(np.float32)
 
 
     @staticmethod
-    def build(total, element):
-        bipsSide = 32
+    def build(total, element, reduce_func=None):
+#        bipsSide = 32
+#        sidesteps = 64
         force_save = element is None
         element = element or total
         for market,second in element.items():
@@ -326,20 +327,16 @@ class BookShapper:
                 for name,arrs in second.items():
                     total[market][name] += arrs
             else:
-                for name,arrs in second.items():
-                    arrday = np.stack(total[market][name]).astype(np.float32)
-                    np.save(f'data/{datetotal}-{market}-{name}.npy', arrday)
-                from threading import Thread
-                thread = Thread(
-                    target=BookShapper.build_time_level_trade,
-                    args=(
+                arrday_bs = np.stack(total[market]['bs']).astype(np.float32)
+                np.save(f'data/{datetotal}-{market}-bs.npy', arrday_bs)
+                arrday_ps = np.stack(total[market]['ps']).astype(np.float64)
+                np.save(f'data/{datetotal}-{market}-ps.npy', arrday_ps)
+                if reduce_func is not None:
+                    t2l = reduce_func(
                         np.stack(total[market]['bs']).astype(np.float32),
-                        np.stack(total[market]['ps']).astype(np.float32),
-                        bipsSide,
-                        f'data/{datetotal}-{market}-time2level.npy'
-                    ))
-                thread.start()
-                thread.join()
+                        np.stack(total[market]['ps']).astype(np.float64),
+                    )
+                    np.save(f'data/{datetotal}-{market}-time2level.npy', t2l)
             if newDay:
                 for name,arrs in second.items():
                     total[market][name] = arrs
