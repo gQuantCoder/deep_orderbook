@@ -100,7 +100,7 @@ class MessageDepthCacheManager(DepthCacheManager):
 
         # set first update id
         self._last_update_id = res['lastUpdateId']
-        print("\nfirst update", self._last_update_id)
+        # print("\nfirst update", self._last_update_id)
 
 #        # set a time to refresh the depth cache
 #        if self._refresh_interval:

@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 
 
 class BookShapper:
+    PriceShape = [2,3]
+
     @classmethod
     async def create(cls):
         self = cls()
@@ -29,7 +31,7 @@ class BookShapper:
         self.px = None
         self.prev_px = None
         self.emaPrice = None
-        self.emaNew = 1/256
+        self.emaNew = 1/32
         return self
 
     def on_snaphsot(self, snapshot):
@@ -120,10 +122,15 @@ class BookShapper:
 
         if bids is None or asks is None:
             bids, asks = self._depth_manager.get_depth_cache().get_bids_asks()
-        oneSec = pd.DataFrame(bids, columns=['price', 'size']).set_index('price'), \
-                pd.DataFrame(asks, columns=['price', 'size']).set_index('price'), \
-                {'time': self.ts, 'price': self.px, 'emaPrice': self.emaPrice, 'bid': bids[0][0], 'ask': asks[0][0]}, \
-                self.trdf
+        oneSec = {'time': self.ts,
+                  'price': self.px,
+                  'bids': pd.DataFrame(bids, columns=['price', 'size']).set_index('price'),
+                  'asks': pd.DataFrame(asks, columns=['price', 'size']).set_index('price'),
+                  'trades': self.trdf.copy(),
+                 'emaPrice': self.emaPrice,
+#                 'bid': bids[0][0],
+#                 'ask': asks[0][0]
+                 }
         return oneSec
 
     @staticmethod
@@ -182,10 +189,10 @@ class BookShapper:
         treind_b = tr[tr['up']<=0].groupby(level=0).sum()[::-1].cumsum().reindex(t_idx_inv, method='ffill', fill_value=0).diff().fillna(0)[::-1]
         treind_a = tr[tr['up']>=0].groupby(level=0).sum().cumsum().reindex(t_idx, method='ffill', fill_value=0).diff().fillna(0)
         
-        treind_b = np.arcsinh(treind_b)
-        treind_a = np.arcsinh(treind_a)
-        reind_b = np.arcsinh(reind_b)
-        reind_a = np.arcsinh(reind_a)
+        treind_b = np.arcsinh(treind_b).astype(np.float32)
+        treind_a = np.arcsinh(treind_a).astype(np.float32)
+        reind_b = np.arcsinh(reind_b).astype(np.float32)
+        reind_a = np.arcsinh(reind_a).astype(np.float32)
         return reind_b, reind_a, treind_b, treind_a
 
 
@@ -276,13 +283,17 @@ class BookShapper:
         async for second in market_replay:
             market_second = {}#collections.defaultdict(list)
             for pair in markets:
-                bi,ai,tpi,tri = second[pair]
-                prev_price[pair] = prev_price[pair] or tpi['price']
-                bib,aib,trb,tra  = BookShapper.bin_books(bi,ai,tri, ref_price=prev_price[pair], zoom_frac=zoom_frac, spacing=spacing)
-                prev_price[pair] = tpi['emaPrice']
+                sec = second[pair]
+                prev_price[pair] = prev_price[pair] or sec['price']
+                bib,aib,trb,tra  = BookShapper.bin_books(sec['bids'],sec['asks'],sec['trades'], ref_price=prev_price[pair], zoom_frac=zoom_frac, spacing=spacing)
+                prev_price[pair] = sec['emaPrice']
                 arr0 = bib.values - aib.values
                 arr1 = tra.values - trb.values
-                tp = np.array([tpi['price'], tpi['emaPrice'], tpi['bid'], tpi['ask'], tpi['time']])
+                utc = datetime.datetime.utcfromtimestamp(sec['time'])
+                d = sec['time'] // (3600 * 24) # int(utc.strftime('%y%m%d'))
+                t = sec['time'] % (3600 * 24)  #float(utc.strftime('%H%M%S.%f'))
+                tp = np.array([[sec['price'], sec['bids'].index[0], sec['asks'].index[0]], [d, t, 0]], dtype=np.float32)
+                # print('tp', tp)
                 arr3d = np.concatenate([arr0, arr1[:,::2]], axis=-1)
                 market_second[pair] = {'ps': [tp], 'bs': [arr3d]}
             yield market_second
@@ -291,7 +302,7 @@ class BookShapper:
     @staticmethod
     def build_time_level_trade(books, prices, bipsSide=32, sidesteps=64):
 #        sidesteps = books.shape[1] // 2
-        pricestep = prices[0][0] * 0.0001 * bipsSide / sidesteps
+        pricestep = prices[0, 0, 0] * 0.0001 * bipsSide / sidesteps
         FUTURE = 120#0*10
         time2levels = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
         #########################################################
@@ -302,9 +313,9 @@ class BookShapper:
             timeupdn = []
             for j in range(sidesteps):
                 thresh = j * pricestep
-                p, e, b, a, t = prices[i]
-                waitUp = prices[i:i+FUTURE, 2] < a + thresh
-                waitDn = prices[i:i+FUTURE, 3] > b - thresh
+                [p, b, a], [d, t, _] = prices[i]
+                waitUp = prices[i:i+FUTURE, 0, 1] < a + thresh
+                waitDn = prices[i:i+FUTURE, 0, 2] > b - thresh
                 timeUp = np.argmin(waitUp) or FUTURE*10
                 timeDn = np.argmin(waitDn) or FUTURE*10
                 timeupdn.insert(0, [timeDn])
@@ -320,8 +331,11 @@ class BookShapper:
         force_save = element is None
         element = element or total
         for market,second in element.items():
-            datetotal = datetime.datetime.fromtimestamp(int(total[market]['ps'][-1][-1])).date()
-            dateeleme = datetime.datetime.fromtimestamp(int(element[market]['ps'][-1][-1])).date()
+            dt = total[market]['ps'][-1][1] # datetime.datetime.strptime(str(int(total[market]['ps'][-1][1,0])), '%y%m%d').date()
+            datetotal = datetime.datetime.utcfromtimestamp(int(dt[0]) * 3600 * 24 + int(dt[1])).date()
+            de = element[market]['ps'][-1][1] # dateeleme = datetime.datetime.strptime(str(int(element[market]['ps'][-1][1,0])), '%y%m%d').date()
+            # print(dt, dt[0] * 3600 * 24 + dt[1])
+            dateeleme = datetime.datetime.utcfromtimestamp(int(de[0]) * 3600 * 24 + int(de[1])).date()
             newDay = datetotal < dateeleme
             if not (newDay or force_save):
                 for name,arrs in second.items():
@@ -329,12 +343,13 @@ class BookShapper:
             else:
                 arrday_bs = np.stack(total[market]['bs']).astype(np.float32)
                 np.save(f'data/{datetotal}-{market}-bs.npy', arrday_bs)
-                arrday_ps = np.stack(total[market]['ps']).astype(np.float64)
+                arrday_ps = np.stack(total[market]['ps']).astype(np.float32)
                 np.save(f'data/{datetotal}-{market}-ps.npy', arrday_ps)
+                # np.save(f'data/{datetotal}-{market}-ptbs.npy', np.concatenate([arrday_ps, arrday_bs], axis=1))
                 if reduce_func is not None:
                     t2l = reduce_func(
                         np.stack(total[market]['bs']).astype(np.float32),
-                        np.stack(total[market]['ps']).astype(np.float64),
+                        np.stack(total[market]['ps']).astype(np.float32),
                     )
                     np.save(f'data/{datetotal}-{market}-time2level.npy', t2l)
             if newDay:

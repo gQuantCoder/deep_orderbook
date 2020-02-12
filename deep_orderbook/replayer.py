@@ -113,7 +113,7 @@ class Replayer:
                         trdf = trdf.loc[[prev_px]]
                     oneSec = shapper.on_trades(trdf)
 
-                    allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, E={E}, trades={len(trdf):02}, px={px:16.12f}")
+                    allupdates.set_description(f"ts={datetime.datetime.utcfromtimestamp(ts)}, E={E}, trades={len(trdf):02}, px={px:16.12f}")
                     # assert not prev_ts or ts == 1 + prev_ts
                     # prev_ts = ts
 
@@ -173,9 +173,9 @@ class Replayer:
 
                     t_avail = shapper.secondAvail(book_upd)
                     oneSec = await shapper.make_frames_async(t_avail)
-                    BBO = oneSec[2]['bid'], oneSec[2]['ask']
+                    BBO = oneSec['bids'].index[0], oneSec['asks'].index[0]
 
-                    allupdates.set_description(f"ts={datetime.datetime.fromtimestamp(ts)}, tr={len(shapper.trdf):02}, BBO:{BBO}")#", px={px:16.12f}")
+                    allupdates.set_description(f"ts={datetime.datetime.utcfromtimestamp(ts)}, tr={len(shapper.trdf):02}, BBO:{BBO}")#", px={px:16.12f}")
                     # assert not prev_ts or ts == 1 + prev_ts
                     # prev_ts = ts
 
@@ -206,7 +206,7 @@ class Replayer:
         pairs = [await replayer.__anext__() for replayer in replayers]
         gens = {pairs[i]: replayers[i] for i in range(len(pairs))}
         nexs = {pair: await gens[pair].__anext__() for pair in pairs}
-        def next_sec(pair): return nexs[pair][2]['time']
+        def next_sec(pair): return nexs[pair]['time']
         tall = max([next_sec(p) for p in pairs])
         curs = {pair: nexs[pair] for pair in pairs}
         print('tall', tall)
