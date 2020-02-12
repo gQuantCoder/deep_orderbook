@@ -30,10 +30,10 @@ class Replayer:
         return BTs
 
     def training_file(self, pair):
-        BTs = sorted(glob.glob(f'{self.data_folder}/training/{self.date_regexp}*{pair}*time2level.npy'))
-        for fn_ts in BTs:
-            fn_bs = fn_ts.replace('time2level', 'bs')
-            fn_ps = fn_ts.replace('time2level', 'ps')
+        BTs = sorted(glob.glob(f'{self.data_folder}/{self.date_regexp}*{pair}*ps.npy'))
+        for fn_ps in BTs:
+            fn_bs = fn_ps.replace('ps.npy', 'bs.npy')
+            fn_ts = fn_ps.replace('ps.npy', 'time2level.npy')
             yield (fn_bs, fn_ps, fn_ts)
 
     def training_samples(self, pair):

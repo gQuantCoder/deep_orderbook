@@ -300,9 +300,9 @@ class BookShapper:
 
 
     @staticmethod
-    def build_time_level_trade(books, prices, bipsSide=32, sidesteps=64):
+    def build_time_level_trade(books, prices, sidebips=32, sidesteps=64):
 #        sidesteps = books.shape[1] // 2
-        pricestep = prices[0, 0, 0] * 0.0001 * bipsSide / sidesteps
+        pricestep = prices[0, 0, 0] * 0.0001 * sidebips / sidesteps
         FUTURE = 120#0*10
         time2levels = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
         #########################################################
@@ -326,7 +326,7 @@ class BookShapper:
 
     @staticmethod
     def build(total, element, reduce_func=None):
-#        bipsSide = 32
+#        sidebips = 32
 #        sidesteps = 64
         force_save = element is None
         element = element or total
