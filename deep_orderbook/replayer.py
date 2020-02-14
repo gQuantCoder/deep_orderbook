@@ -8,6 +8,8 @@ import asyncio
 import aiofiles
 import aioitertools
 from tqdm.auto import tqdm
+import zipfile
+
 from deep_orderbook.shapper import BookShapper
 
 MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
@@ -18,16 +20,30 @@ class Replayer:
         self.data_folder = data_folder
         self.date_regexp = date_regexp
 
+    def zipped(self):
+        zs = sorted(glob.glob(f'{self.data_folder}/{self.date_regexp}*.zip'))
+        for z in zs:
+            fns = zipfile.ZipFile(z).namelist()
+            print(fns)
+            with zipfile.ZipFile(z) as myzip:
+                with myzip.open(fns[0]) as myfile:
+                    pass#print(myfile.read())
+
     def snapshots(self, pair):
         return sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*snapshot.json'))
 
-    def updates(self, pair):
-        BTs = sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*update.json'))
-        return BTs
+    def updates_files(self, pair):
+        Bs = sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*update.json'))
+        return Bs
 
     def trades_file(self, pair):
-        BTs = sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*trades.json'))
-        return BTs
+        Ts = sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*trades.json'))
+        return Ts
+
+    def book_updates_and_trades(self, pair):
+        Bs = self.updates_files(pair)
+        Ts = self.trades_file(pair) 
+        return [(b, b.replace('update', 'trades')) for b in Bs if b.replace('update', 'trades') in Ts]
 
     def training_file(self, pair):
         BTs = sorted(glob.glob(f'{self.data_folder}/{self.date_regexp}*{pair}*ps.npy'))
@@ -76,9 +92,8 @@ class Replayer:
         shapper.on_snaphsot(snapshot)
 
 
-        file_updates = tqdm(self.updates(pair))
-        for fupdate in file_updates:
-                ftrades = fupdate.replace('update', 'trades')
+        file_updates = tqdm(self.book_updates_and_trades(pair))
+        for fupdate, ftrades in file_updates:
                 file_updates.set_description(fupdate.replace(self.data_folder, ''))
                 alltrdf = self.tradesframe(ftrades)
                 js = json.load(open(fupdate))
@@ -138,29 +153,26 @@ class Replayer:
         await shapper.on_snaphsot_async(snapshot)
 
 
-        file_updates = tqdm(self.updates(pair))
-        for fupdate in file_updates:
-                trades_file = fupdate.replace('update', 'trades')
+        file_updates = tqdm(self.book_updates_and_trades(pair))
+        for fupdate, ftrades in file_updates:
                 file_updates.set_description(fupdate.replace(self.data_folder, ''))
-                async with aiofiles.open(trades_file, 'r') as fp:
+                async with aiofiles.open(ftrades, 'r') as fp:
                     list_trades = json.loads(await fp.read())
                     await shapper.on_trades_bunch(list_trades)
                 js = json.load(open(fupdate))
-#                print("\nfupdate", fupdate)
                 allupdates = tqdm(js, leave=False)
-                # prev_ts = None
+
                 for book_upd in allupdates:
                     if book_upd['e'] != 'depthUpdate':
                         print("not update:", book_upd['e'])
                         continue
-                    U = book_upd['U']
-                    u = book_upd['u']
+                    firstID = book_upd['U']
+                    finalID = book_upd['u']
                     eventTime = book_upd['E']
                     ts = 1 + eventTime // 1000
 
-                    if next_snap and u >= next_snap:
+                    if next_snap and finalID >= next_snap:
                         snapshot = json.load(open(snapshot_file))
-#                        print("\nsnapshot_file", snapshot_file)
 
                         lastUpdateId = snapshot['lastUpdateId']
                         await shapper.on_snaphsot_async(snapshot)
@@ -175,7 +187,7 @@ class Replayer:
                     oneSec = await shapper.make_frames_async(t_avail)
                     BBO = oneSec['bids'].index[0], oneSec['asks'].index[0]
 
-                    allupdates.set_description(f"ts={datetime.datetime.utcfromtimestamp(ts)}, tr={len(shapper.trdf):02}, BBO:{BBO}")#", px={px:16.12f}")
+                    allupdates.set_description(f"ts={datetime.datetime.utcfromtimestamp(ts)}, tr={len(oneSec['trades']):02}, BBO:{BBO}")#", px={px:16.12f}")
                     # assert not prev_ts or ts == 1 + prev_ts
                     # prev_ts = ts
 
@@ -229,6 +241,12 @@ class Replayer:
 
 
 async def main():
+    markets = ['ETHBTC']
+    file_replayer = Replayer('../data/crypto')
+    s = file_replayer.zipped()
+    print(s)
+
+    return
     markets = ['ETHBTC']
     file_replayer = Replayer('../crypto-trading/data/L2')
     replay = file_replayer.replayL2('ETHBTC', await BookShapper.create())

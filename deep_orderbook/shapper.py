@@ -26,12 +26,12 @@ class BookShapper:
         self.bids = None
         self.asks = None
         self.tpr = None
-        self.trdf = None
         self.ts = None
         self.px = None
-        self.prev_px = None
+#        self.prev_px = None
         self.emaPrice = None
         self.emaNew = 1/32
+        self.emptyframe = pd.DataFrame(columns=['p', 'q', 'delay', 'num', 'up']).set_index(['p'])
         return self
 
     def on_snaphsot(self, snapshot):
@@ -82,13 +82,16 @@ class BookShapper:
         return 1 + tr_dict['E'] // 1000
 
     async def on_trades_bunch(self, list_trades, force_t_avail=None):
-        if force_t_avail:
-            self.sec_trades[force_t_avail] = list(list_trades)
+        list_trades = [{k:float(v) for k,v in trs.items() if k not in 'Msea'} for trs in list_trades]
+        if not list_trades:
             return
-        grp_sec = itertools.groupby(list_trades, self.secondAvail)
-        for i,l in grp_sec:
-            # print(i, list(l))
-            self.sec_trades[i] = list(l)
+        if force_t_avail:
+            self.sec_trades[force_t_avail] = self.trades2frame(list_trades).drop(['tavail'], axis=1)
+            return
+        alltrades = self.trades2frame(list_trades)
+        for i,l in alltrades.groupby('tavail'):
+            # print(f'{i}\n{l}')
+            self.sec_trades[i] = l.drop(['tavail'], axis=1)
         return
 
     def on_trades(self, trdf):
@@ -98,38 +101,30 @@ class BookShapper:
                 trdf
         return oneSec
 
+    @staticmethod
+    def trades2frame(list_trades):
+        ts = pd.DataFrame(list_trades).set_index('p')
+        ts['tavail'] = ts['E'] // 1000 + 1
+        ts['delay'] = ts['E'] - ts['T']
+        ts['num'] = ts['l'] - ts['f'] + 1
+        ts['up'] = 1 - 2*ts['m']
+        ts = ts.drop(['E', 'T', 'f', 'l', 'm'], axis=1)
+
+        #ts.loc[self.px] = 0
+        ts.sort_index(inplace=True)
+#        self.prev_px = self.px
+        return ts
+
     async def make_frames_async(self, t_avail, bids=None, asks=None):
-        list_trades = self.sec_trades.pop(t_avail, [])
-        if list_trades:
-            # print("past trades available: ", len(self.sec_trades))
-            ts = pd.DataFrame(list_trades).drop(['M', 's', 'e', 'a'], axis=1)
-            ts = ts.astype(np.float64)
-            #ts['t'] = 1 + ts['E'] // 1000
-            ts['delay'] = ts['E'] - ts['T']
-            ts['num'] = ts['l'] - ts['f'] + 1
-            ts['up'] = 1 - 2*ts['m']
-            ts.drop(['E', 'T', 'f', 'l', 'm'], axis=1, inplace=True)
-            #ts.set_index(['t'], inplace=True)
-
-            self.trdf = ts.set_index(['p'])
-            self.trdf.loc[self.px] = 0
-            self.trdf.sort_index(inplace=True)
-            self.prev_px = self.px
-
-        else:
-            self.trdf = pd.DataFrame(columns=['p', 'q', 'delay', 'num', 'up']).set_index(['p'])
-#            self.trdf = self.trdf.loc[[self.prev_px]]
-
         if bids is None or asks is None:
             bids, asks = self._depth_manager.get_depth_cache().get_bids_asks()
+
         oneSec = {'time': self.ts,
                   'price': self.px,
                   'bids': pd.DataFrame(bids, columns=['price', 'size']).set_index('price'),
                   'asks': pd.DataFrame(asks, columns=['price', 'size']).set_index('price'),
-                  'trades': self.trdf.copy(),
+                  'trades': self.sec_trades.pop(t_avail, self.emptyframe),
                  'emaPrice': self.emaPrice,
-#                 'bid': bids[0][0],
-#                 'ask': asks[0][0]
                  }
         return oneSec
 
@@ -139,7 +134,6 @@ class BookShapper:
             df = pd.DataFrame(js, columns=['price', 'size']).astype(np.float64).set_index('price')
         except:
             df = pd.DataFrame(js, columns=['price', 'size', 'none']).drop(['none'], axis=1).astype(np.float64).set_index('price')
-        # assert((df.index > 4).all())
         return df
 
     @staticmethod
@@ -147,7 +141,6 @@ class BookShapper:
         df = df.append(upd_df)
         df = df[~df.index.duplicated(keep='last')]
         df = df[(df!=0).any(axis=1)]
-        # assert((df.index > 4).all())
         return df.sort_index(ascending=is_ask)
 
     @staticmethod
@@ -160,7 +153,6 @@ class BookShapper:
 
     def buildL2(self, snapshot):
         lastUpdateId = snapshot['lastUpdateId']
-        # print(snapshot_file, "lastUpdateId:", lastUpdateId)
         bids = self.json2df(snapshot['bids'])
         asks = self.json2df(snapshot['asks'])
         return bids, asks, lastUpdateId
