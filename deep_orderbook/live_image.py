@@ -8,11 +8,6 @@ from pylab import rcParams
 import aioitertools
 
 
-import matplotlib.pyplot as plt
-from IPython.display import clear_output
-rcParams['figure.figsize'] = 20, 4
-
-
 MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
 
 
