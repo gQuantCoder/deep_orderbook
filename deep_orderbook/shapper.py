@@ -34,32 +34,8 @@ class BookShapper:
         self.emptyframe = pd.DataFrame(columns=['p', 'q', 'delay', 'num', 'up']).set_index(['p'])
         return self
 
-    def on_snaphsot(self, snapshot):
-        self.bids, self.asks, lastUpdateId = self.buildL2(snapshot)
-
     async def on_snaphsot_async(self, snapshot):
         await self._depth_manager._init_cache(snapshot)
-
-    def on_depth_msg(self, msg):
-        E = msg['E']
-        self.ts = 1 + E // 1000
-
-        ub = self.json2df(msg['b'])
-        ua = self.json2df(msg['a'])
-        self.bids = self.merge(self.bids, ub, False)
-        self.asks = self.merge(self.asks, ua, True)
-
-        bid, ask = self.bids.index[0], self.asks.index[0]
-        #assert bid < ask
-        if bid > ask:
-            print(u, bid, ">", ask, datetime.datetime.fromtimestamp(self.ts))
-            self.bids, self.asks = self.bids[self.bids.index < ask], self.asks[self.asks.index > bid]
-            bid, ask = self.bids.index[0], self.asks.index[0]
-        self.px = self.price(self.bids, self.asks)
-        self.emaPrice = self.px * self.emaNew + (self.emaPrice if self.emaPrice is not None else self.px) * (1-self.emaNew)
-
-        self.px += 1e-12
-        return self.px
 
     async def on_depth_msg_async(self, msg):
         await self._depth_manager._depth_event(msg)
@@ -94,13 +70,6 @@ class BookShapper:
             self.sec_trades[i] = l.drop(['tavail'], axis=1)
         return
 
-    def on_trades(self, trdf):
-        oneSec = self.bids, \
-                self.asks, \
-                pd.Series({'time': self.ts, 'price': self.px, 'emaPrice': self.emaPrice, 'bid': self.bids.index[0], 'ask': self.asks.index[0]}), \
-                trdf
-        return oneSec
-
     @staticmethod
     def trades2frame(list_trades):
         ts = pd.DataFrame(list_trades).set_index('p')
@@ -127,38 +96,6 @@ class BookShapper:
                  'emaPrice': self.emaPrice,
                  }
         return oneSec
-
-    @staticmethod
-    def json2df(js):
-        try:
-            df = pd.DataFrame(js, columns=['price', 'size']).astype(np.float64).set_index('price')
-        except:
-            df = pd.DataFrame(js, columns=['price', 'size', 'none']).drop(['none'], axis=1).astype(np.float64).set_index('price')
-        return df
-
-    @staticmethod
-    def merge(df, upd_df, is_ask):
-        df = df.append(upd_df)
-        df = df[~df.index.duplicated(keep='last')]
-        df = df[(df!=0).any(axis=1)]
-        return df.sort_index(ascending=is_ask)
-
-    @staticmethod
-    def price(bids, asks):
-        bbp, bbs = bids.index[0], bids['size'].iloc[0]
-        bap, bas = asks.index[0], asks['size'].iloc[0]
-        price = (bbp * bas + bap * bbs) / (bbs + bas)
-        return round(price, 8)
-
-
-    def buildL2(self, snapshot):
-        lastUpdateId = snapshot['lastUpdateId']
-        bids = self.json2df(snapshot['bids'])
-        asks = self.json2df(snapshot['asks'])
-        return bids, asks, lastUpdateId
-
-
-
 
 
 
@@ -240,30 +177,6 @@ class BookShapper:
         plt.imshow(im3[:,:,:], origin="lower")
         plt.show()
 
-
-    @staticmethod
-    def gen_array(market_replay, markets, width_per_side=64, zoom_frac=1/256):
-        #market_replay = self.multireplayL2(markets)
-        prev_price = {p: None for p in range(len(markets))}
-        spacing = np.arange(width_per_side)
-        #spacing = np.square(spacing) + spacing
-        spacing = spacing / spacing[-1]
-        spacing = np.arcsin(spacing)*3-spacing*2
-        for second in market_replay:
-            market_second = {}#collections.defaultdict(list)
-            for pair in range(len(markets)):
-                bi,ai,tpi,tri = second[pair]
-                prev_price[pair] = prev_price[pair] or tpi['price']
-                bib,aib,trb,tra  = BookShapper.bin_books(bi,ai,tri, ref_price=prev_price[pair], zoom_frac=zoom_frac, spacing=spacing)
-                prev_price[pair] = tpi['emaPrice']
-                arr0 = bib.values - aib.values
-                arr1 = tra.values - trb.values
-                tp = np.array([tpi['price'], tpi['emaPrice'], tpi['bid'], tpi['ask'], tpi['time']])
-                arr3d = np.concatenate([arr0, arr1[:,::2]], axis=-1)
-                market_second[pair] = {'ps': [tp], 'bs': [arr3d]}
-            yield market_second
-
-
     @staticmethod
     async def gen_array_async(market_replay, markets, width_per_side=64, zoom_frac=1/256):
         #market_replay = self.multireplayL2(markets)
@@ -284,7 +197,10 @@ class BookShapper:
                 utc = datetime.datetime.utcfromtimestamp(sec['time'])
                 d = sec['time'] // (3600 * 24) # int(utc.strftime('%y%m%d'))
                 t = sec['time'] % (3600 * 24)  #float(utc.strftime('%H%M%S.%f'))
-                tp = np.array([[sec['price'], sec['bids'].index[0], sec['asks'].index[0]], [d, t, 0]], dtype=np.float32)
+                lowtrade = sec['trades'].index.min()
+                hightrade = sec['trades'].index.max()
+                #print(lowtrade, hightrade)
+                tp = np.array([[lowtrade, sec['bids'].index[0], sec['asks'].index[0]], [d, t, hightrade]], dtype=np.float32)
                 # print('tp', tp)
                 arr3d = np.concatenate([arr0, arr1[:,::2]], axis=-1)
                 market_second[pair] = {'ps': [tp], 'bs': [arr3d]}
@@ -293,7 +209,6 @@ class BookShapper:
 
     @staticmethod
     def build_time_level_trade(books, prices, sidebips=32, sidesteps=64):
-#        sidesteps = books.shape[1] // 2
         pricestep = prices[0, 0, 0] * 0.0001 * sidebips / sidesteps
         FUTURE = 120#0*10
         time2levels = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
@@ -305,9 +220,23 @@ class BookShapper:
             timeupdn = []
             for j in range(sidesteps):
                 thresh = j * pricestep
-                [p, b, a], [d, t, _] = prices[i]
-                waitUp = prices[i:i+FUTURE, 0, 1] < a + thresh
-                waitDn = prices[i:i+FUTURE, 0, 2] > b - thresh
+                [_, b, a], [d, t, _] = prices[i]
+                bids = prices[i:i+FUTURE, 0, 1]
+                asks = prices[i:i+FUTURE, 0, 2]
+                waitUp = bids < a + thresh
+                waitDn = asks > b - thresh
+                #### trades also define potential price hit
+                lowtrade = prices[i:i+FUTURE, 0, 0]
+                hightrade = prices[i:i+FUTURE, 1, 2] 
+                tradeUp = hightrade >= a + thresh
+                tradeDn = lowtrade <= b - thresh
+                # cannot trade with bid/ask of elapsed second
+                tradeUp[0] = False
+                tradeDn[0] = False
+                # first one to NOT wait defines the price hit
+                waitUp &= ~tradeUp
+                waitDn &= ~tradeDn
+                ###########################################
                 timeUp = np.argmin(waitUp) or FUTURE*10
                 timeDn = np.argmin(waitDn) or FUTURE*10
                 timeupdn.insert(0, [timeDn])
@@ -318,8 +247,6 @@ class BookShapper:
 
     @staticmethod
     def build(total, element, reduce_func=None):
-#        sidebips = 32
-#        sidesteps = 64
         force_save = element is None
         element = element or total
         for market,second in element.items():
