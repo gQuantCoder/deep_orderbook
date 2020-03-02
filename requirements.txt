@@ -1,5 +1,6 @@
+git+https://github.com/sammchardy/python-binance.git@feature/asyncio#
 tqdm
-pyarrow
-git+https://github.com/sammchardy/python-binance.git@feature/asyncio
 aioitertools
 aiofiles
+websockets
+matplotlib

@@ -1,9 +1,9 @@
 FROM python:3.7
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY . deep_orderbook
 
-COPY . .
+RUN pip install --no-cache-dir -r deep_orderbook/requirements.txt
 
-CMD [ "python", "./deep_orderbook/recorder.py" ]
+RUN pip install -e deep_orderbook 
 
+CMD [ "python", "./deep_orderbook/deep_orderbook/recorder.py" ]

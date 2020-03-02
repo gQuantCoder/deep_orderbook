@@ -281,6 +281,22 @@ class BookShapper:
         genacc = aioitertools.accumulate(genarr, BookShapper.build)
         return genacc
 
+    @staticmethod
+    async def images(accumulated_arrays, every=10, LENGTH=128):
+        async for n,sec in aioitertools.enumerate(accumulated_arrays):
+            if n % every:
+                continue
+            allim = []
+            for symb, data in sec.items():
+                arr = np.stack(data['bs'][-LENGTH:])
+                im = arr
+                im[:,:,0] /= 10
+                im += 0.5
+                im = im.transpose(1,0,2)
+                im = np.clip(im, 0, 1)
+                allim.append(im[::-1])
+            toshow = np.concatenate(allim, axis=0)
+            yield toshow
 
 
 if __name__ == '__main__':

@@ -17,6 +17,7 @@ from binance.exceptions import BinanceAPIException
 from binance.depthcache import DepthCache
 
 # https://github.com/binance-exchange/binance-official-api-docs/blob/master/web-socket-streams.md#how-to-manage-a-local-order-book-correctly
+DEBUG = False
 
 class DepthCachePlus(DepthCache):
     def add_bid(self, bid):
@@ -40,11 +41,13 @@ class DepthCachePlus(DepthCache):
             print(f"\ncleaning the crossed BBO \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
             for p in list(self._bids.keys()):
                 if p >= asks[0][0]:
-                    print(f"del bids[{p}]")
+                    if DEBUG:
+                        print(f"del bids[{p}]")
                     del self._bids[p]
             for p in list(self._asks.keys()):
                 if p <= bids[0][0]:
-                    print(f"del asks[{p}]")
+                    if DEBUG:
+                        print(f"del asks[{p}]")
                     del self._asks[p]
             bids = self.get_bids()
             asks = self.get_asks()
