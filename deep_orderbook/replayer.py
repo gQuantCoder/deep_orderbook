@@ -16,7 +16,7 @@ MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
 
 
 class Replayer:
-    def __init__(self, data_folder, date_regexp='2020'):
+    def __init__(self, data_folder, date_regexp=''):
         self.data_folder = data_folder
         self.date_regexp = date_regexp
 
@@ -77,62 +77,6 @@ class Replayer:
     def sample(of_file):
         return json.load(open(of_file))[0]
 
-    def replayL2(self, pair, shapper):
-        snapshotupdates = {}
-        files = tqdm(self.snapshots(pair))
-        for snap_file in files:
-            snap = json.load(open(snap_file))
-            lastUpdateId = snap['lastUpdateId']
-            snapshotupdates[lastUpdateId] = snap_file
-        snapshotupdates = iter(sorted(snapshotupdates.items()))
-        next_snap,snapshot_file = next(snapshotupdates)
-
-        snapshot = json.load(open(snapshot_file))
-        lastUpdateId = snapshot['lastUpdateId']
-        shapper.on_snaphsot(snapshot)
-
-
-        file_updates = tqdm(self.book_updates_and_trades(pair))
-        for fupdate, ftrades in file_updates:
-                file_updates.set_description(fupdate.replace(self.data_folder, ''))
-                alltrdf = self.tradesframe(ftrades)
-                js = json.load(open(fupdate))
-                allupdates = tqdm(js, leave=False)
-                # prev_ts = None
-                for book_upd in allupdates:
-                    if book_upd['e'] != 'depthUpdate':
-                        continue
-                    U = book_upd['U']
-                    u = book_upd['u']
-                    E = book_upd['E']
-                    ts = 1 + E // 1000
-
-                    if next_snap and u >= next_snap:
-                        snapshot = json.load(open(snapshot_file))
-                        lastUpdateId = snapshot['lastUpdateId']
-                        shapper.on_snaphsot(snapshot)
-                        try:
-                            next_snap,snapshot_file = next(snapshotupdates)
-                        except StopIteration as e:
-                            next_snap = None
-
-                    px = shapper.on_depth_msg(book_upd)
-
-                    if not alltrdf.empty:
-                        trdf = alltrdf.iloc[alltrdf.index==ts]
-                        trdf = trdf.set_index(['p'])
-                        trdf.loc[px] = 0
-                        trdf.sort_index(inplace=True)
-                        prev_px = px
-                    else:
-                        trdf = trdf.loc[[prev_px]]
-                    oneSec = shapper.on_trades(trdf)
-
-                    allupdates.set_description(f"ts={datetime.datetime.utcfromtimestamp(ts)}, E={E}, trades={len(trdf):02}, px={px:16.12f}")
-                    # assert not prev_ts or ts == 1 + prev_ts
-                    # prev_ts = ts
-
-                    yield oneSec
     async def replayL2_async(self, pair, shapper):
         yield pair
         snapshotupdates = {}
@@ -142,14 +86,11 @@ class Replayer:
                 snap = json.load(open(snap_file))
             except:
                 continue
-            lastUpdateId = snap['lastUpdateId']
-            snapshotupdates[lastUpdateId] = snap_file
+            snapshotupdates[snap['lastUpdateId']] = snap_file
         snapshotupdates = iter(sorted(snapshotupdates.items()))
         next_snap,snapshot_file = next(snapshotupdates)
 
         snapshot = json.load(open(snapshot_file))
-#        print("\nsnapshot_file", snapshot_file)
-        lastUpdateId = snapshot['lastUpdateId']
         await shapper.on_snaphsot_async(snapshot)
 
 
@@ -174,7 +115,6 @@ class Replayer:
                     if next_snap and finalID >= next_snap:
                         snapshot = json.load(open(snapshot_file))
 
-                        lastUpdateId = snapshot['lastUpdateId']
                         await shapper.on_snaphsot_async(snapshot)
                         try:
                             next_snap,snapshot_file = next(snapshotupdates)
@@ -192,26 +132,6 @@ class Replayer:
                     # prev_ts = ts
 
                     yield oneSec
-
-    @staticmethod
-    def multireplayL2(replayers):
-        pairs = range(len(replayers))
-        gens = {pair: replayers[pair] for pair in pairs}
-        nexs = {pair: next(gens[pair]) for pair in pairs}
-        def secs(pair): return nexs[pair][2]['time']
-        tall = max([secs(p) for p in pairs])
-        curs = {pair: nexs[pair] for pair in pairs}
-        print('tall', tall)
-        while True:
-            for pair in pairs:
-                while secs(pair) < tall:
-                    curs[pair] = nexs[pair]
-                    try:
-                        nexs[pair] = next(gens[pair])
-                    except StopIteration:
-                        return # break
-            yield curs
-            tall += 1
 
     @staticmethod
     async def multireplayL2_async(replayers):
@@ -266,4 +186,4 @@ async def main():
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    shapper = loop.run_until_complete(main())
+    loop.run_until_complete(main())
