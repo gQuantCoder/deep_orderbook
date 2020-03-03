@@ -17,13 +17,13 @@ class IamgeStream:
         self.markets = src
     
     async def setup(self):
-        receiver = await Receiver.create(markets=self.markets)
-        #receiver = await Writer.create(markets=MARKETS, data_folder='../crypto-trading/data')
-        #wrting = asyncio.create_task(receiver.run_writer(save_period_minutes=10))
+        self.receiver = await Receiver.create(markets=self.markets, print_level=1)
+        #self.receiver = await Writer.create(markets=MARKETS, data_folder='../crypto-trading/data')
+        #wrting = asyncio.create_task(self.receiver.run_writer(save_period_minutes=10))
 
 
         shappers = {pair: await BookShapper.create() for pair in self.markets}
-        multi_replay = receiver.multi_generator(shappers)
+        multi_replay = self.receiver.multi_generator(shappers)
 
 
         _ = await multi_replay.__anext__()

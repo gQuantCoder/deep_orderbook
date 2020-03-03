@@ -130,7 +130,9 @@ class Receiver:
         await self.setup(**kwargs)
         return self
 
-    async def setup(self, markets):
+    async def setup(self, markets, print_level=2):
+        self.last_update_time = time.time()
+        self.print_level = print_level
         self.markets = markets
         # Instantiate a Client
         self.client = await AsyncClient.create()
@@ -203,10 +205,12 @@ class Receiver:
             "M": true                               # can be ignored
         }
         """
+        self.last_update_time = time.time()
         symbol = msg["s"]
         self.trade_managers[symbol].append(copy.deepcopy(msg))
         self.nummsg[symbol] += 1
-        print(', '.join([f'{s}: {self.nummsg[s]:06}' for s in self.markets]), end='\r')
+        if self.print_level >= 2:
+            print(', '.join([f'{s}: {self.nummsg[s]:06}' for s in self.markets]), end='\r')
 
     async def stoprestart(self, dorestart=True):
         # stop the socket manager
