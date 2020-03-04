@@ -1,4 +1,3 @@
-
 import time
 import datetime
 import json
@@ -6,7 +5,6 @@ import os, sys
 import collections
 import copy
 import threading
-import tqdm
 import asyncio
 import aiofiles
 from binance import AsyncClient, DepthCacheManager # Import the Binance Client
@@ -174,17 +172,8 @@ class Receiver:
         }
         """
         symbol = msg['s']
-        #print(time.time(), msg['E']/1000)
-        # print('no bid' if not depth_cache.get_bids() else '', 'no ask' if not depth_cache.get_asks() else '')
-        #self.nummsg[symbol] += 1
-        #print(', '.join([f'{s}: {self.nummsg[s]:06}' for s in self.markets]), end='\r')
 
     async def on_depth(self, depth_cache):
-#        print(f"symbol {depth_cache.symbol} updated:{depth_cache.update_time}")
-#        print("Top 5 asks:", len(depth_cache.get_asks()))
-#        print(depth_cache.get_asks()[:5])
-#        print("Top 5 bids:", len(depth_cache.get_bids()))
-#        print(depth_cache.get_bids()[:5])
         symbol = depth_cache.symbol
         self.depth_managers[symbol].trades = copy.deepcopy(self.trade_managers[symbol])
         self.trade_managers[symbol] = list()
@@ -223,14 +212,10 @@ class Receiver:
 
         if dorestart:
             for symbol in self.markets:
-                #os.makedirs(f"{DATA_FOLDER}/L2/{symbol}", exist_ok=True)
-#                key = await self.bm.start_depth_socket(symbol, self.on_depth)  # , depth='20')
-#                print("start", key)
-#                conn_keys.append(key)
                 key = await self.bm.start_aggtrade_socket(symbol, self.on_aggtrades)
                 print("start", key)
                 conn_keys.append(key)
-                # create the Depth Cache
+            # create the Depth Cache
             for symbol in self.markets:
                 depthmanager = await MessageDepthCacheManager.create(self.client,
                                                                      asyncio.get_event_loop(), 
@@ -242,15 +227,12 @@ class Receiver:
                                                                      )
                 self.depth_managers[symbol] = depthmanager
 
-            #await self.bm.start()
-
     async def multi_generator(self, symbol_shappers):
         tall = time.time()
         tall = tall // 1
         while True:
             twake = tall
             timesleep = twake - time.time()
-            # print(twake, timesleep)
             if timesleep > 0:
                 await asyncio.sleep(timesleep)
             else:
@@ -292,12 +274,6 @@ class Writer(Receiver):
         with self.tradelock:
             self.tradestore[symbol] += self.depth_managers[symbol].trades
 
-#    async def on_aggtrades(self, msg):
-#        await super().on_aggtrades(msg)
-#        symbol = msg["s"]
-#        if True:#with self.tradelock:
-#            self.tradestore[symbol].append(copy.deepcopy(msg))
-
     async def save_updates_since(self, prev_ts=None):
         prev_ts = prev_ts or self.prev_th
         progressbar = self.markets
@@ -337,14 +313,11 @@ class Writer(Receiver):
         try:
             while True:
                 t = time.time()
-                # print("t", t)
                 await asyncio.sleep(PERIOD_L2 - t % PERIOD_L2)
                 t_ini = int(time.time())
-                # print("ti", ti)
                 self.new_th = int(t_ini // save_period_seconds) * save_period_seconds
 
                 if self.new_th > self.th:
-                    #print("\n", t_ini, datetime.datetime.fromtimestamp(t_ini))
                     if self.th == 0:
                         await self.save_updates_since(t_ini)
                         await self.save_snapshot(t_ini)
