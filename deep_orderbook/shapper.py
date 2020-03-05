@@ -246,7 +246,7 @@ class BookShapper:
 
 
     @staticmethod
-    def build(total, element, reduce_func=None):
+    def build(total, element, reduce_func=None, max_length=None):
         force_save = element is None
         element = element or total
         for market,second in element.items():
@@ -271,6 +271,11 @@ class BookShapper:
                         np.stack(total[market]['ps']).astype(np.float32),
                     )
                     np.save(f'data/{datetotal}-{market}-time2level.npy', t2l)
+
+            if max_length:
+                for name,arrs in second.items():
+                    if len(total[market][name]) > max_length:
+                        total[market][name] = total[market][name][-max_length:]
             if newDay:
                 for name,arrs in second.items():
                     total[market][name] = arrs
@@ -288,8 +293,9 @@ class BookShapper:
                 continue
             allim = []
             for symb, data in sec.items():
-                arr = np.stack(data['bs'][-LENGTH:])
-                im = arr
+                #prices_dts = np.stack(data['ps'][-LENGTH:])
+                books = np.stack(data['bs'][-LENGTH:])
+                im = books
                 im[:,:,0] /= 10
                 im += 0.5
                 im = im.transpose(1,0,2)
