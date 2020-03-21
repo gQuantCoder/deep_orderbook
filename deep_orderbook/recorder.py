@@ -175,6 +175,8 @@ class Receiver:
 
     async def on_depth(self, depth_cache):
         symbol = depth_cache.symbol
+        if symbol not in self.depth_managers:
+            return
         self.depth_managers[symbol].trades = copy.deepcopy(self.trade_managers[symbol])
         self.trade_managers[symbol] = list()
 
@@ -207,7 +209,7 @@ class Receiver:
             print(f"stopping socket {conn_key}\n")
             #await self.bm.stop_socket(conn_key)
         conn_keys = []
-        self.depth_managers = {}
+        self.depth_managers.clear()
 #        await self.bm.close()
 
         if dorestart:
@@ -250,7 +252,7 @@ class Receiver:
 
 
 class Writer(Receiver):
-    async def setup(self, markets, data_folder):
+    async def setup(self, markets, data_folder, print_level=2):
         self.store = collections.defaultdict(list)
         self.tradestore = collections.defaultdict(list)
         self.L2folder = f"{data_folder}/L2"
@@ -260,7 +262,7 @@ class Writer(Receiver):
         for symbol in markets:
             os.makedirs(f"{self.L2folder}/{symbol}", exist_ok=True)
 
-        await super().setup(markets)
+        await super().setup(markets, print_level=print_level)
 
     async def on_depth_msg(self, msg):
         await super().on_depth_msg(msg)
@@ -272,6 +274,8 @@ class Writer(Receiver):
         await super().on_depth(depth_cache)
         symbol = depth_cache.symbol
         with self.tradelock:
+            if symbol not in self.depth_managers:
+                return
             self.tradestore[symbol] += self.depth_managers[symbol].trades
 
     async def save_updates_since(self, prev_ts=None):
