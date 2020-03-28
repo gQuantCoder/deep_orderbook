@@ -333,6 +333,10 @@ class Writer(Receiver):
                     self.th = self.new_th
         except asyncio.CancelledError as e:
             await self.save_updates_since()
+        except ConnectionClosedError as e:
+            print("restarting recorder")
+            await asyncio.sleep(5)
+            await self.stoprestart()
         except Exception as e:
             print(e.__class__, e)
             raise e
