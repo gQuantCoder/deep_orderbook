@@ -5,6 +5,7 @@ import time, datetime
 import pandas as pd
 import numpy as np
 import asyncio
+import itertools
 import aiofiles
 import aioitertools
 from tqdm.auto import tqdm
@@ -19,10 +20,35 @@ class Replayer:
     def __init__(self, data_folder, date_regexp=''):
         self.data_folder = data_folder
         self.date_regexp = date_regexp
+        self.dates = self.zipped_dates()
+        if self.dates:
+            print(f"using zipped file generator.")
+            self.file_generator = self.book_updates_trades_and_snapshots_zip
+        else:
+            self.dates = self.raw_files_dates()
+            if self.dates:
+                print(f"using raw file generator.")
+                self.file_generator = self.book_updates_trades_and_snapshots_raw
+        if self.dates:
+            print(f"dates: [{self.dates[0]} .. {self.dates[-1]}]")
+        else:
+            print(f"the data folder soen't seem to contain any raw or zipped files")
+
+    def raw_files(self):
+        zs = sorted(glob.glob(f'{self.data_folder}/*/{self.date_regexp}*.json'))
+        yield from zs
+
+    def raw_files_dates(self):
+        dates = itertools.groupby(self.raw_files(), lambda fn: fn.split('/')[-1].split('T')[0])
+        return [d[0] for d in dates]
 
     def zipped(self):
         zs = sorted(glob.glob(f'{self.data_folder}/{self.date_regexp}*.zip'))
         yield from zs
+
+    def zipped_dates(self):
+        dates = itertools.groupby(self.zipped(), lambda fn: fn.split('/')[-1].split('.')[0])
+        return [d[0] for d in dates]
 
     @staticmethod
     def loadjson(filename, open_fc=open):
@@ -43,6 +69,27 @@ class Replayer:
         Bs = self.updates_files(pair)
         Ts = self.trades_file(pair) 
         return [(b, b.replace('update', 'trades')) for b in Bs if b.replace('update', 'trades') in Ts]
+
+    async def book_updates_trades_and_snapshots_raw(self, pair, file_generator=None, open_fc=None):
+        file_generator = file_generator or self.raw_files()
+        open_fc = open_fc or open
+        fns_pair = filter(lambda fn: pair in fn, file_generator)
+        fns_pair_time = itertools.groupby(fns_pair, lambda fn: fn.split('/')[-1][:19])
+        for js_group in tqdm(fns_pair_time, leave=False):
+            ts, gr = js_group
+            files = list(gr)
+            if len(files) == 3:
+                snapshot_file, trades_file, updates_file = [json.load(open_fc(fn)) for fn in files]
+                yield updates_file, trades_file, snapshot_file
+
+    async def book_updates_trades_and_snapshots_zip(self, pair):
+        zs_gen = self.zipped()
+        for z in tqdm(zs_gen):
+            print('zip:', z)
+            with zipfile.ZipFile(z) as myzip:
+                fns = sorted(zipfile.ZipFile(z).namelist())
+                async for fff in self.book_updates_trades_and_snapshots_raw(pair, fns, open_fc=myzip.open):
+                    yield fff
 
     def training_file(self, pair):
         BTs = sorted(glob.glob(f'{self.data_folder}/{self.date_regexp}*{pair}*ps.npy'))
@@ -78,59 +125,35 @@ class Replayer:
 
     async def replayL2_async(self, pair, shapper):
         yield pair
-        snapshotupdates = {}
-        files = tqdm(self.snapshots(pair))
-        for snap_file in files:
-            try:
-                snap = self.loadjson(snap_file)
-            except:
-                continue
-            snapshotupdates[snap['lastUpdateId']] = snap_file
-        snapshotupdates = iter(sorted(snapshotupdates.items()))
-        next_snap,snapshot_file = next(snapshotupdates)
+        file_updates_tqdm = self.file_generator(pair)
+        async for js_updates, list_trades, snapshot in file_updates_tqdm:
+            #file_updates_tqdm.set_description(fupdate.replace(self.data_folder, ''))
+            await shapper.on_trades_bunch(list_trades)
+            js_updates_tqdm = tqdm(js_updates, leave=False)
 
-        snapshot = self.loadjson(snapshot_file)
-        await shapper.on_snaphsot_async(snapshot)
+            lastUpdateId = snapshot['lastUpdateId']
+            await shapper.on_snaphsot_async(snapshot)
 
+            for book_upd in js_updates_tqdm:
+                if book_upd['e'] != 'depthUpdate':
+                    print("not update:", book_upd['e'])
+                    continue
+                firstID = book_upd['U']
+                finalID = book_upd['u']
+                if finalID < lastUpdateId:
+                    continue
+                eventTime = book_upd['E']
+                ts = 1 + eventTime // 1000
 
-        file_updates = tqdm(self.book_updates_and_trades(pair))
-        for fupdate, ftrades in file_updates:
-                file_updates.set_description(fupdate.replace(self.data_folder, ''))
-                async with aiofiles.open(ftrades, 'r') as fp:
-                    list_trades = json.loads(await fp.read())
-                    await shapper.on_trades_bunch(list_trades)
-                js = self.loadjson(fupdate)
-                allupdates = tqdm(js, leave=False)
+                px = await shapper.on_depth_msg_async(book_upd)
 
-                for book_upd in allupdates:
-                    if book_upd['e'] != 'depthUpdate':
-                        print("not update:", book_upd['e'])
-                        continue
-                    firstID = book_upd['U']
-                    finalID = book_upd['u']
-                    eventTime = book_upd['E']
-                    ts = 1 + eventTime // 1000
+                t_avail = shapper.secondAvail(book_upd)
+                oneSec = await shapper.make_frames_async(t_avail)
+                BBO = oneSec['bids'].index[0], oneSec['asks'].index[0]
 
-                    if next_snap and finalID >= next_snap:
-                        snapshot = self.loadjson(snapshot_file)
+                js_updates_tqdm.set_description(f"ts={datetime.datetime.utcfromtimestamp(ts)}, tr={len(oneSec['trades']):02}, BBO:{BBO}")#", px={px:16.12f}")
 
-                        await shapper.on_snaphsot_async(snapshot)
-                        try:
-                            next_snap,snapshot_file = next(snapshotupdates)
-                        except StopIteration as e:
-                            next_snap = None
-
-                    px = await shapper.on_depth_msg_async(book_upd)
-
-                    t_avail = shapper.secondAvail(book_upd)
-                    oneSec = await shapper.make_frames_async(t_avail)
-                    BBO = oneSec['bids'].index[0], oneSec['asks'].index[0]
-
-                    allupdates.set_description(f"ts={datetime.datetime.utcfromtimestamp(ts)}, tr={len(oneSec['trades']):02}, BBO:{BBO}")#", px={px:16.12f}")
-                    # assert not prev_ts or ts == 1 + prev_ts
-                    # prev_ts = ts
-
-                    yield oneSec
+                yield oneSec
 
     @staticmethod
     async def multireplayL2_async(replayers):
