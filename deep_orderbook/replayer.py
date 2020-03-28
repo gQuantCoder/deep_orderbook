@@ -22,12 +22,11 @@ class Replayer:
 
     def zipped(self):
         zs = sorted(glob.glob(f'{self.data_folder}/{self.date_regexp}*.zip'))
-        for z in zs:
-            fns = zipfile.ZipFile(z).namelist()
-            print(fns)
-            with zipfile.ZipFile(z) as myzip:
-                with myzip.open(fns[0]) as myfile:
-                    pass#print(myfile.read())
+        yield from zs
+
+    @staticmethod
+    def loadjson(filename, open_fc=open):
+        return json.load(open_fc(filename))
 
     def snapshots(self, pair):
         return sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*snapshot.json'))
@@ -61,7 +60,7 @@ class Replayer:
 
     @staticmethod
     def tradesframe(file):
-        ts = pd.DataFrame(json.load(open(file)))
+        ts = pd.DataFrame(self.loadjson(file))
         if ts.empty:
             return ts
         ts = ts.drop(['M', 's', 'e', 'a'], axis=1).astype(np.float64)
@@ -75,7 +74,7 @@ class Replayer:
 
     @staticmethod
     def sample(of_file):
-        return json.load(open(of_file))[0]
+        return self.loadjson(of_file)[0]
 
     async def replayL2_async(self, pair, shapper):
         yield pair
@@ -83,14 +82,14 @@ class Replayer:
         files = tqdm(self.snapshots(pair))
         for snap_file in files:
             try:
-                snap = json.load(open(snap_file))
+                snap = self.loadjson(snap_file)
             except:
                 continue
             snapshotupdates[snap['lastUpdateId']] = snap_file
         snapshotupdates = iter(sorted(snapshotupdates.items()))
         next_snap,snapshot_file = next(snapshotupdates)
 
-        snapshot = json.load(open(snapshot_file))
+        snapshot = self.loadjson(snapshot_file)
         await shapper.on_snaphsot_async(snapshot)
 
 
@@ -100,7 +99,7 @@ class Replayer:
                 async with aiofiles.open(ftrades, 'r') as fp:
                     list_trades = json.loads(await fp.read())
                     await shapper.on_trades_bunch(list_trades)
-                js = json.load(open(fupdate))
+                js = self.loadjson(fupdate)
                 allupdates = tqdm(js, leave=False)
 
                 for book_upd in allupdates:
@@ -113,7 +112,7 @@ class Replayer:
                     ts = 1 + eventTime // 1000
 
                     if next_snap and finalID >= next_snap:
-                        snapshot = json.load(open(snapshot_file))
+                        snapshot = self.loadjson(snapshot_file)
 
                         await shapper.on_snaphsot_async(snapshot)
                         try:
@@ -161,18 +160,13 @@ class Replayer:
 
 
 async def main():
-    markets = ['ETHBTC']
-    file_replayer = Replayer('../data/crypto')
-    s = file_replayer.zipped()
-    print(s)
-
-    return
+    #markets = ['ETHBTC']
+    #file_replayer = Replayer('../data/crypto')
+    #s = file_replayer.zipped()
+    #print(s)
+    #return
     markets = ['ETHBTC']
     file_replayer = Replayer('../crypto-trading/data/L2')
-    replay = file_replayer.replayL2('ETHBTC', await BookShapper.create())
-    for d in replay:
-        pass
-        break
     
     replay = file_replayer.replayL2_async('ETHBTC', await BookShapper.create())
     async for d in replay:
