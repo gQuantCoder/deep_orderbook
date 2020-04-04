@@ -32,7 +32,7 @@ class Replayer:
         if self.dates:
             print(f"dates: [{self.dates[0]} .. {self.dates[-1]}]")
         else:
-            print(f"the data folder soen't seem to contain any raw or zipped files")
+            print(f"the data folder doen't seem to contain any raw or zipped files: {self.data_folder}")
 
     def raw_files(self):
         zs = sorted(glob.glob(f'{self.data_folder}/*/{self.date_regexp}*.json'))
@@ -91,8 +91,8 @@ class Replayer:
                 async for fff in self.book_updates_trades_and_snapshots_raw(pair, fns, open_fc=myzip.open):
                     yield fff
 
-    def training_file(self, pair):
-        BTs = sorted(glob.glob(f'{self.data_folder}/{self.date_regexp}*{pair}*ps.npy'))
+    def training_files(self, pair, side_bips, side_width):
+        BTs = sorted(glob.glob(f'{self.data_folder}/bip{side_bips:02}-sidepix{side_width:03}/{self.date_regexp}*{pair}*ps.npy'))
         for fn_ps in BTs:
             fn_bs = fn_ps.replace('ps.npy', 'bs.npy')
             fn_ts = fn_ps.replace('ps.npy', 'time2level.npy')
