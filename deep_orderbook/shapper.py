@@ -209,7 +209,7 @@ class BookShapper:
 
     @staticmethod
     def build_time_level_trade(books, prices, sidebips=32, sidesteps=64):
-        pricestep = prices[0, 0, 0] * 0.0001 * sidebips / sidesteps
+        mult =  0.0001 * sidebips / sidesteps
         FUTURE = 120#0*10
         time2levels = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
         #########################################################
@@ -218,6 +218,7 @@ class BookShapper:
                                     #######
         #########################################################
             timeupdn = []
+            pricestep = prices[0, 0, 1] * mult
             for j in range(sidesteps):
                 thresh = j * pricestep
                 [_, b, a], [d, t, _] = prices[i]
@@ -242,6 +243,8 @@ class BookShapper:
                 timeupdn.insert(0, [timeDn])
                 timeupdn.append([timeUp])
             time2levels[i] = timeupdn
+        # print('time2levels minmaxmean', time2levels.min(), time2levels.max(), time2levels.mean(), 'pricestep', pricestep)
+        assert time2levels.min() > 0
         return time2levels.astype(np.float32)
 
 
