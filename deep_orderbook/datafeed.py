@@ -1,11 +1,9 @@
 import tensorflow as tf
 import numpy as np
 import functools
+import random
 
-from config import args
 from deep_orderbook import replayer, shapper
-
-SYMBOL = args.symbol
 
 MAX_DAYS_FOR_NOW = 2
 
@@ -14,14 +12,15 @@ def alpha(arr_time2level):
 
 
 class DataFeed(replayer.Replayer):
-    def __init__(self, data_folder, side_bips, side_width, date_regexp=''):
-        self.replay = replayer.Replayer('../data/crypto', date_regexp=args.date_regexp)
-        file_gen = self.replay.training_files(SYMBOL, side_bips=side_bips, side_width=side_width)
+    def __init__(self, data_folder, symbol, side_bips, side_width, date_regexp=''):
+        self.symbol = symbol
+        self.replay = replayer.Replayer('../data/crypto', date_regexp=date_regexp)
+        file_gen = self.replay.training_files(self.symbol, side_bips=side_bips, side_width=side_width)
         fn_bs, fn_ps, fn_ts = zip(*list(file_gen)[-1:])
         arr_books = np.concatenate(list(map(np.load, fn_bs)))
         arr_prices = np.concatenate(list(map(np.load, fn_ps)))
-        arr_time2level = np.concatenate(list(map(np.load, fn_ts)))
-        print('time2level', arr_time2level.shape, arr_time2level.min(), arr_time2level.mean(), arr_time2level.max())
+        #arr_time2level = np.concatenate(list(map(np.load, fn_ts)))
+        #print('time2level', arr_time2level.shape, arr_time2level.min(), arr_time2level.mean(), arr_time2level.max())
 
         self.side_bips = side_bips
         self.side_width = side_width
@@ -33,18 +32,35 @@ class DataFeed(replayer.Replayer):
 
         self.sample_arr_books = self.batch_length(arr_books, 2048)
         self.sample_arr_prices = self.batch_length(arr_prices, 2048)
-        self.sample_arr_time2level = self.batch_length(arr_time2level, 2048)
+        #self.sample_arr_time2level = self.batch_length(arr_time2level, 2048)
 
-        self.sample_arr_alpha = alpha(self.sample_arr_time2level)
+        #self.sample_arr_alpha = alpha(self.sample_arr_time2level)
 
-    def raw_numpy_gen(self, pair, frac_from=0.0, frac_to=1.0):
-        file_names = list(self.replay.training_files(pair=pair, side_bips=self.side_bips, side_width=self.side_width))
+        self.loaded_files = 0
+        self.last_loaded_file = 'none'
+
+    def raw_numpy_gen(self, frac_from=0.0, frac_to=1.0, seed=42):
+        file_names = list(self.replay.training_files(pair=self.symbol, side_bips=self.side_bips, side_width=self.side_width))
         num = len(file_names)
         rangefrom = int(num * frac_from)
         rangeto = int(num * frac_to)
-        for fn_bs, fn_ps, fn_ts in file_names[rangefrom:rangeto]:
-            print(fn_bs, fn_ps, fn_ts)
-            arr_books, arr_prices, arr_time2level = np.load(fn_bs), np.load(fn_ts), np.load(fn_ps)
+        print(f"total of {num} files. rangefrom: {rangefrom}, rangeto: {rangeto}")
+        files_for_dataset = file_names[rangefrom:rangeto]
+        print(f"using {len(files_for_dataset)} files for the dataset: {files_for_dataset[0]}..{files_for_dataset[-1]}")
+        if seed:
+            random.seed(seed)
+            random.shuffle(files_for_dataset)
+        self.loaded_files = 0
+        for fn_bs, fn_ps, fn_ts in files_for_dataset:
+            arr_books = np.load(fn_bs)
+            arr_prices = np.load(fn_ps)
+            try:
+                arr_time2level = np.load(fn_ts)
+            except FileNotFoundError:
+                arr_time2level = shapper.BookShapper.build_time_level_trade(arr_books, arr_prices, sidebips=self.side_bips, sidesteps=self.side_width)
+                np.save(fn_ts, arr_time2level)
+            self.last_loaded_file = fn_bs.split('/')[-1][:10]
+            self.loaded_files += 1
             assert arr_books.shape[0] ==  arr_prices.shape[0]
             assert arr_books.shape[0] ==  arr_time2level.shape[0]
             yield arr_books, arr_prices, arr_time2level
@@ -55,15 +71,36 @@ class DataFeed(replayer.Replayer):
         arr_length = arr_length.reshape([-1, sample_length] + list(arr.shape[1:]))
         return arr_length
 
-    def data_flow(self, split, batch_size, sample_length):
+    def data_flow(self, split, batch_size, sample_length, seed):
         assert len(split) == 1
-        dataset = tf.data.Dataset.from_generator(
-                        functools.partial(self.raw_numpy_gen, frac_to=split[0]), 
-                        (tf.float32, tf.float32, tf.float32),
-                        (tf.TensorShape([None, self.widthbooks, self.chanbooks]),
-                         tf.TensorShape([None, self.widthbooks, 1]),
-                         tf.TensorShape([None, 2, 3])))
-        
+        def train_gen():
+            for fn_bs, fn_ps, fn_ts in self.raw_numpy_gen(frac_to=split[0], seed=seed):
+                yield self.batch_length(fn_bs, sample_length), self.batch_length(alpha(fn_ts), sample_length), self.batch_length(fn_ps, sample_length)
+        def valid_gen():
+            for fn_bs, fn_ps, fn_ts in self.raw_numpy_gen(frac_from=split[0], seed=seed):
+                yield self.batch_length(fn_bs, sample_length), self.batch_length(alpha(fn_ts), sample_length), self.batch_length(fn_ps, sample_length)
+
+        def make_dataset(raw_gen, name='dataset'):
+            ds = tf.data.Dataset.from_generator(
+                            raw_gen, 
+                            (tf.float32, tf.float32, tf.float32),
+                            (tf.TensorShape([None, sample_length, self.widthbooks, self.chanbooks]),
+                            tf.TensorShape([None, sample_length, self.widthbooks, 1]),
+                            tf.TensorShape([None, sample_length, 2, 3]))
+                            )
+#            print(name, ds)
+#            ds = ds.window(size=sample_length, drop_remainder=True)
+            ds = ds.unbatch()
+#            print(name, ds)
+            if seed:
+                shuffle_size = 37
+                print('shuffle_size', shuffle_size)
+                ds = ds.shuffle(shuffle_size, seed=seed)
+            ds = ds.batch(batch_size)
+#            print(name, ds)
+            return ds
+        return make_dataset(train_gen), make_dataset(valid_gen)
+
         arr_books = self.sample_arr_books
         arr_prices = self.sample_arr_prices
         arr_time2level = self.sample_arr_time2level
