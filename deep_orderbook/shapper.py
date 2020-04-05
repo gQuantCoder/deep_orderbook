@@ -208,10 +208,10 @@ class BookShapper:
 
 
     @staticmethod
-    def build_time_level_trade(books, prices, sidebips=32, sidesteps=64):
-        mult =  0.0001 * sidebips / sidesteps
+    def build_time_level_trade(books, prices, side_bips=32, side_width=64):
+        mult =  0.0001 * side_bips / side_width
         FUTURE = 120#0*10
-        time2levels = np.zeros_like(books[:, :2*sidesteps, :1]) + FUTURE
+        time2levels = np.zeros_like(books[:, :2*side_width, :1]) + FUTURE
         #########################################################
                                     #######
         for i in tqdm(range(prices.shape[0])):
@@ -219,7 +219,7 @@ class BookShapper:
         #########################################################
             timeupdn = []
             pricestep = prices[0, 0, 1] * mult
-            for j in range(sidesteps):
+            for j in range(side_width):
                 thresh = j * pricestep
                 [_, b, a], [d, t, _] = prices[i]
                 bids = prices[i:i+FUTURE, 0, 1]
@@ -249,7 +249,7 @@ class BookShapper:
 
 
     @staticmethod
-    def build(total, element, reduce_func=None, max_length=None):
+    def build(total, element, reduce_func, max_length=None, side_bips=None, side_width=None):
         force_save = element is None
         element = element or total
         for market,second in element.items():
@@ -264,16 +264,15 @@ class BookShapper:
                     total[market][name] += arrs
             else:
                 arrday_bs = np.stack(total[market]['bs']).astype(np.float32)
-                np.save(f'data/{datetotal}-{market}-bs.npy', arrday_bs)
                 arrday_ps = np.stack(total[market]['ps']).astype(np.float32)
-                np.save(f'data/{datetotal}-{market}-ps.npy', arrday_ps)
-                # np.save(f'data/{datetotal}-{market}-ptbs.npy', np.concatenate([arrday_ps, arrday_bs], axis=1))
+                np.save(f'data/sidepix{side_width:03}/{datetotal}-{market}-bs.npy', arrday_bs)
+                np.save(f'data/sidepix{side_width:03}/{datetotal}-{market}-ps.npy', arrday_ps)
                 if reduce_func is not None:
                     t2l = reduce_func(
-                        np.stack(total[market]['bs']).astype(np.float32),
-                        np.stack(total[market]['ps']).astype(np.float32),
+                        books=np.stack(total[market]['bs']).astype(np.float32),
+                        prices=np.stack(total[market]['ps']).astype(np.float32),
                     )
-                    np.save(f'data/{datetotal}-{market}-time2level.npy', t2l)
+                    np.save(f'data/sidepix{side_width:03}/{datetotal}-{market}-time2level-bip{side_bips:02}.npy', t2l)
 
             if max_length:
                 for name,arrs in second.items():

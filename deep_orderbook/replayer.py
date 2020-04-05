@@ -92,10 +92,10 @@ class Replayer:
                     yield fff
 
     def training_files(self, pair, side_bips, side_width):
-        BTs = sorted(glob.glob(f'{self.data_folder}/bip{side_bips:02}-sidepix{side_width:03}/{self.date_regexp}*{pair}*ps.npy'))
+        BTs = sorted(glob.glob(f'{self.data_folder}/sidepix{side_width:03}/{self.date_regexp}*{pair}*ps.npy'))
         for fn_ps in BTs:
             fn_bs = fn_ps.replace('ps.npy', 'bs.npy')
-            fn_ts = fn_ps.replace('ps.npy', 'time2level.npy')
+            fn_ts = fn_ps.replace('ps.npy', f'time2level-bip{side_bips:02}.npy')
             yield (fn_bs, fn_ps, fn_ts)
 
     def training_samples(self, pair):

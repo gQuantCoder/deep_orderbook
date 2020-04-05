@@ -46,21 +46,23 @@ class DataFeed(replayer.Replayer):
         rangeto = int(num * frac_to)
         print(f"total of {num} files. rangefrom: {rangefrom}, rangeto: {rangeto}")
         files_for_dataset = file_names[rangefrom:rangeto]
-        print(f"using {len(files_for_dataset)} files for the dataset: {files_for_dataset[0]}..{files_for_dataset[-1]}")
+        print(f"using {len(files_for_dataset)} files for the dataset: {files_for_dataset[0][0]}..{files_for_dataset[-1][0]}")
         if seed:
             random.seed(seed)
             random.shuffle(files_for_dataset)
-        self.loaded_files = 0
+        if rangefrom == 0: # count training files only
+            self.loaded_files = 0
         for fn_bs, fn_ps, fn_ts in files_for_dataset:
             arr_books = np.load(fn_bs)
             arr_prices = np.load(fn_ps)
             try:
                 arr_time2level = np.load(fn_ts)
             except FileNotFoundError:
-                arr_time2level = shapper.BookShapper.build_time_level_trade(arr_books, arr_prices, sidebips=self.side_bips, sidesteps=self.side_width)
+                arr_time2level = shapper.BookShapper.build_time_level_trade(arr_books, arr_prices, side_bips=self.side_bips, side_width=self.side_width)
                 np.save(fn_ts, arr_time2level)
             self.last_loaded_file = fn_bs.split('/')[-1][:10]
-            self.loaded_files += 1
+            if rangefrom == 0: # count training files only
+                self.loaded_files += 1
             assert arr_books.shape[0] ==  arr_prices.shape[0]
             assert arr_books.shape[0] ==  arr_time2level.shape[0]
             yield arr_books, arr_prices, arr_time2level
