@@ -30,9 +30,9 @@ class DataFeed(replayer.Replayer):
 
         assert side_width == self.sidesteps
 
-        self.sample_arr_books = self.batch_length(arr_books, 2048)
-        self.sample_arr_prices = self.batch_length(arr_prices, 2048)
-        #self.sample_arr_time2level = self.batch_length(arr_time2level, 2048)
+        self.sample_arr_books = self.batch_length(arr_books, 8192)
+        self.sample_arr_prices = self.batch_length(arr_prices, 8192)
+        #self.sample_arr_time2level = self.batch_length(arr_time2level, 8192)
 
         #self.sample_arr_alpha = alpha(self.sample_arr_time2level)
 
