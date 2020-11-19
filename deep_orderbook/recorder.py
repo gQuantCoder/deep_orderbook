@@ -9,6 +9,9 @@ import asyncio
 import aiofiles
 from binance import AsyncClient, DepthCacheManager # Import the Binance Client
 
+import logging
+logging.basicConfig(filename='logging.log')
+
 # Import the Binance Socket Manager
 from binance.websockets import BinanceSocketManager
 from binance.exceptions import BinanceAPIException
