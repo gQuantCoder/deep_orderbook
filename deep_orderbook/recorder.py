@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(filename='logging.log')
 
 # Import the Binance Socket Manager
-from binance.websockets import BinanceSocketManager
+from binance import ThreadedWebsocketManager
 from binance.exceptions import BinanceAPIException
 from binance.depthcache import DepthCache
 
@@ -141,8 +141,8 @@ class Receiver:
         for m in self.markets:
             print(json.dumps(await self.client.get_symbol_ticker(symbol=m), indent=2))
 
-        # Instantiate a BinanceSocketManager, passing in the client that you instantiated
-        self.bm = BinanceSocketManager(self.client, loop=asyncio.get_event_loop())
+        # Instantiate a ThreadedWebsocketManager, passing in the client that you instantiated
+        self.bm = ThreadedWebsocketManager(self.client)
         self.nummsg = collections.defaultdict(int)
         self.conn_keys = []
         self.depth_managers = {}

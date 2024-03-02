@@ -11,7 +11,7 @@ from tqdm.auto import tqdm
 from deep_orderbook.recorder import MessageDepthCacheManager
 import aioitertools
 
-pd.set_option('precision', 12)
+pd.set_option('display.precision', 12)
 import matplotlib.pyplot as plt
 
 
