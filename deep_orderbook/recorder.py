@@ -1,7 +1,7 @@
 import time
 import datetime
 import json
-import os, sys
+import os
 import collections
 import copy
 import threading
@@ -10,11 +10,12 @@ import aiofiles
 from binance import AsyncClient, DepthCacheManager # Import the Binance Client
 
 import logging
+
+from websockets import ConnectionClosedError
 logging.basicConfig(filename='logging.log')
 
 # Import the Binance Socket Manager
 from binance import ThreadedWebsocketManager
-from binance.exceptions import BinanceAPIException
 from binance.depthcache import DepthCache
 
 # https://github.com/binance-exchange/binance-official-api-docs/blob/master/web-socket-streams.md#how-to-manage-a-local-order-book-correctly
@@ -350,4 +351,5 @@ if __name__ == '__main__':
     MARKETS = ["BNBUSDT", "BTCUSDT", "ETHUSDT", "BNBBTC", "ETHBTC", "BNBETH"]
     rec = loop.run_until_complete(Receiver.create(markets=MARKETS))#['ETHBTC', 'BTCUSDT']))
     while True:
+        print("running")
         loop.run_until_complete(asyncio.sleep(10))

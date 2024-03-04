@@ -46,3 +46,19 @@ class ImageStream:
 
     def read(self):
         return self.frame if self.frame is None else self.frame * 255
+    
+
+if __name__ == "__main__":
+    rcParams['figure.figsize'] = 12, 6
+    rcParams['figure.dpi'] = 300
+
+    stream = ImageStream(markets=MARKETS)
+    stream.start()
+    while True:
+        frame = stream.read()
+        if frame is not None:
+            print(frame)
+            print(frame.shape)
+            break
+    stream.stop()
+    print("done")

@@ -87,7 +87,7 @@ class CoinBaseFeed:
             case "l2_data":
                 for event in message.events:
                     print(
-                        f"{message.channel} {event.type} {message.timestamp}: {len(event.updates)}"
+                        f"{message.channel}       {event.type} {message.timestamp}: {len(event.updates)}"
                     )
                     if self.PRINT_EVENTS:
                         print(event)
