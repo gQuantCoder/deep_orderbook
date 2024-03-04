@@ -1,69 +1,153 @@
+import json
 import asyncio
-import httpx
+from coinbase.websocket import WSClient
+from rich import print
+from pydantic import BaseModel, Field
+from datetime import datetime
 
-async def get_level2_market_data(product_id="ETH-USD", top_n=5, interval=1):
-    url = f"https://api.pro.coinbase.com/products/{product_id}/book?level=2"
 
-    async with httpx.AsyncClient() as client:
-        while True:
-            try:
-                response = await client.get(url)
-                response.raise_for_status()  # Raises exception for 4XX/5XX responses
-                data = response.json()
+***REMOVED***
+***REMOVED***
+***REMOVED***
+***REMOVED***
 
-                # Clear the screen to make the data readable in a terminal
-                print("\033[H\033[J", end="")
-                print(f"Fetching Level 2 Market Data for {product_id} every {interval} seconds...")
+# Initialize your aggregation structures outside of the on_message to ensure they're in scope
+order_book_aggregate = {"bids": {}, "asks": {}}
+trades_aggregate = []
 
-                # Display the top bids and asks
-                print("Top Bids:")
-                for bid in data['bids'][:top_n]:
-                    price, size = bid[0:2]
-                    print(f"Price: {price}, Size: {size}")
 
-                print("\nTop Asks:")
-                for ask in data['asks'][:top_n]:
-                    price, size = ask[0:2]
-                    print(f"Price: {price}, Size: {size}")
+class Trade(BaseModel):
+    # trade_id: str = Field(alias="trade_id")
+    product_id: str = Field(alias="product_id")
+    price: str
+    size: str
+    side: str
+    # time: datetime
 
-                await asyncio.sleep(interval)
 
-            except Exception as e:
-                print(f"An error occurred: {e}")
-                break  # Or handle the error as you see fit
+class L2Data(BaseModel):
+    side: str
+    # event_time: datetime = Field(alias="event_time")
+    price_level: str
+    new_quantity: str
 
-async def fetch_recent_trades(product_id="ETH-USD", interval=1):
-    """
-    Fetches and displays the most recent trades for a given product ID from Coinbase Pro asynchronously.
 
-    Args:
-    - product_id (str): The ID of the product to fetch trades for.
-    - interval (int): Interval in seconds between data fetches.
-    """
-    url = f"https://api.pro.coinbase.com/products/{product_id}/trades"
+class Subscriptions(BaseModel):
+    subscriptions: dict[str, list[str]]
 
-    async with httpx.AsyncClient() as client:
-        while True:
-            try:
-                response = await client.get(url)
-                response.raise_for_status()  # Raises exception for 4XX/5XX responses
-                trades = response.json()
 
-                # Clear the screen to make the data readable in a terminal
-                print("\033[H\033[J", end="")
-                print(f"Fetching Recent Trades for {product_id} every {interval} seconds...")
-                print("Most Recent Trades:")
+class L2Event(BaseModel):
+    type: str
+    product_id: str
+    updates: list[L2Data]
 
-                # Display the most recent trades
-                for trade in trades:
-                    print(f"Time: {trade['time']}, Price: {trade['price']}, Size: {trade['size']}, Side: {trade['side']}")
 
-                await asyncio.sleep(interval)
+class TradeEvent(BaseModel):
+    type: str
+    trades: list[Trade]
 
-            except Exception as e:
-                print(f"An error occurred: {e}")
-                break  # Or handle the error as you see fit
+
+class Message(BaseModel):
+    channel: str
+    timestamp: datetime
+    sequence_num: int
+    events: list[L2Event | TradeEvent | Subscriptions]
+
+
+def on_message(msg):
+    global order_book_aggregate, trades_aggregate
+    # print(msg[:256])
+    message = Message.model_validate_json(msg)
+
+    # Assuming your aggregation logic here (simplified for demonstration)
+    match message.channel:
+        case "subscriptions":
+            for event in message.events:
+                print("Successfully subscribed to the following channels:")
+                for channel, products in event.subscriptions.items():
+                    print(f"{channel}: {products}")
+            return  # Return early as there's no further processing needed for these messages
+        case "l2_data":
+            for event in message.events:
+                print(
+                    f"{message.channel} {event.type} {message.timestamp}: {len(event.updates)}"
+                )
+                print(event)
+                match event.type:
+                    case "snapshot":
+                        pass
+                    case "update":
+                        for update in event.updates:
+                            # Update the order book aggregate
+                            if update.side == "bid":
+                                order_book_aggregate["bids"][
+                                    update.price_level
+                                ] = update.new_quantity
+                            elif update.side == "ask":
+                                order_book_aggregate["asks"][
+                                    update.price_level
+                                ] = update.new_quantity
+        case "market_trades":
+            for event in message.events:
+                print(
+                    f"{message.channel} {event.type} {message.timestamp}: {len(event.trades)}"
+                )
+                print(event)
+                match event.type:
+                    case "snapshot":
+                        pass
+                    case "update":
+                        for trade in event.trades:
+                            trades_aggregate.append(trade)
+        case _:
+            print(f"Unhandled channel: {channel}")
+            print(msg[:256])
+            # Handle other message types as needed
+            pass
+
+
+def on_open():
+    print("Connection opened!")
+
+
+def on_close():
+    print("Connection closed!")
+
+
+# Create the WSClient instance
+client = WSClient(
+    api_key=api_key,
+    api_secret=api_secret,
+    on_message=on_message,
+    on_open=on_open,
+    on_close=on_close,
+)
+
+
+async def main():
+    try:
+        client.open()
+        # Subscribe to the necessary channels, adjust according to your requirements
+        client.subscribe(
+            product_ids=["ETH-USD"],
+            channels=[
+                "level2",
+                "market_trades",
+                # "ticker",
+                # "hearbeats",
+            ],
+        )
+
+        # Here, you should implement logic to run for a certain period or handle reconnection/exceptions as needed.
+        await asyncio.sleep(30)  # Run for 30 seconds for demonstration
+
+    finally:
+        client.close()
+        # Here, you can print or process the aggregated data
+        print(
+            json.dumps(order_book_aggregate, indent=2)[:500]
+        )  # Example of handling order_book_aggregate
+
 
 if __name__ == "__main__":
-    # asyncio.run(get_level2_market_data(product_id="ETH-USD", top_n=5, interval=1))
-    asyncio.run(fetch_recent_trades(product_id="ETH-USD", interval=1))
+    asyncio.run(main())
