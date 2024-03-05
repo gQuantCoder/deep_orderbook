@@ -1,5 +1,6 @@
 import json
 import asyncio
+from typing import Literal
 from coinbase.websocket import WSClient
 from rich import print
 from pydantic import BaseModel, Field
@@ -17,7 +18,7 @@ trades_aggregate = []
 
 
 class Trade(BaseModel):
-    # trade_id: str = Field(alias="trade_id")
+    # trade_id: str = Field(alias='trade_id')
     product_id: str = Field(alias="product_id")
     price: str
     size: str
@@ -27,7 +28,7 @@ class Trade(BaseModel):
 
 class L2Data(BaseModel):
     side: str
-    # event_time: datetime = Field(alias="event_time")
+    # event_time: datetime = Field(alias='event_time')
     price_level: str
     new_quantity: str
 
@@ -37,36 +38,57 @@ class Subscriptions(BaseModel):
 
 
 class L2Event(BaseModel):
-    type: str
+    type: Literal["snapshot", "update"]
     product_id: str
     updates: list[L2Data]
 
 
 class TradeEvent(BaseModel):
-    type: str
+    type: Literal["snapshot", "update"]
     trades: list[Trade]
 
 
 class Message(BaseModel):
-    channel: str
+    channel: Literal["l2_data", "market_trades", "subscriptions"]
     timestamp: datetime
     sequence_num: int
-    events: list[L2Event | TradeEvent | Subscriptions]
+    events: list[L2Event] | list[TradeEvent] | list[Subscriptions]
 
 
-class CoinBaseFeed:
+class CoinbaseFeed:
     RECORD_HISTORY = True
     PRINT_EVENTS = False
 
-    def __init__(self) -> None:
+    def __init__(self, markets: list[str]) -> None:
         self.client = WSClient(
             api_key=api_key,
             api_secret=api_secret,
-            on_message=self.on_message if not self.RECORD_HISTORY else self.recorded_on_message,
+            on_message=(
+                self.on_message if not self.RECORD_HISTORY else self.recorded_on_message
+            ),
             on_open=self.on_open,
             on_close=self.on_close,
         )
+        self.markets = markets
         self.msg_history: list[str] = []
+
+    async def __aenter__(self):
+        await self.client.open_async()
+        # Subscribe to the necessary channels, adjust according to your requirements
+        await self.client.subscribe_async(
+            product_ids=["ETH-USD"],
+            channels=[
+                "level2",
+                "market_trades",
+                # 'ticker',
+                # 'hearbeats',
+            ],
+        )
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        await self.client.unsubscribe_all_async()
+        await self.client.close_async()
 
     def recorded_on_message(self, msg):
         self.msg_history.append(msg)
@@ -134,27 +156,10 @@ class CoinBaseFeed:
 async def main():
     import pyinstrument
 
-    coinbase = CoinBaseFeed()
-
     try:
-        coinbase.client.open()
-        # Subscribe to the necessary channels, adjust according to your requirements
-        coinbase.client.subscribe(
-            product_ids=["ETH-USD"],
-            channels=[
-                "level2",
-                "market_trades",
-                # "ticker",
-                # "hearbeats",
-            ],
-        )
-
-        # Here, you should implement logic to run for a certain period or handle reconnection/exceptions as needed.
-        await asyncio.sleep(10)  # Run for 30 seconds for demonstration
-
+        async with CoinbaseFeed(markets=["ETH-USD"]) as coinbase:
+            await asyncio.sleep(10)
     finally:
-        coinbase.client.close()
-        # Here, you can print or process the aggregated data
         print(
             json.dumps(order_book_aggregate, indent=2)[:500]
         )  # Example of handling order_book_aggregate
