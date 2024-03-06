@@ -16,10 +16,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    api_key: str
-    api_secret: str
-
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    api_key: str = ""
+    api_secret: str = ""
+    model_config = SettingsConfigDict(env_file="credentials/coinbase.txt", env_file_encoding="utf-8")
 
 
 class Subscriptions(BaseModel):
@@ -181,11 +180,8 @@ class CoinbaseFeed:
 async def main():
     import pyinstrument
 
-    try:
-        async with CoinbaseFeed(markets=["ETH-USD"]) as coinbase:
-            await asyncio.sleep(5)
-    except Exception as e:
-        print(f"Exception: {e}")
+    async with CoinbaseFeed(markets=["ETH-USD"]) as coinbase:
+        await asyncio.sleep(5)
 
     with pyinstrument.Profiler(interval=0.00001) as profiler:
         for msg in coinbase.msg_history:
