@@ -7,16 +7,19 @@ from rich import print
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-from deep_orderbook.marketdata import PriceLevel, Trade
+import deep_orderbook.marketdata as md
+from deep_orderbook.shapper import BookShapper
 
 
-***REMOVED***
-***REMOVED***
-***REMOVED***
-***REMOVED***
+# read creds from .env using pydantic
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class Settings(BaseSettings):
+    api_key: str
+    api_secret: str
 
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
 class Subscriptions(BaseModel):
@@ -46,9 +49,11 @@ class CoinbaseFeed:
     PRINT_EVENTS = False
 
     def __init__(self, markets: list[str]) -> None:
+        settings = Settings()
+        print(settings.api_key, settings.api_secret)
         self.client = WSClient(
-            api_key=api_key,
-            api_secret=api_secret,
+            api_key=settings.api_key,
+            api_secret=settings.api_secret,
             on_message=(
                 self.on_message if not self.RECORD_HISTORY else self.recorded_on_message
             ),

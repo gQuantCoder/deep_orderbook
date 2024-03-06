@@ -28,7 +28,7 @@ class OrderLevel(BaseModel):
 
 
 class PriceLevel(BaseModel):
-    side: Literal["bid", "offer"]
+    side: Literal['bid', 'offer']
     # event_time: datetime = Field(alias='event_time')
     price: float = Field(alias="price_level")
     size: float = Field(alias="new_quantity")
