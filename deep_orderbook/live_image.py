@@ -1,4 +1,4 @@
-from deep_orderbook.recorder import Receiver, Writer
+from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed as Receiver
 from deep_orderbook.shapper import BookShapper
 
 import asyncio
@@ -9,56 +9,61 @@ import aioitertools
 import functools
 
 
-MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
+MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT"]
+MARKETS = ["ETH-BTC", "BTC-USD", "ETH-USD"]
 LENGTH = 512
+
 
 class ImageStream:
     def __init__(self, markets):
         self.frame = None
         self.markets = markets or MARKETS
-    
+
     async def setup(self):
-        self.receiver = await Receiver.create(markets=self.markets, print_level=1)
+        
+        async with Receiver(markets=self.markets) as receiver:
 
-        shappers = {pair: await BookShapper.create() for pair in self.markets}
-        multi_replay = self.receiver.multi_generator(shappers)
+            multi_replay = receiver.multi_generator(self.markets)
 
-        _ = await multi_replay.__anext__()
+            _ = await multi_replay.__anext__()
 
-        genarr = BookShapper.gen_array_async(market_replay=multi_replay, markets=self.markets)
-        _ = await aioitertools.next(genarr)
+            genarr = BookShapper.gen_array_async(
+                market_replay=multi_replay, markets=self.markets
+            )
+            _ = await aioitertools.next(genarr)
 
-        self.genacc = aioitertools.accumulate(genarr, functools.partial(BookShapper.build, max_length=LENGTH))
-        _ = await aioitertools.next(self.genacc)
+            self.genacc = aioitertools.accumulate(
+                genarr, functools.partial(BookShapper.build, max_length=LENGTH)
+            )
+            _ = await aioitertools.next(self.genacc)
 
     async def run(self):
-        async for toshow in BookShapper.images(accumulated_arrays=self.genacc, every=1, LENGTH=LENGTH):
+        async for toshow in BookShapper.images(
+            accumulated_arrays=self.genacc, every=1, LENGTH=LENGTH
+        ):
             self.frame = toshow.copy()
 
-    def start(self):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        asyncio.get_event_loop().run_until_complete(self.setup())
-        asyncio.get_event_loop().run_until_complete(self.run())
-
-    def stop(self):
+    async def __aenter__(self):
+        await self.setup()
+        await self.run()
+        return self
+    
+    async def __aexit__(self, exc_type, exc, tb):
         pass
 
-    def read(self):
-        return self.frame if self.frame is None else self.frame * 255
-    
+    async def read(self):
+        return self.frame * 255 if self.frame else self.frame
+
+async def main():
+    async with ImageStream(markets=MARKETS) as stream:
+        while True:
+            frame = stream.read()
+            if frame is not None:
+                print(frame)
+                print(frame.shape)
+                break
+    print("done")
+
 
 if __name__ == "__main__":
-    rcParams['figure.figsize'] = 12, 6
-    rcParams['figure.dpi'] = 300
-
-    stream = ImageStream(markets=MARKETS)
-    stream.start()
-    while True:
-        frame = stream.read()
-        if frame is not None:
-            print(frame)
-            print(frame.shape)
-            break
-    stream.stop()
-    print("done")
+    asyncio.run(main())

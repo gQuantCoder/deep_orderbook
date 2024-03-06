@@ -5,3 +5,6 @@ websockets
 matplotlib
 coinbase-advanced-py
 python-binance
+
+pydantic
+pydantic-settings

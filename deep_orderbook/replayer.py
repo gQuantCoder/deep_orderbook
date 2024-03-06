@@ -1,15 +1,12 @@
 import glob
 import json
-import sys
-import time, datetime
-import pandas as pd
+import datetime
 import numpy as np
 import asyncio
 import itertools
-import aiofiles
-import aioitertools
 from tqdm.auto import tqdm
 import zipfile
+import deep_orderbook.marketdata as md
 
 from deep_orderbook.shapper import BookShapper
 
@@ -52,7 +49,11 @@ class Replayer:
 
     @staticmethod
     def loadjson(filename, open_fc=open):
-        return json.load(open_fc(filename))
+        try:
+            return json.load(open_fc(filename))
+        except json.JSONDecodeError as e:
+            print(f"Error loading {filename}: {e}")
+            return []
 
     def snapshots(self, pair):
         return sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*snapshot.json'))
@@ -79,7 +80,7 @@ class Replayer:
             ts, gr = js_group
             files = list(gr)
             if len(files) == 3:
-                snapshot_file, trades_file, updates_file = [json.load(open_fc(fn)) for fn in files]
+                snapshot_file, trades_file, updates_file = [self.loadjson(fn, open_fc) for fn in files]
                 yield updates_file, trades_file, snapshot_file
 
     async def book_updates_trades_and_snapshots_zip(self, pair):
@@ -105,44 +106,46 @@ class Replayer:
             arr_time2level = np.load(fn_ts)
             yield arr_books, arr_prices, arr_time2level
 
-    @staticmethod
-    def tradesframe(file):
-        ts = pd.DataFrame(self.loadjson(file))
-        if ts.empty:
-            return ts
-        ts = ts.drop(['M', 's', 'e', 'a'], axis=1).astype(np.float64)
-        ts['t'] = 1 + ts['E'] // 1000
-        ts['delay'] = ts['E'] - ts['T']
-        ts['num'] = ts['l'] - ts['f'] + 1
-        ts['up'] = 1 - 2*ts['m']
-        ts.drop(['E', 'T', 'f', 'l', 'm'], axis=1, inplace=True)
-        ts.set_index(['t'], inplace=True)
-        return ts
+    # @staticmethod
+    # def tradesframe(file):
+    #     ts = pd.DataFrame(self.loadjson(file))
+    #     if ts.empty:
+    #         return ts
+    #     ts = ts.drop(['M', 's', 'e', 'a'], axis=1).astype(np.float64)
+    #     ts['t'] = 1 + ts['E'] // 1000
+    #     ts['delay'] = ts['E'] - ts['T']
+    #     ts['num'] = ts['l'] - ts['f'] + 1
+    #     ts['up'] = 1 - 2*ts['m']
+    #     ts.drop(['E', 'T', 'f', 'l', 'm'], axis=1, inplace=True)
+    #     ts.set_index(['t'], inplace=True)
+    #     return ts
 
-    @staticmethod
-    def sample(of_file):
-        return self.loadjson(of_file)[0]
+    # @staticmethod
+    # def sample(of_file):
+    #     return self.loadjson(of_file)[0]
 
-    async def replayL2_async(self, pair, shapper):
+    async def replayL2_async(self, pair: str, shapper: BookShapper):
         yield pair
         file_updates_tqdm = self.file_generator(pair)
-        async for js_updates, list_trades, snapshot in file_updates_tqdm:
-            #file_updates_tqdm.set_description(fupdate.replace(self.data_folder, ''))
+        async for js_updates, list_trades_msgs, snapshot_msg in file_updates_tqdm:
+            list_trades = [md.TradeUpdate(**trade) for trade in list_trades_msgs]
             await shapper.on_trades_bunch(list_trades)
             js_updates_tqdm = tqdm(js_updates, leave=False)
 
-            lastUpdateId = snapshot['lastUpdateId']
+            snapshot = md.BookSnaphsot(**snapshot_msg)
+            lastUpdateId = snapshot.lastUpdateId
             await shapper.on_snaphsot_async(snapshot)
 
-            for book_upd in js_updates_tqdm:
-                if book_upd['e'] != 'depthUpdate':
-                    print("not update:", book_upd['e'])
+            for book_upd_msg in js_updates_tqdm:
+                book_upd = md.BookUpdate(**book_upd_msg)
+                if book_upd.e != 'depthUpdate':
+                    print("not update:", book_upd.e)
                     continue
-                firstID = book_upd['U']
-                finalID = book_upd['u']
+                firstID = book_upd.first_id
+                finalID = book_upd.final_id
                 if finalID < lastUpdateId:
                     continue
-                eventTime = book_upd['E']
+                eventTime = book_upd.E
                 ts = 1 + eventTime // 1000
 
                 px = await shapper.on_depth_msg_async(book_upd)
@@ -183,20 +186,20 @@ class Replayer:
 
 
 async def main():
-    #markets = ['ETHBTC']
+    #markets = ['ETHUSDT']
     #file_replayer = Replayer('../data/crypto')
     #s = file_replayer.zipped()
     #print(s)
     #return
-    markets = ['ETHBTC']
+    markets = ['ETHUSDT']
     file_replayer = Replayer('../crypto-trading/data/L2')
     
-    replay = file_replayer.replayL2_async('ETHBTC', await BookShapper.create())
+    replay = file_replayer.replayL2_async('ETHUSDT', BookShapper())
     async for d in replay:
         pass
         break
 
-    replayers = [file_replayer.replayL2_async(pair, await BookShapper.create()) for pair in markets]
+    replayers = [file_replayer.replayL2_async(pair, BookShapper()) for pair in markets]
     multi_replay = file_replayer.multireplayL2_async(replayers)
     async for d in multi_replay:
         pass

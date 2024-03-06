@@ -8,55 +8,19 @@ import threading
 import asyncio
 import aiofiles
 from binance import AsyncClient, DepthCacheManager # Import the Binance Client
-
 import logging
 
-from websockets import ConnectionClosedError
-logging.basicConfig(filename='logging.log')
+from deep_orderbook import marketdata as md
 
-# Import the Binance Socket Manager
-from binance import ThreadedWebsocketManager
-from binance.depthcache import DepthCache
+from websockets import ConnectionClosedError
+
+from deep_orderbook.shapper import BookShapper
+logging.basicConfig(filename='logging.log')
 
 # https://github.com/binance-exchange/binance-official-api-docs/blob/master/web-socket-streams.md#how-to-manage-a-local-order-book-correctly
 DEBUG = False
 
-class DepthCachePlus(DepthCache):
-    def add_bid(self, bid):
-        pr = float(bid[0])
-        sz = float(bid[1])
-        self._bids[pr] = sz
-        if sz == 0.0:
-            del self._bids[pr]
 
-    def add_ask(self, ask):
-        pr = float(ask[0])
-        sz = float(ask[1])
-        self._asks[pr] = sz
-        if sz == 0.0:
-            del self._asks[pr]
-
-    def get_bids_asks(self):
-        bids = self.get_bids()
-        asks = self.get_asks()
-        if bids[0][0] >= asks[0][0]:
-            print(f"\ncleaning the crossed BBO \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
-            for p in list(self._bids.keys()):
-                if p >= asks[0][0]:
-                    if DEBUG:
-                        print(f"del bids[{p}]")
-                    del self._bids[p]
-            for p in list(self._asks.keys()):
-                if p <= bids[0][0]:
-                    if DEBUG:
-                        print(f"del asks[{p}]")
-                    del self._asks[p]
-            bids = self.get_bids()
-            asks = self.get_asks()
-            print(f"result: \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
-
-        assert bids[0][0] < asks[0][0]
-        return bids, asks
 
 
 class MessageDepthCacheManager(DepthCacheManager):
@@ -73,7 +37,7 @@ class MessageDepthCacheManager(DepthCacheManager):
         self._last_update_id = None
         self._depth_message_buffer = []
         self._bm = bm
-        self._depth_cache = DepthCachePlus(self._symbol)
+        self._depth_cache = md.DepthCachePlus(symbol=self._symbol)
         self._refresh_interval = refresh_interval
         self.trades = list()
 
@@ -233,7 +197,12 @@ class Receiver:
                                                                      )
                 self.depth_managers[symbol] = depthmanager
 
-    async def multi_generator(self, symbol_shappers):
+    async def multi_generator(self, markets: list[str]):
+        """ this function is a generator of generators, each one for a different symbol.
+        It is used to run the replay of the market data in parallel for all the symbols.
+        """
+        symbol_shappers = {pair: BookShapper() for pair in self.markets}
+
         tall = time.time()
         tall = tall // 1
         while True:

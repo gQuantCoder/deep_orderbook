@@ -1,4 +1,6 @@
 import asyncio
+import collections
+import time
 from typing import Literal
 from coinbase.websocket import WSClient
 from rich import print
@@ -23,13 +25,13 @@ class Subscriptions(BaseModel):
 
 class L2Event(BaseModel):
     type: Literal["snapshot", "update"]
-    product_id: str
-    updates: list[PriceLevel]
+    product_id: str = Field(alias="product_id")
+    updates: list[md.PriceLevel]
 
 
 class TradeEvent(BaseModel):
     type: Literal["snapshot", "update"]
-    trades: list[Trade]
+    trades: list[md.Trade]
 
 
 class Message(BaseModel):
@@ -40,7 +42,7 @@ class Message(BaseModel):
 
 
 class CoinbaseFeed:
-    RECORD_HISTORY = True
+    RECORD_HISTORY = False
     PRINT_EVENTS = False
 
     def __init__(self, markets: list[str]) -> None:
@@ -55,12 +57,16 @@ class CoinbaseFeed:
         )
         self.markets = markets
         self.msg_history: list[str] = []
+        self.depth_managers: dict[str, md.DepthCachePlus] = {
+            s: md.DepthCachePlus() for s in self.markets
+        }
+        self.trade_managers: dict[str, list[TradeEvent]] = collections.defaultdict(list)
 
     async def __aenter__(self):
         await self.client.open_async()
         # Subscribe to the necessary channels, adjust according to your requirements
         await self.client.subscribe_async(
-            product_ids=["ETH-USD"],
+            product_ids=self.markets,
             channels=[
                 "level2",
                 "market_trades",
@@ -85,6 +91,9 @@ class CoinbaseFeed:
         match message.channel:
             case "subscriptions":
                 for event in message.events:
+                    if not event.subscriptions:
+                        print("ERROR: Failed to subscribe to the requested channels")
+                        # exit(1)
                     print("Successfully subscribed to the following channels:")
                     for channel, products in event.subscriptions.items():
                         print(f"{channel}: {products}")
@@ -92,7 +101,7 @@ class CoinbaseFeed:
             case "l2_data":
                 for event in message.events:
                     print(
-                        f"{message.channel}       {event.type} {message.timestamp}: {len(event.updates)}"
+                        f"{message.channel}       {event.type} {event.product_id} {message.timestamp}: {len(event.updates)}"
                     )
                     if self.PRINT_EVENTS:
                         print(event)
@@ -102,6 +111,12 @@ class CoinbaseFeed:
                         case "update":
                             pass
             case "market_trades":
+                # asserts there is only one product per update
+                assert len(message.events) == 1
+                assert (
+                    len(set([trade.product_id for trade in message.events[0].trades]))
+                    == 1
+                )
                 for event in message.events:
                     print(
                         f"{message.channel} {event.type} {message.timestamp}: {len(event.trades)}"
@@ -124,6 +139,38 @@ class CoinbaseFeed:
 
     def on_close(self):
         print("Connection closed!")
+
+    async def multi_generator(self, markets: list[str]):
+        """this function is a generator of generators, each one for a different symbol.
+        It is used to run the replay of the market data in parallel for all the symbols.
+        """
+        symbol_shappers = {pair: BookShapper() for pair in markets}
+
+        tall = time.time()
+        tall = tall // 1
+        while True:
+            twake = tall
+            timesleep = twake - time.time()
+            if timesleep > 0:
+                await asyncio.sleep(timesleep)
+            else:
+                print(f"time sleep is negative: {timesleep}")
+
+            oneSec = {}
+            for symbol, shapper in symbol_shappers.items():
+                bids, asks = self.depth_managers[symbol].get_bids_asks()
+                if not bids or not asks:
+                    print(f"no bids or asks for {symbol}")
+                    break
+                await shapper.update_ema(bids, asks, twake)
+                list_trades = self.depth_managers[symbol].trades
+                await shapper.on_trades_bunch(list_trades, force_t_avail=twake)
+                oneSec[symbol] = await shapper.make_frames_async(
+                    t_avail=twake, bids=bids, asks=asks
+                )
+            else:
+                yield oneSec
+            tall += 1
 
 
 async def main():
