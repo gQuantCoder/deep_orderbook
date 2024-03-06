@@ -1,43 +1,44 @@
 from datetime import datetime
 from typing import Literal
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from operator import itemgetter
 
 
 class Trade(BaseModel):
     # trade_id: str = Field(alias='trade_id')
-    product_id: str = Field(alias="product_id")
-    price: float = Field(alias="price")
-    size: float = Field(alias="size")
+    product_id: str = Field(alias='product_id')
+    price: float = Field(alias='price')
+    size: float = Field(alias='size')
     side: str
     # time: datetime
 
 
 class OrderLevel(BaseModel):
-    price: float = Field(alias="price_level")
-    size: float = Field(alias="new_quantity")
-
-    @model_validator(mode="before")
-    def from_lists(cls, v):
-        if isinstance(v, list):
-            if len(v) == 2:
-                return {"price_level": v[0], "new_quantity": v[1]}
-            else:
-                raise ValueError(f"PriceLevel: {v} is not a valid list of length 3")
-        return v
+    price: float = Field(alias='price_level')
+    size: float = Field(alias='new_quantity')
 
 
-class PriceLevel(BaseModel):
-    side: Literal['bid', 'offer']
-    # event_time: datetime = Field(alias='event_time')
-    price: float = Field(alias="price_level")
-    size: float = Field(alias="new_quantity")
-
-
-class BookSnaphsot(BaseModel):
-    lastUpdateId: int
+class BookUpdate(BaseModel):
     bids: list[OrderLevel]
     asks: list[OrderLevel]
+
+    @field_validator('bids', 'asks')
+    @classmethod
+    def from_lists(cls, values: list, info: ValidationInfo):
+        if not values:
+            return []
+        if isinstance(values[0], list):
+            if len(values[0]) == 2:
+                return [{'price_level': v[0], 'new_quantity': v[1]} for v in values]
+            else:
+                raise ValueError(
+                    f"PriceLevel: {values} is not a valid list of length 2"
+                )
+        return values
+
+
+class BookSnaphsot(BookUpdate):
+    pass
 
 
 class BinanceUpdate(BaseModel):
@@ -70,40 +71,47 @@ class BookUpdate(BinanceUpdate):
         ]
     }
     """
+
     first_id: int = Field(alias='U')
     final_id: int = Field(alias='u')
     bids: list[OrderLevel] = Field(alias='b')
     asks: list[OrderLevel] = Field(alias='a')
 
+
 class TradeUpdate(BinanceUpdate):
-        """
-        {
-            "e": "aggTrade",                # event type
-            "E": 1499405254326,             # event time
-            "s": "ETHBTC",                  # symbol
-            "a": 70232,                             # aggregated tradeid
-            "p": "0.10281118",              # price
-            "q": "8.15632997",              # quantity
-            "f": 77489,                             # first breakdown trade id
-            "l": 77489,                             # last breakdown trade id
-            "T": 1499405254324,             # trade time
-            "m": false,                             # whether buyer is a maker
-            "M": true                               # can be ignored
-        }
-        """
-        price: float = Field(alias='p')
-        size: float = Field(alias='q')
-        is_buyer_maker: bool = Field(alias='m')
-        trade_id: int = Field(alias='a')
-        first_trade_id: int = Field(alias='f')
-        last_trade_id: int = Field(alias='l')
-        T: int = Field(alias='T')
+    """
+    {
+        "e": "aggTrade",                # event type
+        "E": 1499405254326,             # event time
+        "s": "ETHBTC",                  # symbol
+        "a": 70232,                             # aggregated tradeid
+        "p": "0.10281118",              # price
+        "q": "8.15632997",              # quantity
+        "f": 77489,                             # first breakdown trade id
+        "l": 77489,                             # last breakdown trade id
+        "T": 1499405254324,             # trade time
+        "m": false,                             # whether buyer is a maker
+        "M": true                               # can be ignored
+    }
+    """
+
+    price: float = Field(alias='p')
+    size: float = Field(alias='q')
+    is_buyer_maker: bool = Field(alias='m')
+    trade_id: int = Field(alias='a')
+    first_trade_id: int = Field(alias='f')
+    last_trade_id: int = Field(alias='l')
+    T: int = Field(alias='T')
+
 
 class DepthCachePlus(BaseModel):
     # symbol: str
     _bids: dict[float, float] = {}
     _asks: dict[float, float] = {}
-    recent_trades: list[Trade] = []
+    trades: list[Trade] = []
+
+    def add_trade(self, trade: Trade):
+        self.trades.append(trade)
 
     def get_bids(self):
         lst = [(price, quantity) for price, quantity in self._bids.items()]
@@ -129,7 +137,7 @@ class DepthCachePlus(BaseModel):
         for ask in updates.asks:
             self.add_ask(ask)
 
-    def reset(self, snapshot=None):
+    def reset(self, snapshot: BookSnaphsot | None = None):
         self._bids = {}
         self._asks = {}
         if snapshot:

@@ -1,0 +1,45 @@
+[project]
+name = "deeep_orderbook"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "gQuantCoder" }]
+
+version="0.5.299792458"
+dependencies = [
+    "pydantic>=2",
+]
+[tool.black]
+line-length = 88
+skip-string-normalization=true
+target_version = ['py311']
+exclude = '''
+/(
+  | migrations
+)/
+'''
+
+
+[tool.isort]
+line_length = 88
+profile = "black"
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+extend_skip_glob = ["*/migrations"]
+
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+# Same as Black.
+line-length = 127 # 88
+
+# Assume Python 3.11.
+target-version = "py311"
+
+[tool.ruff.mccabe]
+# Unlike Flake8, default to a complexity level of 10.
+max-complexity = 10

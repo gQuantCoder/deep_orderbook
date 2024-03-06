@@ -16,39 +16,51 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    api_key: str = ""
-    api_secret: str = ""
-    model_config = SettingsConfigDict(env_file="credentials/coinbase.txt", env_file_encoding="utf-8")
+    api_key: str = ''
+    api_secret: str = ''
+    model_config = SettingsConfigDict(env_file='credentials/coinbase.txt', env_file_encoding='utf-8')
 
 
 class Subscriptions(BaseModel):
     subscriptions: dict[str, list[str]]
 
+class CoinbasePriceLevel(md.OrderLevel):
+    side: Literal['bid', 'offer']
+    # event_time: datetime = Field(alias='event_time')
+
+
 
 class L2Event(BaseModel):
-    type: Literal["snapshot", "update"]
-    product_id: str = Field(alias="product_id")
-    updates: list[md.PriceLevel]
+    type: Literal['snapshot', 'update']
+    product_id: str = Field(alias='product_id')
+    updates: list[CoinbasePriceLevel]
+
+    def book_update(self) -> md.BookUpdate:
+        update = md.BookUpdate(
+            bids=[x for x in self.updates if x.side == 'bid'],
+            asks=[x for x in self.updates if x.side == 'offer'],
+        )
+        return update
 
 
 class TradeEvent(BaseModel):
-    type: Literal["snapshot", "update"]
+    type: Literal['snapshot', 'update']
     trades: list[md.Trade]
 
 
 class Message(BaseModel):
-    channel: Literal["l2_data", "market_trades", "subscriptions"]
+    channel: Literal['l2_data', 'market_trades', 'subscriptions']
     timestamp: datetime
-    sequence_num: int = Field(alias="sequence_num")
+    sequence_num: int = Field(alias='sequence_num')
     events: list[L2Event] | list[TradeEvent] | list[Subscriptions]
 
 
 class CoinbaseFeed:
-    RECORD_HISTORY = False
     PRINT_EVENTS = False
 
-    def __init__(self, markets: list[str]) -> None:
+    def __init__(self, markets: list[str], record_history = False) -> None:
         settings = Settings()
+        self.RECORD_HISTORY = record_history
         print(settings.api_key, settings.api_secret)
         self.client = WSClient(
             api_key=settings.api_key,
@@ -64,7 +76,7 @@ class CoinbaseFeed:
         self.depth_managers: dict[str, md.DepthCachePlus] = {
             s: md.DepthCachePlus() for s in self.markets
         }
-        self.trade_managers: dict[str, list[TradeEvent]] = collections.defaultdict(list)
+        self.trade_managers: dict[str, list[md.Trade]] = collections.defaultdict(list)
 
     async def __aenter__(self):
         await self.client.open_async()
@@ -72,8 +84,8 @@ class CoinbaseFeed:
         await self.client.subscribe_async(
             product_ids=self.markets,
             channels=[
-                "level2",
-                "market_trades",
+                'level2',
+                'market_trades',
                 # 'ticker',
                 # 'hearbeats',
             ],
@@ -90,10 +102,11 @@ class CoinbaseFeed:
 
     def on_message(self, msg):
         message = Message.model_validate_json(msg)
+        assert len(message.events) == 1
 
         # Assuming your aggregation logic here (simplified for demonstration)
         match message.channel:
-            case "subscriptions":
+            case 'subscriptions':
                 for event in message.events:
                     if not event.subscriptions:
                         print("ERROR: Failed to subscribe to the requested channels")
@@ -102,7 +115,7 @@ class CoinbaseFeed:
                     for channel, products in event.subscriptions.items():
                         print(f"{channel}: {products}")
                 return  # Return early as there's no further processing needed for these messages
-            case "l2_data":
+            case 'l2_data':
                 for event in message.events:
                     print(
                         f"{message.channel}       {event.type} {event.product_id} {message.timestamp}: {len(event.updates)}"
@@ -110,11 +123,11 @@ class CoinbaseFeed:
                     if self.PRINT_EVENTS:
                         print(event)
                     match event.type:
-                        case "snapshot":
-                            pass
-                        case "update":
-                            pass
-            case "market_trades":
+                        case 'snapshot':
+                            self.depth_managers[event.product_id].reset(event.book_update())
+                        case 'update':
+                            self.depth_managers[event.product_id].update(event.book_update())
+            case 'market_trades':
                 # asserts there is only one product per update
                 assert len(message.events) == 1
                 assert (
@@ -128,10 +141,11 @@ class CoinbaseFeed:
                     if self.PRINT_EVENTS:
                         print(event)
                     match event.type:
-                        case "snapshot":
+                        case 'snapshot':
                             pass
-                        case "update":
-                            pass
+                        case 'update':
+                            for trade in event.trades:
+                                self.trade_managers[trade.product_id].append(trade)
             case _:
                 print(f"Unhandled channel: {channel}")
                 print(msg[:256])
@@ -180,10 +194,10 @@ class CoinbaseFeed:
 async def main():
     import pyinstrument
 
-    async with CoinbaseFeed(markets=["ETH-USD"]) as coinbase:
+    async with CoinbaseFeed(markets=['ETH-USD', 'BTC-USD'], record_history=True) as coinbase:
         await asyncio.sleep(5)
 
-    with pyinstrument.Profiler(interval=0.00001) as profiler:
+    with pyinstrument.Profiler() as profiler:
         for msg in coinbase.msg_history:
             coinbase.on_message(msg)
 
@@ -191,5 +205,5 @@ async def main():
     profiler.open_in_browser(timeline=False)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     asyncio.run(main())
