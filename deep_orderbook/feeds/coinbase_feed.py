@@ -1,4 +1,3 @@
-import json
 import asyncio
 from typing import Literal
 from coinbase.websocket import WSClient
@@ -6,31 +5,16 @@ from rich import print
 from pydantic import BaseModel, Field
 from datetime import datetime
 
+from deep_orderbook.marketdata import PriceLevel, Trade
+
 
 ***REMOVED***
 ***REMOVED***
 ***REMOVED***
 ***REMOVED***
 
-# Initialize your aggregation structures outside of the on_message to ensure they're in scope
-order_book_aggregate = {"bids": {}, "asks": {}}
-trades_aggregate = []
 
 
-class Trade(BaseModel):
-    # trade_id: str = Field(alias='trade_id')
-    product_id: str = Field(alias="product_id")
-    price: str
-    size: str
-    side: str
-    # time: datetime
-
-
-class L2Data(BaseModel):
-    side: str
-    # event_time: datetime = Field(alias='event_time')
-    price_level: str
-    new_quantity: str
 
 
 class Subscriptions(BaseModel):
@@ -40,7 +24,7 @@ class Subscriptions(BaseModel):
 class L2Event(BaseModel):
     type: Literal["snapshot", "update"]
     product_id: str
-    updates: list[L2Data]
+    updates: list[PriceLevel]
 
 
 class TradeEvent(BaseModel):
@@ -51,7 +35,7 @@ class TradeEvent(BaseModel):
 class Message(BaseModel):
     channel: Literal["l2_data", "market_trades", "subscriptions"]
     timestamp: datetime
-    sequence_num: int
+    sequence_num: int = Field(alias="sequence_num")
     events: list[L2Event] | list[TradeEvent] | list[Subscriptions]
 
 
@@ -95,7 +79,6 @@ class CoinbaseFeed:
         self.on_message(msg)
 
     def on_message(self, msg):
-        global order_book_aggregate, trades_aggregate
         message = Message.model_validate_json(msg)
 
         # Assuming your aggregation logic here (simplified for demonstration)
@@ -117,16 +100,7 @@ class CoinbaseFeed:
                         case "snapshot":
                             pass
                         case "update":
-                            for update in event.updates:
-                                # Update the order book aggregate
-                                if update.side == "bid":
-                                    order_book_aggregate["bids"][
-                                        update.price_level
-                                    ] = update.new_quantity
-                                elif update.side == "ask":
-                                    order_book_aggregate["asks"][
-                                        update.price_level
-                                    ] = update.new_quantity
+                            pass
             case "market_trades":
                 for event in message.events:
                     print(
@@ -138,8 +112,7 @@ class CoinbaseFeed:
                         case "snapshot":
                             pass
                         case "update":
-                            for trade in event.trades:
-                                trades_aggregate.append(trade)
+                            pass
             case _:
                 print(f"Unhandled channel: {channel}")
                 print(msg[:256])
@@ -158,11 +131,9 @@ async def main():
 
     try:
         async with CoinbaseFeed(markets=["ETH-USD"]) as coinbase:
-            await asyncio.sleep(10)
-    finally:
-        print(
-            json.dumps(order_book_aggregate, indent=2)[:500]
-        )  # Example of handling order_book_aggregate
+            await asyncio.sleep(5)
+    except Exception as e:
+        print(f"Exception: {e}")
 
     with pyinstrument.Profiler(interval=0.00001) as profiler:
         for msg in coinbase.msg_history:
