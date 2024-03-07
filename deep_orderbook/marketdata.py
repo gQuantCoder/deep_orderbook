@@ -22,7 +22,7 @@ class BookUpdate(BaseModel):
     bids: list[OrderLevel]
     asks: list[OrderLevel]
 
-    @field_validator('bids', 'asks')
+    @field_validator('bids', 'asks', mode='before')
     @classmethod
     def from_lists(cls, values: list, info: ValidationInfo):
         if not values:
@@ -38,6 +38,7 @@ class BookUpdate(BaseModel):
 
 
 class BookSnaphsot(BookUpdate):
+    lastUpdateId: int
     pass
 
 
@@ -47,7 +48,7 @@ class BinanceUpdate(BaseModel):
     s: str = Field(alias='s')
 
 
-class BookUpdate(BinanceUpdate):
+class BinanceBookUpdate(BinanceUpdate, BookUpdate):
     """
     {
         "e": "depthUpdate", # Event type

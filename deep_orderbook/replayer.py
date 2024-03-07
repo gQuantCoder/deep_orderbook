@@ -133,18 +133,17 @@ class Replayer:
             js_updates_tqdm = tqdm(js_updates, leave=False)
 
             snapshot = md.BookSnaphsot(**snapshot_msg)
-            lastUpdateId = snapshot.lastUpdateId
             await shapper.on_snaphsot_async(snapshot)
 
             for book_upd_msg in js_updates_tqdm:
-                book_upd = md.BookUpdate(**book_upd_msg)
+                book_upd = md.BinanceBookUpdate(**book_upd_msg)
                 if book_upd.e != 'depthUpdate':
                     print("not update:", book_upd.e)
                     continue
-                firstID = book_upd.first_id
-                finalID = book_upd.final_id
-                if finalID < lastUpdateId:
+
+                if book_upd.final_id < snapshot.lastUpdateId:
                     continue
+
                 eventTime = book_upd.E
                 ts = 1 + eventTime // 1000
 
@@ -185,7 +184,73 @@ class Replayer:
                 tall += 1
 
 
+async def test_multireplay():
+    from aioitertools import enumerate, next as anext
+    MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
+
+    shapper = BookShapper()
+    file_replayer = Replayer('../crypto-trading/data/L2', date_regexp='2020')
+    areplay = file_replayer.replayL2_async('ETHBTC', shapper)
+    await anext(areplay)
+    batptr = await anext(areplay)
+
+
+    for i in range(100):
+        batptr = await anext(areplay)
+    print(f"bids:\n{batptr['bids'].head()}")
+    print(f"asks:\n{batptr['asks'].head()}")
+    print(f"prices:\n{batptr['price']}")
+    print(f"trades:\n{batptr['trades']}")
+
+
+    replayers = [file_replayer.replayL2_async(pair, BookShapper()) for pair in MARKETS]
+    multi_replay = file_replayer.multireplayL2_async(replayers)
+    d = await anext(multi_replay)
+
+
+
+    genarr = shapper.gen_array_async(market_replay=multi_replay, markets=MARKETS)
+    _ = await anext(genarr)
+
+
+    genacc = shapper.accumulate_array(genarr, markets=MARKETS)
+    _ = await anext(genacc)
+
+
+    every = 10
+    LENGTH = 128
+    x = []
+    async for n,sec in enumerate(genacc):
+        allim = []
+        for symb, data in sec.items():
+            print([a.shape for a in data['bs']])
+            arr = np.stack(data['bs'][-LENGTH:])
+            im = arr
+            im[:,:,0] /= 10
+            im += 0.5
+            allim.append(im)
+        allim = np.concatenate(allim, axis=1)
+        if n % every == 0:
+            plt.figure(figsize=(15,11))
+            toshow = allim.transpose(1,0,2)
+            toshow = np.clip(toshow, 0, 1)
+            plt.imshow(toshow, origin="lower");
+            plt.show()
+    #        pr = np.stack(data['ps'])[-LENGTH:, :-1]
+    #        plt.plot(pr)
+    #        plt.show()
+    #        print(symb)
+            clear_output(wait=True)
+    #        plt.show()
+    #    if n == 100:
+    #        break
+        pass
+
+
+
+
 async def main():
+    await test_multireplay()
     #markets = ['ETHUSDT']
     #file_replayer = Replayer('../data/crypto')
     #s = file_replayer.zipped()
