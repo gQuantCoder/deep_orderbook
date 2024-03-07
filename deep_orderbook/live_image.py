@@ -2,14 +2,10 @@ from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed as Receiver
 from deep_orderbook.shapper import BookShapper
 
 import asyncio
-import pandas as pd
-import numpy as np
-from pylab import rcParams
 import aioitertools
 import functools
 
 
-MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT"]
 MARKETS = ["ETH-BTC", "BTC-USD", "ETH-USD"]
 LENGTH = 512
 
@@ -20,22 +16,22 @@ class ImageStream:
         self.markets = markets or MARKETS
 
     async def setup(self):
-        
-        async with Receiver(markets=self.markets) as receiver:
+        receiver = Receiver(markets=self.markets)
+        await receiver.__aenter__()
 
-            multi_replay = receiver.multi_generator(self.markets)
+        multi_replay = receiver.multi_generator(self.markets)
 
-            _ = await multi_replay.__anext__()
+        _ = await multi_replay.__anext__()
 
-            genarr = BookShapper.gen_array_async(
-                market_replay=multi_replay, markets=self.markets
-            )
-            _ = await aioitertools.next(genarr)
+        genarr = BookShapper.gen_array_async(
+            market_replay=multi_replay, markets=self.markets
+        )
+        _ = await aioitertools.next(genarr)
 
-            self.genacc = aioitertools.accumulate(
-                genarr, functools.partial(BookShapper.build, max_length=LENGTH)
-            )
-            _ = await aioitertools.next(self.genacc)
+        self.genacc = aioitertools.accumulate(
+            genarr, functools.partial(BookShapper.build, max_length=LENGTH)
+        )
+        _ = await aioitertools.next(self.genacc)
 
     async def run(self):
         async for toshow in BookShapper.images(
@@ -45,23 +41,24 @@ class ImageStream:
 
     async def __aenter__(self):
         await self.setup()
-        await self.run()
+        asyncio.create_task(self.run())
         return self
     
     async def __aexit__(self, exc_type, exc, tb):
         pass
 
     async def read(self):
-        return self.frame * 255 if self.frame else self.frame
+        if self.frame is not None:
+            return self.frame * 255
 
 async def main():
     async with ImageStream(markets=MARKETS) as stream:
         while True:
-            frame = stream.read()
+            frame = await stream.read()
             if frame is not None:
-                print(frame)
+                # print(frame)
                 print(frame.shape)
-                break
+            await asyncio.sleep(1)
     print("done")
 
 

@@ -58,7 +58,8 @@ class BookShapper:
 
     async def on_trades_bunch(self, list_trades, force_t_avail=None):
         list_trades = [
-            {k: float(v) for k, v in trs if k not in ['M','s','e','trade_id']} for trs in list_trades
+            {k: float(v) for k, v in trs if k not in ['M', 's', 'e', 'trade_id']}
+            for trs in list_trades
         ]
         if not list_trades:
             return
@@ -111,7 +112,14 @@ class BookShapper:
     SPACING = SPACING / SPACING[-1]
 
     @staticmethod
-    def bin_books(dfb, dfa, tr, ref_price, zoom_frac=FRAC_LEVELS, spacing=SPACING):
+    def bin_books(
+        dfb: pd.DataFrame,
+        dfa: pd.DataFrame,
+        tr: pd.DataFrame,
+        ref_price: float,
+        zoom_frac=FRAC_LEVELS,
+        spacing=SPACING,
+    ):
         """
         This method bins books into price levels and calculates the cumulative sum of the trades at each price level.
         It then reindexes the data to include all price levels in the specified range and fills any missing values with zero.
