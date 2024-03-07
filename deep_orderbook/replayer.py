@@ -186,7 +186,7 @@ class Replayer:
 
 async def test_multireplay():
     from aioitertools import enumerate, next as anext
-    MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
+    MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT"]
 
     shapper = BookShapper()
     file_replayer = Replayer('../crypto-trading/data/L2', date_regexp='2020')
@@ -223,28 +223,13 @@ async def test_multireplay():
     async for n,sec in enumerate(genacc):
         allim = []
         for symb, data in sec.items():
-            print([a.shape for a in data['bs']])
             arr = np.stack(data['bs'][-LENGTH:])
             im = arr
             im[:,:,0] /= 10
             im += 0.5
             allim.append(im)
         allim = np.concatenate(allim, axis=1)
-        if n % every == 0:
-            plt.figure(figsize=(15,11))
-            toshow = allim.transpose(1,0,2)
-            toshow = np.clip(toshow, 0, 1)
-            plt.imshow(toshow, origin="lower");
-            plt.show()
-    #        pr = np.stack(data['ps'])[-LENGTH:, :-1]
-    #        plt.plot(pr)
-    #        plt.show()
-    #        print(symb)
-            clear_output(wait=True)
-    #        plt.show()
-    #    if n == 100:
-    #        break
-        pass
+
 
 
 

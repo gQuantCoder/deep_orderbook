@@ -5,3 +5,4 @@ dist
 .vscode
 .ipynb_checkpoints
 /data/
+*.log

@@ -8,6 +8,7 @@ import deep_orderbook.marketdata as md
 import aioitertools
 
 pd.set_option('display.precision', 12)
+pd.set_option('future.no_silent_downcasting', True)
 import matplotlib.pyplot as plt
 
 
@@ -57,7 +58,7 @@ class BookShapper:
 
     async def on_trades_bunch(self, list_trades, force_t_avail=None):
         list_trades = [
-            {k: float(v) for k, v in trs if k not in 'Msea'} for trs in list_trades
+            {k: float(v) for k, v in trs if k not in ['M','s','e','trade_id']} for trs in list_trades
         ]
         if not list_trades:
             return
@@ -170,8 +171,10 @@ class BookShapper:
             .cumsum()
             .reindex(t_idx_inv, method='ffill', fill_value=0)
             .diff()
-            .fillna(0)[::-1]
+            .fillna(0.0)[::-1]
         )
+        if treind_b.empty:
+            treind_b = reind_b * 0.0
 
         # Bin trade data into price levels for asks and apply arcsinh transformation.
         treind_a = (
@@ -181,13 +184,15 @@ class BookShapper:
             .cumsum()
             .reindex(t_idx, method='ffill', fill_value=0)
             .diff()
-            .fillna(0)
+            .fillna(0.0)
         )
+        if treind_a.empty:
+            treind_a = reind_a * 0.0
 
-        treind_b = np.arcsinh(treind_b).astype(np.float32)
-        treind_a = np.arcsinh(treind_a).astype(np.float32)
-        reind_b = np.arcsinh(reind_b).astype(np.float32)
-        reind_a = np.arcsinh(reind_a).astype(np.float32)
+        treind_b = np.arcsinh(treind_b.astype(np.float32))
+        treind_a = np.arcsinh(treind_a.astype(np.float32))
+        reind_b = np.arcsinh(reind_b.astype(np.float32))
+        reind_a = np.arcsinh(reind_a.astype(np.float32))
         return reind_b, reind_a, treind_b, treind_a
 
     def sampleArrays(self, replayer, numpoints=None, apply_fnct=None):
