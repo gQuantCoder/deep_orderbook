@@ -18,16 +18,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     api_key: str = ''
     api_secret: str = ''
-    model_config = SettingsConfigDict(env_file='credentials/coinbase.txt', env_file_encoding='utf-8')
+    model_config = SettingsConfigDict(
+        env_file='credentials/coinbase.txt', env_file_encoding='utf-8'
+    )
 
 
 class Subscriptions(BaseModel):
     subscriptions: dict[str, list[str]]
 
+
 class CoinbasePriceLevel(md.OrderLevel):
     side: Literal['bid', 'offer']
     # event_time: datetime = Field(alias='event_time')
-
 
 
 class L2Event(BaseModel):
@@ -57,8 +59,9 @@ class Message(BaseModel):
 
 class CoinbaseFeed:
     PRINT_EVENTS = False
+    PRINT_MESSAGE = False
 
-    def __init__(self, markets: list[str], record_history = False) -> None:
+    def __init__(self, markets: list[str], record_history=False) -> None:
         settings = Settings()
         self.RECORD_HISTORY = record_history
         # print(settings.api_key, settings.api_secret)
@@ -77,6 +80,7 @@ class CoinbaseFeed:
             s: md.DepthCachePlus() for s in self.markets
         }
         self.trade_managers: dict[str, list[md.Trade]] = collections.defaultdict(list)
+        self.run_timer = False
 
     async def __aenter__(self):
         await self.client.open_async()
@@ -90,11 +94,33 @@ class CoinbaseFeed:
                 # 'hearbeats',
             ],
         )
+        asyncio.create_task(self.start_timer())
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
+        self.run_timer = False
         await self.client.unsubscribe_all_async()
         await self.client.close_async()
+
+    async def start_timer(self):
+        self.run_timer = True
+        tall = time.time()
+        tall = tall // 1 + 1
+        while self.run_timer:
+            twake = tall
+            timesleep = twake - time.time()
+            if timesleep > 0:
+                await asyncio.sleep(timesleep)
+            else:
+                print(f"time sleep is negative: {timesleep}")
+            self.cut_trade_tape()
+            tall += 1
+
+    def cut_trade_tape(self):
+        # print('cut')
+        for symbol, trade_man in self.trade_managers.items():
+            self.depth_managers[symbol].trades = [t for t in trade_man]
+        self.trade_managers = collections.defaultdict(list)
 
     def recorded_on_message(self, msg):
         self.msg_history.append(msg)
@@ -117,16 +143,21 @@ class CoinbaseFeed:
                 return  # Return early as there's no further processing needed for these messages
             case 'l2_data':
                 for event in message.events:
-                    print(
-                        f"{message.channel}       {event.type} {event.product_id} {message.timestamp}: {len(event.updates)}"
-                    )
+                    if self.PRINT_MESSAGE:
+                        print(
+                            f"{message.channel}       {event.type} {event.product_id} {message.timestamp}: {len(event.updates)}"
+                        )
                     if self.PRINT_EVENTS:
                         print(event)
                     match event.type:
                         case 'snapshot':
-                            self.depth_managers[event.product_id].reset(event.book_update())
+                            self.depth_managers[event.product_id].reset(
+                                event.book_update()
+                            )
                         case 'update':
-                            self.depth_managers[event.product_id].update(event.book_update())
+                            self.depth_managers[event.product_id].update(
+                                event.book_update()
+                            )
             case 'market_trades':
                 # asserts there is only one product per update
                 assert len(message.events) == 1
@@ -135,9 +166,10 @@ class CoinbaseFeed:
                     == 1
                 )
                 for event in message.events:
-                    print(
-                        f"{message.channel} {event.type} {message.timestamp}: {len(event.trades)}"
-                    )
+                    if self.PRINT_MESSAGE:
+                        print(
+                            f"{message.channel} {event.type} {message.timestamp}: {len(event.trades)}"
+                        )
                     if self.PRINT_EVENTS:
                         print(event)
                     match event.type:
@@ -165,7 +197,7 @@ class CoinbaseFeed:
         symbol_shappers = {pair: BookShapper() for pair in markets}
 
         tall = time.time()
-        tall = tall // 1
+        tall = tall // 1 + 1
         while True:
             twake = tall
             timesleep = twake - time.time()
@@ -182,6 +214,7 @@ class CoinbaseFeed:
                     break
                 await shapper.update_ema(bids, asks, twake)
                 list_trades = self.depth_managers[symbol].trades
+                list_trades = [t.to_binanace_format() for t in list_trades]
                 await shapper.on_trades_bunch(list_trades, force_t_avail=twake)
                 oneSec[symbol] = await shapper.make_frames_async(
                     t_avail=twake, bids=bids, asks=asks
@@ -194,8 +227,11 @@ class CoinbaseFeed:
 async def main():
     import pyinstrument
 
-    async with CoinbaseFeed(markets=['ETH-USD', 'BTC-USD'], record_history=True) as coinbase:
-        await asyncio.sleep(5)
+    async with CoinbaseFeed(
+        markets=['ETH-USD', 'BTC-USD'], record_history=True
+    ) as coinbase:
+        coinbase.PRINT_MESSAGE = True
+        await asyncio.sleep(10)
 
     with pyinstrument.Profiler() as profiler:
         for msg in coinbase.msg_history:

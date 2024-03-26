@@ -17,6 +17,7 @@ class ImageStream:
 
     async def setup(self):
         receiver = Receiver(markets=self.markets)
+        receiver.PRINT_MESSAGE = True
         await receiver.__aenter__()
 
         multi_replay = receiver.multi_generator(self.markets)

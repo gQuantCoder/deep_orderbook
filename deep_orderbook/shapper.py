@@ -57,6 +57,7 @@ class BookShapper:
         return 1 + tr_dict.E // 1000
 
     async def on_trades_bunch(self, list_trades, force_t_avail=None):
+        # print(f"{list_trades=}")
         list_trades = [
             {k: float(v) for k, v in trs if k not in ['M', 's', 'e', 'trade_id']}
             for trs in list_trades
@@ -488,7 +489,7 @@ class BookShapper:
                 # prices_dts = np.stack(data['ps'][-LENGTH:])
                 books = np.stack(data['bs'][-LENGTH:])
                 im = books
-                im[:, :, 0] /= 10
+                im[:, :, 0] /= 5
                 im += 0.5
                 im = im.transpose(1, 0, 2)
                 im = np.clip(im, 0, 1)
