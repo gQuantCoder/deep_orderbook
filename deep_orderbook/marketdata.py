@@ -12,6 +12,20 @@ class Trade(BaseModel):
     side: str
     # time: datetime
 
+    def to_binanace_format(self, time: int = 0):
+        return TradeUpdate(
+            e='aggTrade',
+            E=0,
+            s='NA',
+            a=0,
+            p=self.price,
+            q=self.size,
+            m=self.side == 'BUY',
+            f=0,
+            l=1,
+            T=time or int(datetime.now().timestamp()),
+        )
+
 
 class OrderLevel(BaseModel):
     price: float = Field(alias='price_level')
