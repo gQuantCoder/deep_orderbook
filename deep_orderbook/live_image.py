@@ -6,7 +6,7 @@ import aioitertools
 import functools
 
 
-MARKETS = ["ETH-BTC", "BTC-USD", "ETH-USD"]
+MARKETS = ["BTC-USD", "ETH-USD", "ETH-BTC"]
 LENGTH = 512
 
 
@@ -43,7 +43,7 @@ class ImageStream:
         await self.setup()
         asyncio.create_task(self.run())
         return self
-    
+
     async def __aexit__(self, exc_type, exc, tb):
         pass
 
@@ -51,13 +51,14 @@ class ImageStream:
         if self.frame is not None:
             return self.frame * 255
 
+
 async def main():
     async with ImageStream(markets=MARKETS) as stream:
         while True:
             frame = await stream.read()
             if frame is not None:
-                # print(frame)
                 print(frame.shape)
+                # print(frame[384 // 2 - 3 : 384 // 2 + 3, -1:, :])
             await asyncio.sleep(1)
     print("done")
 

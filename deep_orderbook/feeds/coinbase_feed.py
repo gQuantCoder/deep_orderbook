@@ -61,7 +61,7 @@ class CoinbaseFeed:
     def __init__(self, markets: list[str], record_history = False) -> None:
         settings = Settings()
         self.RECORD_HISTORY = record_history
-        print(settings.api_key, settings.api_secret)
+        # print(settings.api_key, settings.api_secret)
         self.client = WSClient(
             api_key=settings.api_key,
             api_secret=settings.api_secret,

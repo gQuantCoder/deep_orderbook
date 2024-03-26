@@ -312,42 +312,81 @@ class BookShapper:
 
     @staticmethod
     def build_time_level_trade(books, prices, side_bips=32, side_width=64):
+        """
+        This function builds a time level trade matrix. It calculates the time
+        it takes for the price to hit a certain level.
+        The levels are defined by the side_bips and side_width parameters.
+
+        Parameters:
+        books (numpy array): The order book data.
+        prices (numpy array): The price data.
+        side_bips (int): The number of basis points to consider on each side of
+        the price. Default is 32.
+        side_width (int): The width of the price band to consider. Default is 64.
+
+        Returns:
+        numpy array: A matrix of time it takes for the price to hit each level.
+        """
+
+        # Define constants
         mult = 0.0001 * side_bips / side_width
-        FUTURE = 120  # 0*10
+        FUTURE = 120
+
+        # Initialize time2levels matrix with default value
         time2levels = np.zeros_like(books[:, : 2 * side_width, :1]) + FUTURE
-        #########################################################
-        #######
+
+        # Calculate the price step
+        pricestep = prices[0, 0, 1] * mult
+
+        # Loop over all prices
         for i in tqdm(range(prices.shape[0])):
-            #######
-            #########################################################
+
+            # Initialize timeupdn list
             timeupdn = []
-            pricestep = prices[0, 0, 1] * mult
+
+            # Loop over all price levels
             for j in range(side_width):
+
+                # Calculate the threshold
                 thresh = j * pricestep
+                # Get the bid and ask prices
                 [_, b, a], [d, t, _] = prices[i]
                 bids = prices[i : i + FUTURE, 0, 1]
                 asks = prices[i : i + FUTURE, 0, 2]
+
+                # Calculate the waitUp and waitDn conditions
                 waitUp = bids < a + thresh
                 waitDn = asks > b - thresh
-                #### trades also define potential price hit
+
+                # Calculate the tradeUp and tradeDn conditions
                 lowtrade = prices[i : i + FUTURE, 0, 0]
                 hightrade = prices[i : i + FUTURE, 1, 2]
                 tradeUp = hightrade >= a + thresh
                 tradeDn = lowtrade <= b - thresh
-                # cannot trade with bid/ask of elapsed second
+
+                # Update the tradeUp and tradeDn conditions
                 tradeUp[0] = False
                 tradeDn[0] = False
-                # first one to NOT wait defines the price hit
+
+                # Update the waitUp and waitDn conditions
                 waitUp &= ~tradeUp
                 waitDn &= ~tradeDn
-                ###########################################
+
+                # Calculate the timeUp and timeDn
                 timeUp = np.argmin(waitUp) or FUTURE * 10
                 timeDn = np.argmin(waitDn) or FUTURE * 10
+
+                # Update the timeupdn list
                 timeupdn.insert(0, [timeDn])
                 timeupdn.append([timeUp])
+
+            # Update the time2levels matrix
             time2levels[i] = timeupdn
-        # print('time2levels minmaxmean', time2levels.min(), time2levels.max(), time2levels.mean(), 'pricestep', pricestep)
+
+        # Ensure that the minimum value in time2levels is greater than 0
         assert time2levels.min() > 0
+
+        # Return the time2levels matrix as a float32 numpy array
         return time2levels.astype(np.float32)
 
     @staticmethod
@@ -359,27 +398,46 @@ class BookShapper:
         side_bips=None,
         side_width=None,
     ):
+        """
+        This function is used to build and save numpy arrays from the given data.
+        It also applies a reduce function if provided and handles the data for a new day.
+
+        Parameters:
+        total (dict): The total data dictionary.
+        element (dict): The element data dictionary.
+        reduce_func (function, optional): A function to reduce the data. Defaults to None.
+        max_length (int, optional): The maximum length of the data. Defaults to None.
+        side_bips (int, optional): The side bips value. Defaults to None.
+        side_width (int, optional): The side width value. Defaults to None.
+        Returns:
+        dict: The updated total data dictionary.
+        """
+
+        # If element is None, force_save is set to True
         force_save = element is None
         element = element or total
+
         for market, second in element.items():
-            dt = total[market]['ps'][-1][
-                1
-            ]  # datetime.datetime.strptime(str(int(total[market]['ps'][-1][1,0])), '%y%m%d').date()
+            # Convert the timestamp to date
+            dt = total[market]['ps'][-1][1]
             datetotal = datetime.datetime.utcfromtimestamp(
                 int(dt[0]) * 3600 * 24 + int(dt[1])
             ).date()
-            de = element[market]['ps'][-1][
-                1
-            ]  # dateeleme = datetime.datetime.strptime(str(int(element[market]['ps'][-1][1,0])), '%y%m%d').date()
-            # print(dt, dt[0] * 3600 * 24 + dt[1])
+
+            de = element[market]['ps'][-1][1]
             dateeleme = datetime.datetime.utcfromtimestamp(
                 int(de[0]) * 3600 * 24 + int(de[1])
             ).date()
+
+            # Check if it's a new day
             newDay = datetotal < dateeleme
+
             if not (newDay or force_save):
+                # If it's not a new day and force_save is False, add the second data to the total data
                 for name, arrs in second.items():
                     total[market][name] += arrs
             else:
+                # If it's a new day or force_save is True, save the total data to numpy files
                 arrday_bs = np.stack(total[market]['bs']).astype(np.float32)
                 arrday_ps = np.stack(total[market]['ps']).astype(np.float32)
                 np.save(
@@ -390,6 +448,8 @@ class BookShapper:
                     f'data/sidepix{side_width:03}/{datetotal}-{market}-ps.npy',
                     arrday_ps,
                 )
+
+                # If a reduce function is provided, apply it to the total data and save the result to a numpy file
                 if reduce_func is not None:
                     t2l = reduce_func(
                         books=np.stack(total[market]['bs']).astype(np.float32),
@@ -400,13 +460,17 @@ class BookShapper:
                         t2l,
                     )
 
+            # If a max_length is provided, truncate the total data to the max_length
             if max_length:
                 for name, arrs in second.items():
                     if len(total[market][name]) > max_length:
                         total[market][name] = total[market][name][-max_length:]
+
+            # If it's a new day, replace the total data with the second data
             if newDay:
                 for name, arrs in second.items():
                     total[market][name] = arrs
+
         return total
 
     @staticmethod
