@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from operator import itemgetter
 
 
+from deep_orderbook.utils import logger
+
 class Trade(BaseModel):
     # trade_id: str = Field(alias='trade_id')
     product_id: str = Field(alias='product_id')
@@ -165,7 +167,7 @@ class DepthCachePlus(BaseModel):
         bids = self.get_bids()
         asks = self.get_asks()
         if bids and asks and bids[0][0] >= asks[0][0]:
-            print(f"\ncleaning the crossed BBO \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
+            logger.warning(f"\ncleaning the crossed BBO \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
             for p in list(self._bids.keys()):
                 if p >= asks[0][0]:
                     del self._bids[p]
@@ -174,7 +176,7 @@ class DepthCachePlus(BaseModel):
                     del self._asks[p]
             bids = self.get_bids()
             asks = self.get_asks()
-            print(f"result: \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
+            logger.debug(f"result: \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
 
             assert bids[0][0] < asks[0][0]
         return bids, asks

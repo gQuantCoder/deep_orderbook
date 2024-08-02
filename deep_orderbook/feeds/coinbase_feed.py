@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 
 import deep_orderbook.marketdata as md
-from deep_orderbook.shapper import BookShapper
+from deep_orderbook.shaper import BookShaper
 
 
 # read creds from .env using pydantic
@@ -194,7 +194,7 @@ class CoinbaseFeed:
         """this function is a generator of generators, each one for a different symbol.
         It is used to run the replay of the market data in parallel for all the symbols.
         """
-        symbol_shappers = {pair: BookShapper() for pair in markets}
+        symbol_shapers = {pair: BookShaper() for pair in markets}
 
         tall = time.time()
         tall = tall // 1 + 1
@@ -207,16 +207,16 @@ class CoinbaseFeed:
                 print(f"time sleep is negative: {timesleep}")
 
             oneSec = {}
-            for symbol, shapper in symbol_shappers.items():
+            for symbol, shaper in symbol_shapers.items():
                 bids, asks = self.depth_managers[symbol].get_bids_asks()
                 if not bids or not asks:
                     print(f"no bids or asks for {symbol}")
                     break
-                await shapper.update_ema(bids, asks, twake)
+                await shaper.update_ema(bids, asks, twake)
                 list_trades = self.depth_managers[symbol].trades
                 list_trades = [t.to_binanace_format() for t in list_trades]
-                await shapper.on_trades_bunch(list_trades, force_t_avail=twake)
-                oneSec[symbol] = await shapper.make_frames_async(
+                await shaper.on_trades_bunch(list_trades, force_t_avail=twake)
+                oneSec[symbol] = await shaper.make_frames_async(
                     t_avail=twake, bids=bids, asks=asks
                 )
             else:

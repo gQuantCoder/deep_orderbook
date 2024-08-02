@@ -14,7 +14,7 @@ from deep_orderbook import marketdata as md
 
 from websockets import ConnectionClosedError
 
-from deep_orderbook.shapper import BookShapper
+from deep_orderbook.shaper import BookShaper
 logging.basicConfig(filename='logging.log')
 
 # https://github.com/binance-exchange/binance-official-api-docs/blob/master/web-socket-streams.md#how-to-manage-a-local-order-book-correctly
@@ -201,7 +201,7 @@ class Receiver:
         """ this function is a generator of generators, each one for a different symbol.
         It is used to run the replay of the market data in parallel for all the symbols.
         """
-        symbol_shappers = {pair: BookShapper() for pair in self.markets}
+        symbol_shapers = {pair: BookShaper() for pair in self.markets}
 
         tall = time.time()
         tall = tall // 1
@@ -214,12 +214,12 @@ class Receiver:
                 print(f"time sleep is negative: {timesleep}")
 
             oneSec = {}
-            for symbol,shapper in symbol_shappers.items():
+            for symbol,shaper in symbol_shapers.items():
                 bids, asks = self.depth_managers[symbol].get_depth_cache().get_bids_asks()
-                await shapper.update_ema(bids, asks, twake)
+                await shaper.update_ema(bids, asks, twake)
                 list_trades = self.depth_managers[symbol].trades
-                await shapper.on_trades_bunch(list_trades, force_t_avail=twake)
-                oneSec[symbol] = await shapper.make_frames_async(t_avail=twake, bids=bids, asks=asks)
+                await shaper.on_trades_bunch(list_trades, force_t_avail=twake)
+                oneSec[symbol] = await shaper.make_frames_async(t_avail=twake, bids=bids, asks=asks)
             yield oneSec
             tall += 1
 
@@ -254,7 +254,7 @@ class Writer(Receiver):
     async def save_updates_since(self, prev_ts=None):
         prev_ts = prev_ts or self.prev_th
         progressbar = self.markets
-        upds = datetime.datetime.utcfromtimestamp(prev_ts).isoformat().replace(":", "-")  # .replace('-',"_")
+        upds = datetime.datetime.fromtimestamp(prev_ts, datetime.timezone.utc).isoformat().replace(":", "-")  # .replace('-',"_")
         for symbol in progressbar:
             with self.lock:
                 tosave = copy.deepcopy(self.store[symbol])
@@ -271,7 +271,7 @@ class Writer(Receiver):
         print(f"\nsaved_updates since {upds}")
 
     async def save_snapshot(self, cur_ts, max_levels=1000):
-        snap = datetime.datetime.utcfromtimestamp(cur_ts).isoformat().replace(":", "-")  # .replace('-',"_")
+        snap = datetime.datetime.fromtimestamp(cur_ts, datetime.timezone.utc).isoformat().replace(":", "-")  # .replace('-',"_")
         if cur_ts:
             L2s_coro = [self.client.get_order_book(symbol=pair, limit=max_levels) for pair in self.markets]
             L2s = await asyncio.gather(*L2s_coro)

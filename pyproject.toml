@@ -1,5 +1,5 @@
 [project]
-name = "deeep_orderbook"
+name = "deep-orderbook"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "gQuantCoder" }]

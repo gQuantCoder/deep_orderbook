@@ -12,7 +12,7 @@ pd.set_option('future.no_silent_downcasting', True)
 import matplotlib.pyplot as plt
 
 
-class BookShapper:
+class BookShaper:
     PriceShape = [2, 3]
 
     def __init__(self):
@@ -282,7 +282,7 @@ class BookShapper:
             for pair in markets:
                 sec = second[pair]
                 prev_price[pair] = prev_price[pair] or sec['price']
-                bib, aib, trb, tra = BookShapper.bin_books(
+                bib, aib, trb, tra = BookShaper.bin_books(
                     sec['bids'],
                     sec['asks'],
                     sec['trades'],
@@ -293,8 +293,9 @@ class BookShapper:
                 prev_price[pair] = sec['emaPrice']
                 arr0 = bib.values - aib.values
                 arr1 = tra.values - trb.values
-                utc = datetime.datetime.utcfromtimestamp(sec['time'])
-                d = sec['time'] // (3600 * 24)  # int(utc.strftime('%y%m%d'))
+                d = sec['time'] // (
+                    3600 * 24
+                )  # int(datetime.datetime.fromtimestamp(sec['time'], datetime.timezone.utc).strftime('%y%m%d'))
                 t = sec['time'] % (3600 * 24)  # float(utc.strftime('%H%M%S.%f'))
                 lowtrade = sec['trades'].index.min()
                 hightrade = sec['trades'].index.max()
@@ -421,13 +422,13 @@ class BookShapper:
         for market, second in element.items():
             # Convert the timestamp to date
             dt = total[market]['ps'][-1][1]
-            datetotal = datetime.datetime.utcfromtimestamp(
-                int(dt[0]) * 3600 * 24 + int(dt[1])
+            datetotal = datetime.datetime.fromtimestamp(
+                int(dt[0]) * 3600 * 24 + int(dt[1]), datetime.timezone.utc
             ).date()
 
             de = element[market]['ps'][-1][1]
-            dateeleme = datetime.datetime.utcfromtimestamp(
-                int(de[0]) * 3600 * 24 + int(de[1])
+            dateeleme = datetime.datetime.fromtimestamp(
+                int(de[0]) * 3600 * 24 + int(de[1]), datetime.timezone.utc
             ).date()
 
             # Check if it's a new day
@@ -476,7 +477,7 @@ class BookShapper:
 
     @staticmethod
     def accumulate_array(genarr, markets):
-        genacc = aioitertools.accumulate(genarr, BookShapper.build)
+        genacc = aioitertools.accumulate(genarr, BookShaper.build)
         return genacc
 
     @staticmethod
@@ -499,9 +500,9 @@ class BookShapper:
 
 
 async def main():
-    shapper = BookShapper()
-    print(shapper)
-    print(shapper.depth_cache)
+    shaper = BookShaper()
+    print(shaper)
+    print(shaper.depth_cache)
 
 
 if __name__ == '__main__':

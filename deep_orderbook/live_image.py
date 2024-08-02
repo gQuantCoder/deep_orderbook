@@ -1,5 +1,5 @@
 from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed as Receiver
-from deep_orderbook.shapper import BookShapper
+from deep_orderbook.shaper import BookShaper
 
 import asyncio
 import aioitertools
@@ -24,18 +24,18 @@ class ImageStream:
 
         _ = await multi_replay.__anext__()
 
-        genarr = BookShapper.gen_array_async(
+        genarr = BookShaper.gen_array_async(
             market_replay=multi_replay, markets=self.markets
         )
         _ = await aioitertools.next(genarr)
 
         self.genacc = aioitertools.accumulate(
-            genarr, functools.partial(BookShapper.build, max_length=LENGTH)
+            genarr, functools.partial(BookShaper.build, max_length=LENGTH)
         )
         _ = await aioitertools.next(self.genacc)
 
     async def run(self):
-        async for toshow in BookShapper.images(
+        async for toshow in BookShaper.images(
             accumulated_arrays=self.genacc, every=1, LENGTH=LENGTH
         ):
             self.frame = toshow.copy()
