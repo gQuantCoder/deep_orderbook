@@ -88,7 +88,7 @@ L2_message = """
 
 
 def test_coinbase_message_L2(msg=L2_message):
-    obj = cb.Message.model_validate_json(msg)
+    obj = cb.CoinbaseMessage.model_validate_json(msg)
     print(f"{obj}")
 
 

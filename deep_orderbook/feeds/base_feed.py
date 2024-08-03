@@ -1,5 +1,9 @@
 import collections
 from deep_orderbook import marketdata as md
+from typing import AsyncGenerator, TypeVar
+
+# defien a templte type for Messages return by __aiter__
+Message = TypeVar("Message", bound=md.Message)
 
 
 class BaseFeed:
@@ -14,3 +18,7 @@ class BaseFeed:
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         pass
+
+    async def __aiter__(self) -> AsyncGenerator[md.Message, None]:
+        raise NotImplementedError
+        yield None

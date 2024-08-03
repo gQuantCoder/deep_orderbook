@@ -5,6 +5,11 @@ from operator import itemgetter
 from deep_orderbook.utils import logger
 
 
+class Message(BaseModel):
+    @property
+    def symbol(self) -> str:
+        raise NotImplementedError
+
 class Trade(BaseModel):
     # trade_id: str = Field(alias='trade_id')
     product_id: str = Field(alias='product_id')
@@ -163,7 +168,7 @@ class DepthCachePlus(BaseModel):
         for ask in updates.asks:
             self.add_ask(ask)
 
-    def reset(self, snapshot: BookSnaphsot | None = None):
+    def reset(self, snapshot: BookUpdate | None = None):
         self._bids = {}
         self._asks = {}
         if snapshot:
