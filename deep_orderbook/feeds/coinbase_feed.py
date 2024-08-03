@@ -2,17 +2,16 @@ import asyncio
 import collections
 import time
 from typing import Literal
-from coinbase.websocket import WSClient
+from datetime import datetime
 from rich import print
 from pydantic import BaseModel, Field
-from datetime import datetime
-
-import deep_orderbook.marketdata as md
-from deep_orderbook.shaper import BookShaper
-
-
-# read creds from .env using pydantic
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from coinbase.websocket import WSClient
+from deep_orderbook import marketdata as md
+from deep_orderbook.shaper import BookShaper
+from deep_orderbook.feeds.base_feed import BaseFeed
+from deep_orderbook.utils import logger
 
 
 class Settings(BaseSettings):
@@ -57,7 +56,7 @@ class Message(BaseModel):
     events: list[L2Event] | list[TradeEvent] | list[Subscriptions]
 
 
-class CoinbaseFeed:
+class CoinbaseFeed(BaseFeed):
     PRINT_EVENTS = False
     PRINT_MESSAGE = False
 
@@ -65,7 +64,7 @@ class CoinbaseFeed:
         settings = Settings()
         self.RECORD_HISTORY = record_history
         # print(settings.api_key, settings.api_secret)
-        self.client = WSClient(
+        self._client = WSClient(
             api_key=settings.api_key,
             api_secret=settings.api_secret,
             on_message=(
@@ -79,13 +78,13 @@ class CoinbaseFeed:
         self.depth_managers: dict[str, md.DepthCachePlus] = {
             s: md.DepthCachePlus() for s in self.markets
         }
-        self.trade_managers: dict[str, list[md.Trade]] = collections.defaultdict(list)
+        self.trade_tapes: dict[str, list[md.Trade]] = collections.defaultdict(list)
         self.run_timer = False
 
     async def __aenter__(self):
-        await self.client.open_async()
+        await self._client.open_async()
         # Subscribe to the necessary channels, adjust according to your requirements
-        await self.client.subscribe_async(
+        await self._client.subscribe_async(
             product_ids=self.markets,
             channels=[
                 'level2',
@@ -99,8 +98,8 @@ class CoinbaseFeed:
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         self.run_timer = False
-        await self.client.unsubscribe_all_async()
-        await self.client.close_async()
+        await self._client.unsubscribe_all_async()
+        await self._client.close_async()
 
     async def start_timer(self):
         self.run_timer = True
@@ -112,15 +111,15 @@ class CoinbaseFeed:
             if timesleep > 0:
                 await asyncio.sleep(timesleep)
             else:
-                print(f"time sleep is negative: {timesleep}")
+                logger.warning(f"time sleep is negative: {timesleep}")
             self.cut_trade_tape()
             tall += 1
 
     def cut_trade_tape(self):
         # print('cut')
-        for symbol, trade_man in self.trade_managers.items():
-            self.depth_managers[symbol].trades = [t for t in trade_man]
-        self.trade_managers = collections.defaultdict(list)
+        for symbol, trade_man in self.trade_tapes.items():
+            self.depth_managers[symbol].trade_bunch.trades = [t for t in trade_man]
+        self.trade_tapes = collections.defaultdict(list)
 
     def recorded_on_message(self, msg):
         self.msg_history.append(msg)
@@ -135,20 +134,21 @@ class CoinbaseFeed:
             case 'subscriptions':
                 for event in message.events:
                     if not event.subscriptions:
-                        print("ERROR: Failed to subscribe to the requested channels")
-                        # exit(1)
-                    print("Successfully subscribed to the following channels:")
+                        logger.error(
+                            "ERROR: Failed to subscribe to the requested channels"
+                        )
+                    logger.info("Successfully subscribed to the following channels:")
                     for channel, products in event.subscriptions.items():
-                        print(f"{channel}: {products}")
-                return  # Return early as there's no further processing needed for these messages
+                        logger.info(f"{channel}: {products}")
+                return
             case 'l2_data':
                 for event in message.events:
                     if self.PRINT_MESSAGE:
-                        print(
+                        logger.debug(
                             f"{message.channel}       {event.type} {event.product_id} {message.timestamp}: {len(event.updates)}"
                         )
                     if self.PRINT_EVENTS:
-                        print(event)
+                        logger.debug(event)
                     match event.type:
                         case 'snapshot':
                             self.depth_managers[event.product_id].reset(
@@ -167,28 +167,26 @@ class CoinbaseFeed:
                 )
                 for event in message.events:
                     if self.PRINT_MESSAGE:
-                        print(
+                        logger.debug(
                             f"{message.channel} {event.type} {message.timestamp}: {len(event.trades)}"
                         )
                     if self.PRINT_EVENTS:
-                        print(event)
+                        logger.debug(event)
                     match event.type:
                         case 'snapshot':
                             pass
                         case 'update':
                             for trade in event.trades:
-                                self.trade_managers[trade.product_id].append(trade)
+                                self.trade_tapes[trade.product_id].append(trade)
             case _:
-                print(f"Unhandled channel: {channel}")
-                print(msg[:256])
-                # Handle other message types as needed
-                pass
+                logger.error(f"Unhandled channel: {message.channel}")
+                logger.error(msg[:256])
 
     def on_open(self):
-        print("Connection opened!")
+        logger.info("Connection opened!")
 
     def on_close(self):
-        print("Connection closed!")
+        logger.info("Connection closed!")
 
     async def multi_generator(self, markets: list[str]):
         """this function is a generator of generators, each one for a different symbol.
@@ -204,20 +202,22 @@ class CoinbaseFeed:
             if timesleep > 0:
                 await asyncio.sleep(timesleep)
             else:
-                print(f"time sleep is negative: {timesleep}")
+                logger.warning(f"time sleep is negative: {timesleep}")
 
             oneSec = {}
             for symbol, shaper in symbol_shapers.items():
                 bids, asks = self.depth_managers[symbol].get_bids_asks()
                 if not bids or not asks:
-                    print(f"no bids or asks for {symbol}")
+                    logger.warning(f"no bids or asks for {symbol}")
                     break
                 await shaper.update_ema(bids, asks, twake)
-                list_trades = self.depth_managers[symbol].trades
-                list_trades = [t.to_binanace_format() for t in list_trades]
+                list_trades = self.depth_managers[symbol].trade_bunch.trades
+                list_trades = [t.to_binance_format() for t in list_trades]
                 await shaper.on_trades_bunch(list_trades, force_t_avail=twake)
                 oneSec[symbol] = await shaper.make_frames_async(
-                    t_avail=twake, bids=bids, asks=asks
+                    t_avail=twake,
+                    bids=bids,
+                    asks=asks,
                 )
             else:
                 yield oneSec

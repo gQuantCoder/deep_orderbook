@@ -2,9 +2,8 @@ from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 from operator import itemgetter
-
-
 from deep_orderbook.utils import logger
+
 
 class Trade(BaseModel):
     # trade_id: str = Field(alias='trade_id')
@@ -14,7 +13,7 @@ class Trade(BaseModel):
     side: str
     # time: datetime
 
-    def to_binanace_format(self, time: int = 0):
+    def to_binance_format(self, time: int = 0):
         return TradeUpdate(
             e='aggTrade',
             E=0,
@@ -121,14 +120,24 @@ class TradeUpdate(BinanceUpdate):
     T: int = Field(alias='T')
 
 
-class DepthCachePlus(BaseModel):
-    # symbol: str
-    _bids: dict[float, float] = {}
-    _asks: dict[float, float] = {}
+class TradeBunch(BaseModel):
     trades: list[Trade] = []
 
     def add_trade(self, trade: Trade):
         self.trades.append(trade)
+
+    def clear_trades(self):
+        self.trades = []
+
+
+class DepthCachePlus(BaseModel):
+    # symbol: str
+    _bids: dict[float, float] = {}
+    _asks: dict[float, float] = {}
+    trade_bunch: TradeBunch = TradeBunch()
+
+    def add_trade(self, trade: Trade):
+        self.trade_bunch.add_trade(trade)
 
     def get_bids(self):
         lst = [(price, quantity) for price, quantity in self._bids.items()]
@@ -167,7 +176,9 @@ class DepthCachePlus(BaseModel):
         bids = self.get_bids()
         asks = self.get_asks()
         if bids and asks and bids[0][0] >= asks[0][0]:
-            logger.warning(f"\ncleaning the crossed BBO \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
+            logger.warning(
+                f"\ncleaning the crossed BBO \nBIDS: {bids[:5]}\nASKS: {asks[:5]}"
+            )
             for p in list(self._bids.keys()):
                 if p >= asks[0][0]:
                     del self._bids[p]
@@ -180,3 +191,10 @@ class DepthCachePlus(BaseModel):
 
             assert bids[0][0] < asks[0][0]
         return bids, asks
+
+    def dump(self, and_reset_trades=False) -> tuple[str, str]:
+        depths: str = self.model_dump_json(include={'_bids', '_asks'})
+        trades: str = self.trade_bunch.model_dump_json(include={'trades'})
+        if and_reset_trades:
+            self.trade_bunch.clear_trades()
+        return depths, trades
