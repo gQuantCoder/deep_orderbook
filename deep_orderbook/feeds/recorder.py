@@ -39,16 +39,12 @@ class Writer:
         for symbol in self.feed.markets:
             async with self.lock:
                 depth_cache = self.feed.depth_managers[symbol]
-                updates = depth_cache.get_bids_asks()
-                tosave = copy.deepcopy(updates)
-            async with self.tradelock:
-                trades = depth_cache.trade_bunch.model_dump()
-                depth_cache.trade_bunch.clear_trades()
+                depths, trades = depth_cache.dump(and_reset_trades=True)
 
             async with aiofiles.open(
                 f"{self.L2folder}/{symbol}/{upds}_update.json", "w"
             ) as fp:
-                await fp.write(tosave)
+                await fp.write(depths)
             async with aiofiles.open(
                 f"{self.L2folder}/{symbol}/{upds}_trades.json", "w"
             ) as fp:
@@ -71,7 +67,7 @@ class Writer:
                 async with aiofiles.open(
                     f"{self.L2folder}/{symbol}/{snap}_snapshot.json", "w"
                 ) as fp:
-                    await fp.write(L2)
+                    await fp.write(json.dumps(L2))
         logger.info("Saved snapshot")
 
     async def run_writer(self, save_period_minutes=60):
@@ -133,7 +129,7 @@ class Writer:
 async def main():
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
 
-    MARKETS = ["ETH-USD", "BTC-USD"]
+    MARKETS = ["ETH-USD"]
     data_folder = "data"
 
     async with CoinbaseFeed(markets=MARKETS, record_history=True) as feed:
