@@ -21,76 +21,90 @@ class Replayer:
         self.date_regexp = date_regexp
         self.dates = self.zipped_dates()
         if self.dates:
-            logger.info("using zipped file generator.")
+            logger.info("Using zipped file generator.")
             self.file_generator = self.book_updates_trades_and_snapshots_zip
         else:
             self.dates = self.raw_files_dates()
             if self.dates:
-                logger.info("using raw file generator.")
+                logger.info("Using raw file generator.")
                 self.file_generator = self.book_updates_trades_and_snapshots_raw
 
         if self.dates:
             logger.info(
-                f"found {len(self.dates)} dates: [{self.dates[0]} .. {self.dates[-1]}]"
+                f"Found {len(self.dates)} dates: [{self.dates[0]} .. {self.dates[-1]}]"
             )
         else:
             logger.info(
-                f"the data folder doen't seem to contain any raw or zipped files: {self.data_folder}"
+                f"The data folder doesn't seem to contain any raw or zipped files: {self.data_folder}"
             )
 
     def raw_files(self):
         zs = sorted(glob.glob(f'{self.data_folder}/*/{self.date_regexp}*.json'))
+        logger.debug(f"Raw files: {zs}")
         yield from zs
 
     def raw_files_dates(self):
         dates = itertools.groupby(
             self.raw_files(), lambda fn: fn.split('/')[-1].split('T')[0]
         )
-        return [d[0] for d in dates]
+        dates = [d[0] for d in dates]
+        logger.debug(f"Raw file dates: {dates}")
+        return dates
 
     def zipped(self):
         zs = sorted(glob.glob(f'{self.data_folder}/{self.date_regexp}*.zip'))
+        logger.debug(f"Zipped files: {zs}")
         yield from zs
 
     def zipped_dates(self):
         dates = itertools.groupby(
             self.zipped(), lambda fn: fn.split('/')[-1].split('.')[0]
         )
-        return [d[0] for d in dates]
+        dates = [d[0] for d in dates]
+        logger.debug(f"Zipped file dates: {dates}")
+        return dates
 
     @staticmethod
     def loadjson(filename, open_fc=open):
         try:
-            return json.load(open_fc(filename))
+            data = json.load(open_fc(filename))
+            logger.debug(f"Loaded JSON from {filename}")
+            return data
         except json.JSONDecodeError as e:
             logger.error(f"Error loading {filename}: {e}")
             return []
 
     def snapshots(self, pair):
-        return sorted(
+        snapshots = sorted(
             glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*snapshot.json')
         )
+        logger.debug(f"Snapshots for {pair}: {snapshots}")
+        return snapshots
 
     def updates_files(self, pair):
-        Bs = sorted(
+        updates = sorted(
             glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*update.json')
         )
-        return Bs
+        logger.debug(f"Update files for {pair}: {updates}")
+        return updates
 
     def trades_file(self, pair):
-        Ts = sorted(
+        trades = sorted(
             glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*trades.json')
         )
-        return Ts
+        logger.debug(f"Trade files for {pair}: {trades}")
+        return trades
 
     def book_updates_and_trades(self, pair):
-        Bs = self.updates_files(pair)
-        Ts = self.trades_file(pair)
-        return [
+        updates = self.updates_files(pair)
+        trades = self.trades_file(pair)
+        book_updates_trades = [
             (b, b.replace('update', 'trades'))
-            for b in Bs
-            if b.replace('update', 'trades') in Ts
+            for b in updates
+            if b.replace('update', 'trades') in trades
         ]
+        logger.debug(f"Book updates and trades for {pair}: {book_updates_trades}")
+        return book_updates_trades
 
     async def book_updates_trades_and_snapshots_raw(
         self, pair, file_generator=None, open_fc=None
@@ -103,7 +117,7 @@ class Replayer:
             ts, gr = js_group
             files = list(gr)
             if len(files) == 3:
-                logger.info(f"reading from {files=}")
+                logger.info(f"Reading from {files=}")
                 snapshot_file, trades_file, updates_file = [
                     self.loadjson(fn, open_fc) for fn in files
                 ]
@@ -139,24 +153,6 @@ class Replayer:
             arr_time2level = np.load(fn_ts)
             yield arr_books, arr_prices, arr_time2level
 
-    # @staticmethod
-    # def tradesframe(file):
-    #     ts = pd.DataFrame(self.loadjson(file))
-    #     if ts.empty:
-    #         return ts
-    #     ts = ts.drop(['M', 's', 'e', 'a'], axis=1).astype(np.float64)
-    #     ts['t'] = 1 + ts['E'] // 1000
-    #     ts['delay'] = ts['E'] - ts['T']
-    #     ts['num'] = ts['l'] - ts['f'] + 1
-    #     ts['up'] = 1 - 2*ts['m']
-    #     ts.drop(['E', 'T', 'f', 'l', 'm'], axis=1, inplace=True)
-    #     ts.set_index(['t'], inplace=True)
-    #     return ts
-
-    # @staticmethod
-    # def sample(of_file):
-    #     return self.loadjson(of_file)[0]
-
     async def replayL2_async(self, *, pair: str, shaper: BookShaper):
         yield pair
         file_updates_tqdm = self.file_generator(pair)
@@ -176,7 +172,7 @@ class Replayer:
                     for book_upd_msg in js_updates_tqdm:
                         book_upd = md.BinanceBookUpdate(**book_upd_msg)
                         if book_upd.e != 'depthUpdate':
-                            logger.debug("not update:", book_upd.e)
+                            logger.debug("Not update:", book_upd.e)
                             continue
 
                         if book_upd.final_id < snapshot.lastUpdateId:
@@ -228,7 +224,7 @@ class Replayer:
                 jump = next_overall_sec - tall
                 if jump > 60:
                     logger.info(
-                        f"\njumping {datetime.timedelta(seconds=jump)} seconds to have an update from one of the symbols"
+                        f"\nJumping {datetime.timedelta(seconds=jump)} seconds to have an update from one of the symbols"
                     )
                     tall += jump
                 else:
@@ -239,10 +235,10 @@ async def main():
     single_pair = 'ETHUSDT'
     file_replayer = Replayer('../data/crypto', date_regexp='20')
     areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
-    num_to_output = 10
+    num_to_output = 100
     async for bb in areplay:
         num_to_output -= 1
-        logger.debug(bb)
+        print(bb)
         if num_to_output < 0:
             break
 
