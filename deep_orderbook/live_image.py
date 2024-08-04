@@ -1,4 +1,4 @@
-from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed as Receiver
+from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed as Feed
 from deep_orderbook.shaper import BookShaper
 
 import asyncio
@@ -16,7 +16,7 @@ class ImageStream:
         self.markets = markets or MARKETS
 
     async def setup(self):
-        receiver = Receiver(markets=self.markets)
+        receiver = Feed(markets=self.markets)
         receiver.PRINT_MESSAGE = True
         await receiver.__aenter__()
 

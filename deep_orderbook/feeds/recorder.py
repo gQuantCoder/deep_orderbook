@@ -8,17 +8,23 @@ from deep_orderbook.utils import logger
 
 
 class Writer:
-    def __init__(self, feed: BaseFeed, directory: str = "data") -> None:
-        self.feed = feed
+    def __init__(self, *, markets: list[str], directory: str = "data") -> None:
+        self.markets = markets
         self.directory = Path(directory)
         self.files: dict[
-            str, dict[str, aiofiles.threadpool.binary.AsyncBufferedIOBase]
+            str,
+            dict[
+                str,
+                aiofiles.threadpool.AiofilesContextManager,
+            ],
         ] = {}
 
     async def __aenter__(self):
         self.directory.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now(tz=timezone.utc).isoformat().replace(":", "-").split('.')[0]
-        for market in self.feed.markets:
+        timestamp = (
+            datetime.now(tz=timezone.utc).isoformat().replace(":", "-").split('.')[0]
+        )
+        for market in self.markets:
             market_path = self.directory / "L2" / market
             market_path.mkdir(parents=True, exist_ok=True)
             update_filename = f"{timestamp}_update.jsonl"
@@ -27,7 +33,6 @@ class Writer:
                 "update": await aiofiles.open(market_path / update_filename, mode="a"),
                 "trades": await aiofiles.open(market_path / trade_filename, mode="a"),
             }
-        asyncio.create_task(self._write_messages())
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -35,10 +40,11 @@ class Writer:
             for file in market_files.values():
                 await file.close()
 
-    async def _write_messages(self):
-        async for msg in self.feed:
-            if msg is None:
-                break
+    async def start_recording(self, feed: BaseFeed):
+        asyncio.create_task(self._write_messages(feed))
+
+    async def _write_messages(self, feed: BaseFeed):
+        async for msg in feed:
             if msg.is_subscription():
                 continue
             market = msg.symbol
@@ -58,8 +64,9 @@ async def main():
     MARKETS = ["BTC-USD", "ETH-USD", "ETH-BTC"]
 
     while True:
-        async with CoinbaseFeed(markets=MARKETS, feed_msg_queue=True) as feed:
-            async with Writer(feed=feed):
+        async with Writer(markets=MARKETS) as recorder:
+            async with CoinbaseFeed(markets=MARKETS, feed_msg_queue=True) as feed:
+                await recorder.start_recording(feed)
                 seconds_to_next_round_hour = 3600 - time.time() % 3600
                 await asyncio.sleep(seconds_to_next_round_hour)
 

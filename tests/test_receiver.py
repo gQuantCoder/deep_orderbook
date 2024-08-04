@@ -1,14 +1,14 @@
 import asyncio
 import pytest
 
-from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed as Receiver
+from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed as Feed
 from deep_orderbook.shaper import BookShaper
 
 
 MARKETS = ["BTC-USD", "ETH-USD", "ETH-BTC", ]
 
 async def test_make_receiver():
-    receiver = Receiver(markets=MARKETS)
+    receiver = Feed(markets=MARKETS)
     await receiver.__aenter__()
     await asyncio.sleep(5)
 

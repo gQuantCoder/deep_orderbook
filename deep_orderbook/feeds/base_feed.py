@@ -6,6 +6,10 @@ from typing import AsyncGenerator, TypeVar
 Message = TypeVar("Message", bound=md.Message)
 
 
+class EndFeed:
+    pass
+
+
 class BaseFeed:
     def __init__(self) -> None:
         self.markets: list[str] = []

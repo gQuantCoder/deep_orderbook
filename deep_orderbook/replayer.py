@@ -11,24 +11,23 @@ import deep_orderbook.marketdata as md
 from deep_orderbook.shaper import BookShaper
 from deep_orderbook.utils import logger
 
-
-MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
-
-
 class Replayer:
     def __init__(self, data_folder, date_regexp=''):
         self.data_folder = data_folder
         self.date_regexp = date_regexp
-        self.dates = self.zipped_dates()
-        if self.dates:
+        if dates := self.zipped_dates():
             logger.info("Using zipped file generator.")
             self.file_generator = self.book_updates_trades_and_snapshots_zip
+        elif dates := self.raw_files_dates():
+            logger.info("Using raw file generator.")
+            self.file_generator = self.book_updates_trades_and_snapshots_raw
         else:
-            self.dates = self.raw_files_dates()
-            if self.dates:
-                logger.info("Using raw file generator.")
-                self.file_generator = self.book_updates_trades_and_snapshots_raw
+            logger.error(
+                f"The data folder doesn't seem to contain any raw or zipped files: {self.data_folder}"
+            )
+            raise FileNotFoundError
 
+        self.dates = dates
         if self.dates:
             logger.info(
                 f"Found {len(self.dates)} dates: [{self.dates[0]} .. {self.dates[-1]}]"
@@ -39,7 +38,7 @@ class Replayer:
             )
 
     def raw_files(self):
-        zs = sorted(glob.glob(f'{self.data_folder}/*/{self.date_regexp}*.json'))
+        zs = sorted(glob.glob(f'{self.data_folder}/*/{self.date_regexp}*.json*'))
         logger.debug(f"Raw files: {zs}")
         yield from zs
 
@@ -67,8 +66,12 @@ class Replayer:
     @staticmethod
     def loadjson(filename, open_fc=open):
         try:
-            data = json.load(open_fc(filename))
-            logger.debug(f"Loaded JSON from {filename}")
+            if filename.endswith('.json'):
+                data = json.load(open_fc(filename))
+                logger.debug(f"Loaded {len(data)} entries from {filename}")
+            elif filename.endswith('.jsonl'):
+                data = [json.loads(line) for line in open_fc(filename)]
+                logger.debug(f"Loaded {len(data)} lines from {filename}")
             return data
         except json.JSONDecodeError as e:
             logger.error(f"Error loading {filename}: {e}")
@@ -122,6 +125,12 @@ class Replayer:
                     self.loadjson(fn, open_fc) for fn in files
                 ]
                 yield updates_file, trades_file, snapshot_file
+            elif len(files) == 2:
+                logger.info(f"Reading from {files=}")
+                trades_file, updates_file = [
+                    self.loadjson(fn, open_fc) for fn in files
+                ]
+                yield updates_file, trades_file, None
 
     async def book_updates_trades_and_snapshots_zip(self, pair):
         zs_gen = self.zipped()
@@ -232,8 +241,18 @@ class Replayer:
 
 
 async def main():
-    single_pair = 'ETHUSDT'
+    single_pair = 'BTCUSDT'
     file_replayer = Replayer('../data/crypto', date_regexp='20')
+    areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
+    num_to_output = 100
+    async for bb in areplay:
+        num_to_output -= 1
+        print(bb)
+        if num_to_output < 0:
+            break
+
+    single_pair = 'BTC-USD'
+    file_replayer = Replayer('data/L2', date_regexp='20')
     areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
     num_to_output = 100
     async for bb in areplay:
@@ -244,5 +263,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    asyncio.run(main())

@@ -9,7 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from coinbase.websocket import WSClient
 from deep_orderbook import marketdata as md
 from deep_orderbook.shaper import BookShaper
-from deep_orderbook.feeds.base_feed import BaseFeed
+from deep_orderbook.feeds.base_feed import BaseFeed, EndFeed
 from deep_orderbook.utils import logger
 
 
@@ -77,15 +77,16 @@ class CoinbaseMessage(md.Message):
             len(set([event.product_id for event in self.events])) == 1
         ), f"Not the same symbol in events: {self.model_dump_json()}"
         return self.events[0].product_id
-    
+
     def is_book_update(self):
         return self.channel == 'l2_data'
-    
+
     def is_trade_update(self):
         return self.channel == 'market_trades'
-    
+
     def is_subscription(self):
         return self.channel == 'subscriptions'
+
 
 class CoinbaseFeed(BaseFeed):
     PRINT_EVENTS = False
@@ -130,7 +131,7 @@ class CoinbaseFeed(BaseFeed):
         self.run_timer = False
         await self._client.unsubscribe_all_async()
         await self._client.close_async()
-        self.queue.put_nowait(None)
+        self.queue.put_nowait(EndFeed())
 
     async def start_timer(self):
         self.run_timer = True
@@ -156,6 +157,8 @@ class CoinbaseFeed(BaseFeed):
         while True:
             msg = await self.queue.get()
             # logger.debug(f"yielding message from queue: {msg}")
+            if isinstance(msg, EndFeed):
+                return
             yield msg
 
     def _on_message(self, msg):
@@ -171,10 +174,14 @@ class CoinbaseFeed(BaseFeed):
 
         if self.feed_msg_queue:
             self.queue.put_nowait(message)
-    
+
         self.process_message(message)
 
-    def process_message(self, message: CoinbaseMessage):
+    def process_message(self, message: CoinbaseMessage | EndFeed):
+        if isinstance(message, EndFeed):
+            logger.warning("Received EndFeed message")
+            return
+
         assert len(message.events) == 1
 
         match message.channel:
