@@ -77,7 +77,15 @@ class CoinbaseMessage(md.Message):
             len(set([event.product_id for event in self.events])) == 1
         ), f"Not the same symbol in events: {self.model_dump_json()}"
         return self.events[0].product_id
-
+    
+    def is_book_update(self):
+        return self.channel == 'l2_data'
+    
+    def is_trade_update(self):
+        return self.channel == 'market_trades'
+    
+    def is_subscription(self):
+        return self.channel == 'subscriptions'
 
 class CoinbaseFeed(BaseFeed):
     PRINT_EVENTS = False

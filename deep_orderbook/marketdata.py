@@ -10,6 +10,15 @@ class Message(BaseModel):
     def symbol(self) -> str:
         raise NotImplementedError
 
+    def is_book_update(self):
+        raise NotImplementedError
+
+    def is_trade_update(self):
+        raise NotImplementedError
+
+    def is_subscription(self):
+        raise NotImplementedError
+
 
 class Trade(BaseModel):
     # trade_id: str = Field(alias='trade_id')

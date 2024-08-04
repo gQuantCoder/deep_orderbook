@@ -6,3 +6,5 @@ dist
 .ipynb_checkpoints
 /data/
 *.log
+/.coverage
+/cov.xml
