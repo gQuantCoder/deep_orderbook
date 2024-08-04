@@ -224,8 +224,9 @@ class CoinbaseFeed(BaseFeed):
     def on_close(self):
         logger.info("Connection closed!")
 
-    async def multi_generator(self, markets: list[str]):
+    async def multi_generator(self, *, markets: list[str] | None = None):
         """this function is used to run the replay of the market data in parallel for all the symbols."""
+        markets = markets or self.markets
         symbol_shapers = {pair: BookShaper() for pair in markets}
 
         tall = time.time()

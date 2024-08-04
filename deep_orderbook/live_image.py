@@ -20,7 +20,7 @@ class ImageStream:
         receiver.PRINT_MESSAGE = True
         await receiver.__aenter__()
 
-        multi_replay = receiver.multi_generator(self.markets)
+        multi_replay = receiver.multi_generator()
 
         _ = await multi_replay.__anext__()
 

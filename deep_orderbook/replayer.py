@@ -198,7 +198,9 @@ class Replayer:
                         yield oneSec
 
     async def multireplayL2_async(self, pairs: list[str]):
-        replayers = [self.replayL2_async(pair=pair, shaper=BookShaper()) for pair in pairs]
+        replayers = [
+            self.replayL2_async(pair=pair, shaper=BookShaper()) for pair in pairs
+        ]
         pairs = [await replayer.__anext__() for replayer in replayers]
         gens = {pairs[i]: replayers[i] for i in range(len(pairs))}
         nexs = {pair: await gens[pair].__anext__() for pair in pairs}
@@ -211,7 +213,9 @@ class Replayer:
         logger.debug(f'\n{tall=}')
         with tqdm() as pbar:
             while True:
-                pbar.set_description(f"tall={datetime.datetime.fromtimestamp(tall, datetime.timezone.utc)}")
+                pbar.set_description(
+                    f"tall={datetime.datetime.fromtimestamp(tall, datetime.timezone.utc)}"
+                )
                 for pair in pairs:
                     while next_sec(pair) < tall:
                         curs[pair] = nexs[pair]
@@ -231,80 +235,16 @@ class Replayer:
                     tall += 1
 
 
-async def test_raw_replay():
-    from aioitertools import enumerate, next as anext
-
-    MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT"]
-
-    shaper = BookShaper()
-    file_replayer = Replayer('../crypto-trading/data/L2', date_regexp='2020')
-    areplay = file_replayer.replayL2_async(pair='ETHBTC', shaper=shaper)
-    a = await anext(areplay)
-    logger.debug(a)
-    batptr = await anext(areplay)
-
-    for i in range(100):
-        batptr = await anext(areplay)
-    logger.debug(f"bids:\n{batptr['bids'].head()}")
-    logger.debug(f"asks:\n{batptr['asks'].head()}")
-    logger.debug(f"prices:\n{batptr['price']}")
-    logger.debug(f"trades:\n{batptr['trades']}")
-
-    multi_replay = file_replayer.multireplayL2_async(pairs=MARKETS)
-    d = await anext(multi_replay)
-    logger.debug(d)
-
-    genarr = BookShaper.gen_array_async(market_replay=multi_replay, markets=MARKETS)
-    _ = await anext(genarr)
-
-    genacc = BookShaper.accumulate_array(genarr, markets=MARKETS)
-    _ = await anext(genacc)
-
-    every = 10
-    LENGTH = 128
-    x = []
-    async for n, sec in enumerate(genacc):
-        allim = []
-        for symb, data in sec.items():
-            arr = np.stack(data['bs'][-LENGTH:])
-            im = arr
-            im[:, :, 0] /= 10
-            im += 0.5
-            allim.append(im)
-        allim = np.concatenate(allim, axis=1)
-
-
-async def test_zipped_replay():
-    file_replayer = Replayer('../data/crypto', date_regexp='20')
-    shaper = BookShaper()
-    s = file_replayer.zipped()
-    logger.debug(s)
-
+async def main():
     single_pair = 'ETHUSDT'
-    logger.debug(f"replaying a single market: {single_pair}")
-    areplay = file_replayer.replayL2_async(pair=single_pair, shaper=shaper)
-    logger.debug(areplay)
+    file_replayer = Replayer('../data/crypto', date_regexp='20')
+    areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
     num_to_output = 10
     async for bb in areplay:
         num_to_output -= 1
         logger.debug(bb)
         if num_to_output < 0:
             break
-
-    multi_pairs = ['ETHUSDT', 'BTCUSDT', 'ETHBTC']
-    logger.info(f"synchronizing and replaying multilple markets: {multi_pairs}")
-    file_gen = file_replayer.multireplayL2_async(pairs=multi_pairs)
-    num_to_output = 1000
-    async for bb in file_gen:
-        num_to_output -= 1
-        # logger.debug(bb)
-        if num_to_output < 0:
-            break
-
-
-async def main():
-    await test_zipped_replay()
-    await test_raw_replay()
 
 
 if __name__ == '__main__':
