@@ -9,6 +9,8 @@ import zipfile
 import deep_orderbook.marketdata as md
 
 from deep_orderbook.shaper import BookShaper
+from deep_orderbook.utils import logger
+
 
 MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
 
@@ -19,20 +21,20 @@ class Replayer:
         self.date_regexp = date_regexp
         self.dates = self.zipped_dates()
         if self.dates:
-            print("using zipped file generator.")
+            logger.info("using zipped file generator.")
             self.file_generator = self.book_updates_trades_and_snapshots_zip
         else:
             self.dates = self.raw_files_dates()
             if self.dates:
-                print("using raw file generator.")
+                logger.info("using raw file generator.")
                 self.file_generator = self.book_updates_trades_and_snapshots_raw
 
         if self.dates:
-            print(
+            logger.info(
                 f"found {len(self.dates)} dates: [{self.dates[0]} .. {self.dates[-1]}]"
             )
         else:
-            print(
+            logger.info(
                 f"the data folder doen't seem to contain any raw or zipped files: {self.data_folder}"
             )
 
@@ -61,7 +63,7 @@ class Replayer:
         try:
             return json.load(open_fc(filename))
         except json.JSONDecodeError as e:
-            print(f"Error loading {filename}: {e}")
+            logger.error(f"Error loading {filename}: {e}")
             return []
 
     def snapshots(self, pair):
@@ -101,6 +103,7 @@ class Replayer:
             ts, gr = js_group
             files = list(gr)
             if len(files) == 3:
+                logger.info(f"reading from {files=}")
                 snapshot_file, trades_file, updates_file = [
                     self.loadjson(fn, open_fc) for fn in files
                 ]
@@ -154,7 +157,7 @@ class Replayer:
     # def sample(of_file):
     #     return self.loadjson(of_file)[0]
 
-    async def replayL2_async(self, pair: str, shaper: BookShaper):
+    async def replayL2_async(self, *, pair: str, shaper: BookShaper):
         yield pair
         file_updates_tqdm = self.file_generator(pair)
         with tqdm(
@@ -173,7 +176,7 @@ class Replayer:
                     for book_upd_msg in js_updates_tqdm:
                         book_upd = md.BinanceBookUpdate(**book_upd_msg)
                         if book_upd.e != 'depthUpdate':
-                            print("not update:", book_upd.e)
+                            logger.debug("not update:", book_upd.e)
                             continue
 
                         if book_upd.final_id < snapshot.lastUpdateId:
@@ -194,8 +197,8 @@ class Replayer:
 
                         yield oneSec
 
-    async def multireplayL2_async(self, pairs: list[str], shaper: BookShaper):
-        replayers = [self.replayL2_async(pair, shaper) for pair in pairs]
+    async def multireplayL2_async(self, pairs: list[str]):
+        replayers = [self.replayL2_async(pair=pair, shaper=BookShaper()) for pair in pairs]
         pairs = [await replayer.__anext__() for replayer in replayers]
         gens = {pairs[i]: replayers[i] for i in range(len(pairs))}
         nexs = {pair: await gens[pair].__anext__() for pair in pairs}
@@ -205,7 +208,7 @@ class Replayer:
 
         tall = max([next_sec(p) for p in pairs])
         curs = {pair: nexs[pair] for pair in pairs}
-        print(f'\n{tall=}')
+        logger.debug(f'\n{tall=}')
         with tqdm() as pbar:
             while True:
                 pbar.set_description(f"tall={datetime.datetime.fromtimestamp(tall, datetime.timezone.utc)}")
@@ -220,7 +223,7 @@ class Replayer:
                 next_overall_sec = min([next_sec(pair) for pair in pairs])
                 jump = next_overall_sec - tall
                 if jump > 60:
-                    print(
+                    logger.info(
                         f"\njumping {datetime.timedelta(seconds=jump)} seconds to have an update from one of the symbols"
                     )
                     tall += jump
@@ -235,21 +238,21 @@ async def test_raw_replay():
 
     shaper = BookShaper()
     file_replayer = Replayer('../crypto-trading/data/L2', date_regexp='2020')
-    areplay = file_replayer.replayL2_async('ETHBTC', shaper)
+    areplay = file_replayer.replayL2_async(pair='ETHBTC', shaper=shaper)
     a = await anext(areplay)
-    print(a)
+    logger.debug(a)
     batptr = await anext(areplay)
 
     for i in range(100):
         batptr = await anext(areplay)
-    print(f"bids:\n{batptr['bids'].head()}")
-    print(f"asks:\n{batptr['asks'].head()}")
-    print(f"prices:\n{batptr['price']}")
-    print(f"trades:\n{batptr['trades']}")
+    logger.debug(f"bids:\n{batptr['bids'].head()}")
+    logger.debug(f"asks:\n{batptr['asks'].head()}")
+    logger.debug(f"prices:\n{batptr['price']}")
+    logger.debug(f"trades:\n{batptr['trades']}")
 
-    multi_replay = file_replayer.multireplayL2_async(pairs=MARKETS, shaper=shaper)
+    multi_replay = file_replayer.multireplayL2_async(pairs=MARKETS)
     d = await anext(multi_replay)
-    print(d)
+    logger.debug(d)
 
     genarr = BookShaper.gen_array_async(market_replay=multi_replay, markets=MARKETS)
     _ = await anext(genarr)
@@ -275,26 +278,26 @@ async def test_zipped_replay():
     file_replayer = Replayer('../data/crypto', date_regexp='20')
     shaper = BookShaper()
     s = file_replayer.zipped()
-    print(s)
+    logger.debug(s)
 
-    single_pair = 'BTCUSDT'
-    print(f"replaying a single market: {single_pair}")
+    single_pair = 'ETHUSDT'
+    logger.debug(f"replaying a single market: {single_pair}")
     areplay = file_replayer.replayL2_async(pair=single_pair, shaper=shaper)
-    print(areplay)
+    logger.debug(areplay)
     num_to_output = 10
     async for bb in areplay:
         num_to_output -= 1
-        print(bb)
+        logger.debug(bb)
         if num_to_output < 0:
             break
 
     multi_pairs = ['ETHUSDT', 'BTCUSDT', 'ETHBTC']
-    print(f"synchronizing and replaying multilple markets: {multi_pairs}")
-    file_gen = file_replayer.multireplayL2_async(pairs=multi_pairs, shaper=shaper)
-    num_to_output = 10
+    logger.info(f"synchronizing and replaying multilple markets: {multi_pairs}")
+    file_gen = file_replayer.multireplayL2_async(pairs=multi_pairs)
+    num_to_output = 1000
     async for bb in file_gen:
         num_to_output -= 1
-        # print(bb)
+        # logger.debug(bb)
         if num_to_output < 0:
             break
 

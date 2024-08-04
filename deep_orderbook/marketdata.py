@@ -10,6 +10,7 @@ class Message(BaseModel):
     def symbol(self) -> str:
         raise NotImplementedError
 
+
 class Trade(BaseModel):
     # trade_id: str = Field(alias='trade_id')
     product_id: str = Field(alias='product_id')
@@ -182,7 +183,7 @@ class DepthCachePlus(BaseModel):
         asks = self.get_asks()
         if bids and asks and bids[0][0] >= asks[0][0]:
             logger.warning(
-                f"\ncleaning the crossed BBO \nBIDS: {bids[:5]}\nASKS: {asks[:5]}"
+                f"cleaning the crossed BBO \nBIDS: {bids[:5]}\nASKS: {asks[:5]}"
             )
             for p in list(self._bids.keys()):
                 if p >= asks[0][0]:

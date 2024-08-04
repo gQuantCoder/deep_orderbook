@@ -122,6 +122,7 @@ class CoinbaseFeed(BaseFeed):
         self.run_timer = False
         await self._client.unsubscribe_all_async()
         await self._client.close_async()
+        self.queue.put_nowait(None)
 
     async def start_timer(self):
         self.run_timer = True
@@ -143,10 +144,6 @@ class CoinbaseFeed(BaseFeed):
             self.depth_managers[symbol].trade_bunch.trades = [t for t in trade_man]
         self.trade_tapes = collections.defaultdict(list)
 
-    async def put_message(self, msg):
-        # logger.debug(f"putting message in queue: {msg}")
-        await self.queue.put(msg)
-
     async def __aiter__(self) -> AsyncGenerator[CoinbaseMessage, None]:
         while True:
             msg = await self.queue.get()
@@ -163,10 +160,10 @@ class CoinbaseFeed(BaseFeed):
                 return
         else:
             message = msg
+
         if self.feed_msg_queue:
-            asyncio.run_coroutine_threadsafe(
-                self.put_message(message), asyncio.get_event_loop()
-            )
+            self.queue.put_nowait(message)
+    
         self.process_message(message)
 
     def process_message(self, message: CoinbaseMessage):

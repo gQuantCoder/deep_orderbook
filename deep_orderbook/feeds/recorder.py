@@ -1,9 +1,8 @@
 import asyncio
-import time
 import aiofiles
 from pathlib import Path
 from typing import Dict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from deep_orderbook.feeds.base_feed import BaseFeed
 from deep_orderbook.feeds.coinbase_feed import SubscriptionsEvent
 from deep_orderbook.utils import logger
@@ -24,7 +23,7 @@ class Writer:
             filename = f"{timestamp}.jsonl"
             market_file = await aiofiles.open(market_path / filename, mode="a")
             self.files[market] = market_file
-        asyncio.create_task(self._write_messages())
+        self.taskloop = asyncio.create_task(self._write_messages())
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -33,6 +32,8 @@ class Writer:
 
     async def _write_messages(self):
         async for msg in self.feed:
+            if msg is None:
+                break
             if isinstance(msg.events[0], SubscriptionsEvent):
                 continue
             market = msg.symbol
