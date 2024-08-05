@@ -57,6 +57,11 @@ class Writer:
             else:
                 logger.error(f"Received message for unknown market: {market}")
 
+    async def sleep_unitl_midnight(self):
+        now = datetime.now()
+        tomorrow = now.replace(day=now.day + 1, hour=0, minute=0, second=0, microsecond=0)
+        await asyncio.sleep((tomorrow - now).total_seconds())
+
 
 async def main():
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
@@ -67,8 +72,7 @@ async def main():
         async with Writer(markets=MARKETS) as recorder:
             async with CoinbaseFeed(markets=MARKETS, feed_msg_queue=True) as feed:
                 await recorder.start_recording(feed)
-                seconds_to_next_round_hour = 3600 - time.time() % 3600
-                await asyncio.sleep(seconds_to_next_round_hour)
+                await recorder.sleep_unitl_midnight()
 
 
 if __name__ == '__main__':
