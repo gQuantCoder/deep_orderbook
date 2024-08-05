@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Literal
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import AliasChoices, BaseModel, Field, ValidationInfo, field_validator
 from operator import itemgetter
 from deep_orderbook.utils import logger
 
@@ -44,8 +44,8 @@ class Trade(BaseModel):
 
 
 class OrderLevel(BaseModel):
-    price: float = Field(alias='price_level')
-    size: float = Field(alias='new_quantity')
+    price: float = Field(validation_alias=AliasChoices('price_level', 'price'))
+    size: float = Field(validation_alias=AliasChoices('new_quantity', 'size'))
 
 
 class BookUpdate(BaseModel):

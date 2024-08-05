@@ -241,6 +241,8 @@ class Replayer:
 
 
 async def main():
+    import pyinstrument
+    
     single_pair = 'BTCUSDT'
     file_replayer = Replayer('../data/crypto', date_regexp='20')
     areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
@@ -251,15 +253,17 @@ async def main():
         if num_to_output < 0:
             break
 
-    single_pair = 'BTC-USD'
-    file_replayer = Replayer('data/L2', date_regexp='20')
-    areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
-    num_to_output = 100
-    async for bb in areplay:
-        num_to_output -= 1
-        print(bb)
-        if num_to_output < 0:
-            break
+    with pyinstrument.Profiler() as profiler:
+        single_pair = 'BTC-USD'
+        file_replayer = Replayer('data/L2', date_regexp='20')
+        areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
+        num_to_output = 100
+        async for bb in areplay:
+            num_to_output -= 1
+            print(bb)
+            if num_to_output < 0:
+                break
+    profiler.open_in_browser(timeline=True)
 
 
 if __name__ == '__main__':
