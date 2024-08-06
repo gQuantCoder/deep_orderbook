@@ -1,12 +1,14 @@
 import asyncio
 import collections
+from pathlib import Path
 import time
 from typing import AsyncGenerator, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import polars as pl
 
-from coinbase.websocket import WSClient
+from coinbase.websocket import WSClient  # type: ignore[import-untyped]
 from deep_orderbook import marketdata as md
 from deep_orderbook.shaper import BookShaper
 from deep_orderbook.feeds.base_feed import BaseFeed, EndFeed
@@ -131,7 +133,80 @@ class CoinbaseFeed(BaseFeed):
         self.run_timer = False
         await self._client.unsubscribe_all_async()
         await self._client.close_async()
+        await self.close_queue()
+
+    async def close_queue(self):
         self.queue.put_nowait(EndFeed())
+        # await self.queue.()
+
+    @classmethod
+    async def polarize(
+        cls,
+        *,
+        jsonl_path: Path | None = None,
+        json_str: str | None = None,
+        df: pl.DataFrame | None = None,
+        explode=None,
+    ) -> pl.DataFrame:
+        if json_str:
+            df = pl.DataFrame([CoinbaseMessage.model_validate_json(json_str)])
+        elif jsonl_path:
+            df = pl.read_ndjson(jsonl_path)
+        else:
+            assert df is not None
+
+        df = df.with_columns(
+            [
+                pl.col('channel').cast(
+                    pl.Enum(['l2_data', 'market_trades', 'subscriptions'])
+                ),
+                pl.col('timestamp').str.strptime(pl.Datetime, "%Y-%m-%dT%H:%M:%S%.fZ"),
+                pl.col('sequence_num').cast(pl.Int64),
+            ]
+        )
+        explode = explode or []
+        if explode:
+            df = df.explode('events')
+            df = df.unnest('events')
+            if 'updates' in explode:
+                df = df.explode('updates')
+                df = df.unnest('updates')
+            if 'trades' in explode:
+                df = df.explode('trades')
+                df = df.unnest('trades')
+            df = df.with_columns(
+                [
+                    pl.col('type').cast(pl.Enum(['snapshot', 'update'])),
+                    pl.col('product_id').cast(pl.Categorical),
+                    pl.col('side').cast(pl.Enum(['bid', 'offer', 'BUY', 'SELL'])),
+                ]
+            )
+        return df
+
+    @classmethod
+    async def depolarize(cls, df: pl.DataFrame, regroup=None) -> pl.DataFrame:
+        if regroup:
+            if 'updates' in regroup:
+                # Reconstruct the 'updates' nested structure
+                df = df.group_by(
+                    ['channel', 'timestamp', 'sequence_num', 'product_id', 'type'],
+                    maintain_order=True,
+                ).agg([pl.struct(['price', 'size', 'side']).alias('updates')])
+                # Reconstruct the 'events' nested structure
+                df = df.group_by(
+                    ['channel', 'timestamp', 'sequence_num'],
+                    maintain_order=True,
+                ).agg([pl.struct(['type', 'product_id', 'updates']).alias('events')])
+            if 'trades' in regroup:
+                df = df.group_by(
+                    ['channel', 'timestamp', 'sequence_num', 'type'],
+                    maintain_order=True,
+                ).agg([pl.struct(['product_id', 'price', 'size', 'side']).alias('trades')])
+                df = df.group_by(
+                    ['channel', 'timestamp', 'sequence_num'],
+                    maintain_order=True,
+                ).agg([pl.struct(['type', 'trades']).alias('events')])
+        return df
 
     async def start_timer(self):
         self.run_timer = True
