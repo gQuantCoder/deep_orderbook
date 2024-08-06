@@ -40,11 +40,11 @@ async def main(folder=Path('data/L2/BTC-USD/'), msg_type='update'):
     output_file = input_file.with_suffix('.parquet')
 
     EXPLODE = None
-    # EXPLODE = (
-    #     ['updates']
-    #     if 'update' in msg_type
-    #     else ['trades'] if 'trades' in msg_type else None
-    # )
+    EXPLODE = (
+        ['updates']
+        if 'update' in msg_type
+        else ['trades'] if 'trades' in msg_type else None
+    )
 
     print(f"Reading {input_file}")
     df_orig = pl.read_ndjson(input_file)
@@ -74,7 +74,56 @@ async def main(folder=Path('data/L2/BTC-USD/'), msg_type='update'):
     )
 
 
+async def merge(msg_type):
+    with pl.StringCache():
+        df = None
+        for folder in Path('data/L2').iterdir():
+            if folder.is_dir():
+                for tstr in [
+                    # '2024-08-04T23-00-00',
+                    '2024-08-05T00-00-00',
+                    '2024-08-05T01-00-00',
+                    '2024-08-05T02-00-00',
+                    '2024-08-05T03-00-00',
+                    '2024-08-05T04-00-00',
+                    '2024-08-05T04-26-38',
+                ]:
+                    input_file = folder / f'{tstr}_{msg_type}.jsonl'
+                    print(f"Reading {input_file}")
+                    EXPLODE = (
+                        ['updates']
+                        if 'update' in msg_type
+                        else ['trades'] if 'trades' in msg_type else None
+                    )
+                    df_part = await CoinbaseFeed.polarize(
+                        jsonl_path=input_file, explode=EXPLODE
+                    )
+                    print(df_part)
+                    df = (
+                        df.merge_sorted(df_part, key='timestamp')
+                        if df is not None
+                        else df_part
+                    )
+        return df
+
 if __name__ == '__main__':
     import asyncio
 
-    asyncio.run(main())
+    # asyncio.run(main())
+
+    # for msg_type in ['trades', 'update']:
+    #     for folder in Path('data/L2').iterdir():
+    #         if folder.is_dir():
+    #             asyncio.run(main(folder=folder, msg_type=msg_type))
+
+    # dfall = pl.read_parquet('data/2024-08-05T20-52-37_all.parquet')
+    # print(dfall.schema)
+
+    with pl.StringCache():
+        df_trades = asyncio.run(merge(msg_type='trades'))
+        df_books = asyncio.run(merge(msg_type='update'))
+
+        df_all = df_books.merge_sorted(df_trades, key='sequence_num')
+
+    print(df_all)
+    df_all.write_parquet('data/2024-08-05T00-00-00.parquet')
