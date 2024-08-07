@@ -1,8 +1,8 @@
 import asyncio
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import aiofiles
+from aiofiles.threadpool.text import AsyncTextIOWrapper
 from tqdm.auto import tqdm
 import polars as pl
 from deep_orderbook.feeds.base_feed import BaseFeed
@@ -10,18 +10,21 @@ from deep_orderbook.utils import logger
 
 
 class Writer:
-    def __init__(self, *, feed: BaseFeed, directory: str = "data") -> None:
+    def __init__(
+        self, *, feed: BaseFeed, directory: str = "data/L2", save_path='data'
+    ) -> None:
         self.feed = feed
         self.directory = Path(directory)
-        self.files: dict[str, aiofiles.threadpool.AiofilesContextManager] = {}
+        self.save_path = Path(save_path)
+        self.files: dict[str, AsyncTextIOWrapper] = {}
         timestamp = (
             datetime.now(tz=timezone.utc).isoformat().replace(":", "-").split('.')[0]
         )
-        path = self.directory / "L2"
-        path.mkdir(parents=True, exist_ok=True)
-        self.update_filename = path / f"{timestamp}_update.jsonl"
-        self.trade_filename = path / f"{timestamp}_trades.jsonl"
-        self.output_parquet = path / f"../{timestamp}.parquet"
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.update_filename = self.directory / f"{timestamp}_update.jsonl"
+        self.trade_filename = self.directory / f"{timestamp}_trades.jsonl"
+        self.save_path.mkdir(parents=True, exist_ok=True)
+        self.output_parquet = self.save_path / f"{timestamp}.parquet"
 
     async def __aenter__(self):
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -47,11 +50,14 @@ class Writer:
                 df_trades = await self.feed.polarize(
                     jsonl_path=self.trade_filename, explode=['trades']
                 )
-                df_all = df_books.merge_sorted(
-                    df_trades, key="sequence_num"
-                )
+                df_all = df_books.merge_sorted(df_trades, key="sequence_num")
                 df_all.write_parquet(self.output_parquet)
                 logger.info(f"Saved parquet file: {self.output_parquet}")
+                logger.info(
+                    f"Removing jsonl files: {self.update_filename}, {self.trade_filename}"
+                )
+                self.update_filename.unlink()
+                self.trade_filename.unlink()
         except Exception as e:
             logger.error(f"Error post processing file: {e}")
 
@@ -93,7 +99,9 @@ async def main():
 
     while True:
         async with CoinbaseFeed(markets=MARKETS, feed_msg_queue=True) as feed:
-            async with Writer(feed=feed) as recorder:
+            async with Writer(
+                feed=feed, directory='data/L2', save_path='/media/photoDS216/crypto'
+            ) as recorder:
                 await recorder.start_recording()
                 await recorder.sleep_until_next_hour()
 
