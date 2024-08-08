@@ -1,15 +1,19 @@
 import glob
 import json
 import datetime
+from pathlib import Path
 import numpy as np
 import asyncio
 import itertools
 from tqdm.auto import tqdm
 import zipfile
 import deep_orderbook.marketdata as md
+from rich import print
+import polars as pl
 
 from deep_orderbook.shaper import BookShaper
 from deep_orderbook.utils import logger
+
 
 class Replayer:
     def __init__(self, data_folder, date_regexp=''):
@@ -127,9 +131,7 @@ class Replayer:
                 yield updates_file, trades_file, snapshot_file
             elif len(files) == 2:
                 logger.info(f"Reading from {files=}")
-                trades_file, updates_file = [
-                    self.loadjson(fn, open_fc) for fn in files
-                ]
+                trades_file, updates_file = [self.loadjson(fn, open_fc) for fn in files]
                 yield updates_file, trades_file, None
 
     async def book_updates_trades_and_snapshots_zip(self, pair):
@@ -240,9 +242,62 @@ class Replayer:
                     tall += 1
 
 
+class ParquetReplayer:
+    def __init__(self, directory: str, date_regexp: str = ''):
+        self.directory = Path(directory)
+        self.date_regexp = date_regexp
+        self.on_message = None
+
+    async def open_async(self):
+        self.parquet_files = sorted(self.directory.glob(f"{self.date_regexp}*.parquet"))
+        logger.info(f"Found {len(self.parquet_files)} parquet files in {self.directory}")
+        if not self.parquet_files:
+            raise FileNotFoundError(f"No parquet files found in {self.directory} matching {self.date_regexp}")
+
+    async def close_async(self):
+        pass
+
+    async def subscribe_async(self, product_ids, channels):
+        # Process each parquet file individually
+        for parquet_file in tqdm(self.parquet_files, leave=False):
+            logger.info(f"Reading {parquet_file}")
+            df = pl.read_parquet(parquet_file)
+
+            # weirdly, the subscription name is not necessarily the same as the channel name
+            channel_names = ['l2_data'] if 'level2' in channels else []
+            channel_names += ['market_trades'] if 'market_trades' in channels else []
+
+            # filter on product_ids and channels
+            if product_ids:
+                df = df.filter(pl.col('product_id').is_in(product_ids))
+            if channels:
+                df = df.filter(pl.col('channel').is_in(channel_names))
+
+            with tqdm(df.group_by_dynamic("timestamp", every="1s")) as windows:
+                if self.on_message:
+                    for t_win, df in windows:
+                        windows.set_description(f"replay: {t_win}")
+                        await self.on_message(t_win, df)
+                else:
+                    raise ValueError("on_message handler not set for ParquetReplayer.")
+
+    async def unsubscribe_all_async(self):
+        # This is a no-op for the replayer, since we are just replaying stored data
+        pass
+
+
 async def main():
+    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     import pyinstrument
-    
+
+    pairs = ['BTC-USD', 'ETH-USD', 'ETH-BTC']
+    async with CoinbaseFeed(
+        markets=pairs,
+        replayer=ParquetReplayer('data', date_regexp='20'),
+    ) as feed:
+        async for msg in feed:
+            print(msg)
+
     single_pair = 'BTCUSDT'
     file_replayer = Replayer('../data/crypto', date_regexp='20')
     areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
@@ -255,7 +310,7 @@ async def main():
 
     with pyinstrument.Profiler() as profiler:
         single_pair = 'BTC-USD'
-        file_replayer = Replayer('data/L2', date_regexp='20')
+        file_replayer = Replayer('data/L2', date_regexp='2024-08-0')
         areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
         num_to_output = 100
         async for bb in areplay:

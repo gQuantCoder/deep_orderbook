@@ -39,7 +39,7 @@ class Writer:
         logger.info("Closing file")
         for file in self.files.values():
             await file.close()
-        asyncio.create_task(self.post_process_file())
+        await self.post_process_file()
 
     async def post_process_file(self) -> None:
         try:
@@ -50,7 +50,7 @@ class Writer:
                 df_trades = await self.feed.polarize(
                     jsonl_path=self.trade_filename, explode=['trades']
                 )
-                df_all = df_books.merge_sorted(df_trades, key="sequence_num")
+                df_all = df_books.merge_sorted(df_trades, key="timestamp")
                 df_all.write_parquet(self.output_parquet)
                 logger.info(f"Saved parquet file: {self.output_parquet}")
                 logger.info(

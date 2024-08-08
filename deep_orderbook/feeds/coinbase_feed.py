@@ -2,7 +2,7 @@ import asyncio
 import collections
 from pathlib import Path
 import time
-from typing import AsyncGenerator, Literal
+from typing import AsyncGenerator, Iterator, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -94,17 +94,14 @@ class CoinbaseFeed(BaseFeed):
     PRINT_EVENTS = False
     PRINT_MESSAGE = False
 
-    def __init__(self, markets: list[str], feed_msg_queue=False) -> None:
+    def __init__(
+        self,
+        markets: list[str],
+        feed_msg_queue=False,
+        replayer: Iterator[CoinbaseMessage] | None = None,
+    ) -> None:
         settings = Settings()
         self.feed_msg_queue = feed_msg_queue
-        # print(settings.api_key, settings.api_secret)
-        self._client = WSClient(
-            api_key=settings.api_key,
-            api_secret=settings.api_secret,
-            on_message=self._on_message,
-            on_open=self.on_open,
-            on_close=self.on_close,
-        )
         self.markets = markets
         self.msg_history: list[str] = []
         self.depth_managers: dict[str, md.DepthCachePlus] = {
@@ -113,6 +110,18 @@ class CoinbaseFeed(BaseFeed):
         self.trade_tapes: dict[str, list[md.Trade]] = collections.defaultdict(list)
         self.run_timer = False
         self.queue: asyncio.Queue[CoinbaseMessage] = asyncio.Queue()
+
+        if not replayer:
+            self._client = WSClient(
+                api_key=settings.api_key,
+                api_secret=settings.api_secret,
+                on_message=self._on_message,
+                on_open=self.on_open,
+                on_close=self.on_close,
+            )
+        else:
+            self._client = replayer
+            self._client.on_message = self._on_polars
 
     async def __aenter__(self):
         await self._client.open_async()
@@ -201,7 +210,9 @@ class CoinbaseFeed(BaseFeed):
                 df = df.group_by(
                     ['channel', 'timestamp', 'sequence_num', 'type'],
                     maintain_order=True,
-                ).agg([pl.struct(['product_id', 'price', 'size', 'side']).alias('trades')])
+                ).agg(
+                    [pl.struct(['product_id', 'price', 'size', 'side']).alias('trades')]
+                )
                 df = df.group_by(
                     ['channel', 'timestamp', 'sequence_num'],
                     maintain_order=True,
@@ -236,6 +247,17 @@ class CoinbaseFeed(BaseFeed):
                 return
             yield msg
 
+    async def _on_polars(self, t_win:datetime, df_per_time: pl.DataFrame):
+        # print(t_win, df_per_time)
+        df_books = await self.depolarize(df_per_time.filter(pl.col('channel') == 'l2_data'), regroup=['updates'])
+        df_trade = await self.depolarize(df_per_time.filter(pl.col('channel') == 'market_trades'), regroup=['trades'])
+
+
+        for msg in (CoinbaseMessage(**row) for row in df_books.iter_rows(named=True)):
+            self.process_message(msg)
+        for msg in (CoinbaseMessage(**row) for row in df_trade.iter_rows(named=True)):
+            self.process_message(msg)
+            
     def _on_message(self, msg):
         if isinstance(msg, str):
             try:
