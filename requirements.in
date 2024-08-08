@@ -8,3 +8,6 @@ python-binance
 
 pydantic
 pydantic-settings
+polars
+
+numpy<2

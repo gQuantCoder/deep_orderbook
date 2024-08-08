@@ -105,9 +105,21 @@ async def merge(msg_type):
                         else df_part
                     )
         return df
+    
+async def resort_by_ts():
+    for filename in Path('/media/photoDS216/crypto').iterdir():
+        if filename.is_file() and filename.suffix == '.parquet':
+            print(f"Reading {filename}")
+            df = pl.read_parquet(filename)
+            df = df.sort(by='timestamp')
+            print("rewriting", filename)
+            df.write_parquet(filename)
 
 if __name__ == '__main__':
     import asyncio
+
+    # asyncio.run(resort_by_ts())
+    # exit()
 
     # asyncio.run(main())
 
@@ -123,7 +135,7 @@ if __name__ == '__main__':
         df_trades = asyncio.run(merge(msg_type='trades'))
         df_books = asyncio.run(merge(msg_type='update'))
 
-        df_all = df_books.merge_sorted(df_trades, key='sequence_num')
+        df_all = df_books.merge_sorted(df_trades, key='timestamp')
 
     print(df_all)
     df_all.write_parquet('data/2024-08-05T00-00-00.parquet')
