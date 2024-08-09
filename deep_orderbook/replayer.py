@@ -273,7 +273,7 @@ class ParquetReplayer:
             if channels:
                 df = df.filter(pl.col('channel').is_in(channel_names))
 
-            with tqdm(df.group_by_dynamic("timestamp", every="1s")) as windows:
+            with tqdm(df.group_by_dynamic("timestamp", every="1s", label='right')) as windows:
                 if self.on_message:
                     for t_win, df in windows:
                         windows.set_description(f"replay: {t_win}")
@@ -290,13 +290,16 @@ async def main():
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     import pyinstrument
 
-    pairs = ['BTC-USD', 'ETH-USD', 'ETH-BTC']
-    async with CoinbaseFeed(
-        markets=pairs,
-        replayer=ParquetReplayer('data', date_regexp='20'),
-    ) as feed:
-        async for msg in feed:
-            print(msg)
+    with pyinstrument.Profiler() as profiler:
+        pairs = ['BTC-USD', 'ETH-USD', 'ETH-BTC']
+        async with CoinbaseFeed(
+            markets=pairs,
+            replayer=ParquetReplayer('data', date_regexp='2024'),
+        ) as feed:
+            pass
+            # async for msg in feed:
+            #     print(msg)
+    profiler.open_in_browser(timeline=False)
 
     single_pair = 'BTCUSDT'
     file_replayer = Replayer('../data/crypto', date_regexp='20')

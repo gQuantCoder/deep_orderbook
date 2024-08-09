@@ -98,13 +98,16 @@ async def main():
     MARKETS = ["BTC-USD", "ETH-USD", "ETH-BTC"]
 
     while True:
-        async with CoinbaseFeed(markets=MARKETS, feed_msg_queue=True) as feed:
-            async with Writer(
-                feed=feed, directory='data/L2', save_path='/media/photoDS216/crypto'
-            ) as recorder:
-                await recorder.start_recording()
-                await recorder.sleep_until_next_hour()
-
+        try: 
+            async with CoinbaseFeed(markets=MARKETS, feed_msg_queue=True) as feed:
+                async with Writer(
+                    feed=feed, directory='data/L2', save_path='/media/photoDS216/crypto'
+                ) as recorder:
+                    await recorder.start_recording()
+                    await recorder.sleep_until_next_hour()
+        except Exception as e:
+            logger.error(f"Error in main: {e}")
+            await asyncio.sleep(10)
 
 if __name__ == '__main__':
     asyncio.run(main())

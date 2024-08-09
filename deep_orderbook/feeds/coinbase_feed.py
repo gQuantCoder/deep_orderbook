@@ -221,22 +221,22 @@ class CoinbaseFeed(BaseFeed):
 
     async def start_timer(self):
         self.run_timer = True
-        tall = time.time()
-        tall = tall // 1 + 1
+        tnext = time.time()
+        tnext = tnext // 1 + 1
         while self.run_timer:
-            twake = tall
+            twake = tnext
             timesleep = twake - time.time()
             if timesleep > 0:
                 await asyncio.sleep(timesleep)
             else:
                 logger.warning(f"time sleep is negative: {timesleep}")
             self.cut_trade_tape()
-            tall += 1
+            tnext += 1
 
     def cut_trade_tape(self):
-        # logger.debug("cutting trade tapes")
-        for symbol, trade_man in self.trade_tapes.items():
-            self.depth_managers[symbol].trade_bunch.trades = [t for t in trade_man]
+        logger.debug("cutting trade tapes")
+        for symbol, tape in self.trade_tapes.items():
+            self.depth_managers[symbol].trade_bunch.trades = [t for t in tape]
         self.trade_tapes = collections.defaultdict(list)
 
     async def __aiter__(self) -> AsyncGenerator[CoinbaseMessage, None]:
@@ -247,17 +247,20 @@ class CoinbaseFeed(BaseFeed):
                 return
             yield msg
 
-    async def _on_polars(self, t_win:datetime, df_per_time: pl.DataFrame):
+    async def _on_polars(self, t_win: datetime, df_per_time: pl.DataFrame):
         # print(t_win, df_per_time)
-        df_books = await self.depolarize(df_per_time.filter(pl.col('channel') == 'l2_data'), regroup=['updates'])
-        df_trade = await self.depolarize(df_per_time.filter(pl.col('channel') == 'market_trades'), regroup=['trades'])
-
+        df_books = await self.depolarize(
+            df_per_time.filter(pl.col('channel') == 'l2_data'), regroup=['updates']
+        )
+        df_trade = await self.depolarize(
+            df_per_time.filter(pl.col('channel') == 'market_trades'), regroup=['trades']
+        )
 
         for msg in (CoinbaseMessage(**row) for row in df_books.iter_rows(named=True)):
             self.process_message(msg)
         for msg in (CoinbaseMessage(**row) for row in df_trade.iter_rows(named=True)):
             self.process_message(msg)
-            
+
     def _on_message(self, msg):
         if isinstance(msg, str):
             try:
@@ -341,16 +344,17 @@ class CoinbaseFeed(BaseFeed):
         markets = markets or self.markets
         symbol_shapers = {pair: BookShaper() for pair in markets}
 
-        tall = time.time()
-        tall = tall // 1 + 1
+        tnext = time.time()
+        tnext = tnext // 1 + 1
         while True:
-            twake = tall
+            twake = tnext
             timesleep = twake - time.time()
             if timesleep > 0:
                 await asyncio.sleep(timesleep)
             else:
                 logger.warning(f"time sleep is negative: {timesleep}")
 
+            logger.debug(f"generating onsec, {tnext=}")
             oneSec = {}
             for symbol, shaper in symbol_shapers.items():
                 bids, asks = self.depth_managers[symbol].get_bids_asks()
@@ -368,7 +372,7 @@ class CoinbaseFeed(BaseFeed):
                 )
             else:
                 yield oneSec
-            tall += 1
+            tnext += 1
 
 
 async def main():
