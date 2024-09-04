@@ -9,11 +9,30 @@ from deep_orderbook.feeds.base_feed import BaseFeed
 from deep_orderbook.utils import logger
 
 
-class Writer:
+class FeedConsumer:
+    def __init__(self, *, feed: BaseFeed) -> None:
+        self.feed = feed
+
+    async def sleep_until_midnight(self):
+        now = datetime.now()
+        tomorrow = now.replace(hour=23, minute=59, second=59, microsecond=0)
+        num_seconds = max(2, (tomorrow - now).total_seconds())
+        logger.warning(f"Sleeping for {num_seconds} seconds")
+        await asyncio.sleep(num_seconds)
+
+    async def sleep_until_next_hour(self):
+        now = datetime.now()
+        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        num_seconds = max(2, (next_hour - now).total_seconds())
+        logger.warning(f"Sleeping for {num_seconds} seconds")
+        await asyncio.sleep(num_seconds)
+
+
+class FeedWriter(FeedConsumer):
     def __init__(
         self, *, feed: BaseFeed, directory: str = "data/L2", save_path='data'
     ) -> None:
-        self.feed = feed
+        super().__init__(feed=feed)
         self.directory = Path(directory)
         self.save_path = Path(save_path)
         self.files: dict[str, AsyncTextIOWrapper] = {}
@@ -77,20 +96,6 @@ class Writer:
                 await file.write(msg.model_dump_json() + "\n")
                 pbar.update()
 
-    async def sleep_until_midnight(self):
-        now = datetime.now()
-        tomorrow = now.replace(hour=23, minute=59, second=59, microsecond=0)
-        num_seconds = max(2, (tomorrow - now).total_seconds())
-        logger.warning(f"Sleeping for {num_seconds} seconds")
-        await asyncio.sleep(num_seconds)
-
-    async def sleep_until_next_hour(self):
-        now = datetime.now()
-        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        num_seconds = max(2, (next_hour - now).total_seconds())
-        logger.warning(f"Sleeping for {num_seconds} seconds")
-        await asyncio.sleep(num_seconds)
-
 
 async def main():
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
@@ -98,9 +103,9 @@ async def main():
     MARKETS = ["BTC-USD", "ETH-USD", "ETH-BTC"]
 
     while True:
-        try: 
+        try:
             async with CoinbaseFeed(markets=MARKETS, feed_msg_queue=True) as feed:
-                async with Writer(
+                async with FeedWriter(
                     feed=feed, directory='data/L2', save_path='/media/photoDS216/crypto'
                 ) as recorder:
                     await recorder.start_recording()
@@ -108,6 +113,7 @@ async def main():
         except Exception as e:
             logger.error(f"Error in main: {e}")
             await asyncio.sleep(10)
+
 
 if __name__ == '__main__':
     asyncio.run(main())

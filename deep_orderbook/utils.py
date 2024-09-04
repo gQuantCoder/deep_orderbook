@@ -2,7 +2,7 @@ import logging
 
 
 class Config:
-    LOG_LEVEL = logging.DEBUG
+    LOG_LEVEL = logging.INFO
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     RUN_WHERE = 'local'
 
@@ -11,7 +11,7 @@ conf = Config()
 class NoNewLineFileHandler(logging.FileHandler):
     terminator = ''
 
-def make_handlers(filename='./player.log', filename_if_no_permission='./player.log'):
+def make_handlers(filename='./replayer.log', filename_if_no_permission='./player.log'):
     mode = 'a'
     encoding = 'utf-8'
     try:
