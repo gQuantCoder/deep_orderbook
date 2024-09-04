@@ -250,36 +250,53 @@ class ParquetReplayer:
 
     async def open_async(self):
         self.parquet_files = sorted(self.directory.glob(f"{self.date_regexp}*.parquet"))
-        logger.info(f"Found {len(self.parquet_files)} parquet files in {self.directory}")
+        logger.info(
+            f"Found {len(self.parquet_files)} parquet files in {self.directory}"
+        )
         if not self.parquet_files:
-            raise FileNotFoundError(f"No parquet files found in {self.directory} matching {self.date_regexp}")
+            raise FileNotFoundError(
+                f"No parquet files found in {self.directory} matching {self.date_regexp}"
+            )
 
     async def close_async(self):
         pass
 
     async def subscribe_async(self, product_ids, channels):
+        # weirdly, the subscription name is not necessarily the same as the channel name
+        channel_names = ['l2_data'] if 'level2' in channels else []
+        channel_names += ['market_trades'] if 'market_trades' in channels else []
+
         # Process each parquet file individually
+        asyncio.create_task(self.feed_(product_ids, channel_names))
+
+    async def feed_(self, product_ids, channel_names):
         for parquet_file in tqdm(self.parquet_files, leave=False):
             logger.info(f"Reading {parquet_file}")
-            df = pl.read_parquet(parquet_file)
-
-            # weirdly, the subscription name is not necessarily the same as the channel name
-            channel_names = ['l2_data'] if 'level2' in channels else []
-            channel_names += ['market_trades'] if 'market_trades' in channels else []
+            df = pl.read_parquet(parquet_file).set_sorted('timestamp')
+            # df = df.sort('timestamp')
 
             # filter on product_ids and channels
             if product_ids:
                 df = df.filter(pl.col('product_id').is_in(product_ids))
-            if channels:
+            if channel_names:
                 df = df.filter(pl.col('channel').is_in(channel_names))
 
-            with tqdm(df.group_by_dynamic("timestamp", every="1s", label='right')) as windows:
-                if self.on_message:
-                    for t_win, df in windows:
-                        windows.set_description(f"replay: {t_win}")
-                        await self.on_message(t_win, df)
-                else:
-                    raise ValueError("on_message handler not set for ParquetReplayer.")
+            with tqdm(
+                df.group_by_dynamic('timestamp', every='1h', label='right'), leave=False
+            ) as hours:
+                for t_h, df_h in hours:
+                    with tqdm(
+                        df.group_by_dynamic("timestamp", every="1s", label='right')
+                    ) as windows:
+                        if self.on_message:
+                            for t_win, df in windows:
+                                windows.set_description(f"replay: {t_win}")
+                                print(f"{t_win=}\n{df=}")
+                                # await self.on_message(t_win, df)
+                        else:
+                            raise ValueError(
+                                "on_message handler not set for ParquetReplayer."
+                            )
 
     async def unsubscribe_all_async(self):
         # This is a no-op for the replayer, since we are just replaying stored data
@@ -290,15 +307,15 @@ async def main():
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     import pyinstrument
 
+    replayer = ParquetReplayer('data', date_regexp='2024-08-05')
     with pyinstrument.Profiler() as profiler:
         pairs = ['BTC-USD', 'ETH-USD', 'ETH-BTC']
         async with CoinbaseFeed(
             markets=pairs,
-            replayer=ParquetReplayer('data', date_regexp='2024'),
+            replayer=replayer,
         ) as feed:
-            pass
-            # async for msg in feed:
-            #     print(msg)
+            async for msg in feed.multi_generator():
+                print(msg)
     profiler.open_in_browser(timeline=False)
 
     single_pair = 'BTCUSDT'
