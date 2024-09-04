@@ -2,12 +2,13 @@ tqdm
 aioitertools
 aiofiles
 websockets
-matplotlib
+seaborn
+seaborn-image
 coinbase-advanced-py
 python-binance
 
 pydantic
 pydantic-settings
-polars
+polars>1.7
 
 numpy<2

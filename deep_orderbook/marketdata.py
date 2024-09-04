@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import AliasChoices, BaseModel, Field, ValidationInfo, field_validator
 from operator import itemgetter
 from deep_orderbook.utils import logger
+import polars as pl
 
 
 class Message(BaseModel):
@@ -46,6 +47,62 @@ class Trade(BaseModel):
 class OrderLevel(BaseModel):
     price: float = Field(validation_alias=AliasChoices('price_level', 'price'))
     size: float = Field(validation_alias=AliasChoices('new_quantity', 'size'))
+
+
+class OneSecondEnds(BaseModel, arbitrary_types_allowed=True):
+    ts: datetime
+    bids: pl.DataFrame = pl.DataFrame(schema={"price": pl.Float32, "size": pl.Float32})
+    asks: pl.DataFrame = pl.DataFrame(schema={"price": pl.Float32, "size": pl.Float32})
+    trades: pl.DataFrame = pl.DataFrame(
+        schema={"price": pl.Float32, "size": pl.Float32, "side": pl.Utf8}
+    )
+
+    def bbos(self):
+        return (
+            OrderLevel(**next(self.bids.iter_rows(named=True))),
+            OrderLevel(**next(self.asks.iter_rows(named=True))),
+        )
+
+    def avg_price(self) -> float:
+        bb, ba = self.bbos()
+        price = (bb.price * ba.size + ba.price * bb.size) / (bb.size + ba.size)
+        return round(price, 8)
+    
+    def trade_range(self) -> tuple[float, float] | None:
+        trades = self.trades
+        if len(trades) == 0:
+            return None
+        return trades['price'].min(), trades['price'].max()
+
+    def trades_to_3num(self):
+        return self.trades.with_columns(
+            [
+                (1 - 2 * (pl.col('side') == 'SELL').cast(pl.Int8)).alias('up'),
+                pl.lit(len(self.trades)).alias('num'),
+            ]
+        ).drop('side')
+
+
+class MulitSymbolOneSecondEnds(BaseModel):
+    ts: datetime
+    symbols: dict[str, OneSecondEnds] = {}
+
+    def __str__(self):
+        """returns a simplfied verion of the object.
+        for each symbol, BBO and number of trades"""
+        to_ret = f"One second: {self.ts} \n"
+        for symbol, sec in self.symbols.items():
+            to_ret += f"{symbol}: BBO: {sec.bids[0]}-{sec.asks[0]}, num trades: {len(sec.trades)}\n"
+        return to_ret
+
+    @classmethod
+    async def make_one_second(
+        cls, ts: datetime, depth_managers: dict[str, 'DepthCachePlus']
+    ):
+        oneSec = MulitSymbolOneSecondEnds(ts=ts)
+        for symbol, depth in depth_managers.items():
+            oneSec.symbols[symbol] = depth.make_one_sec(ts=ts)
+        return oneSec
 
 
 class BookUpdate(BaseModel):
@@ -155,22 +212,18 @@ class DepthCachePlus(BaseModel):
         self.trade_bunch.add_trade(trade)
 
     def get_bids(self):
-        lst = [(price, quantity) for price, quantity in self._bids.items()]
+        lst = [(price, quantity) for price, quantity in self._bids.items() if quantity]
         return sorted(lst, key=itemgetter(0), reverse=True)
 
     def get_asks(self):
-        lst = [(price, quantity) for price, quantity in self._asks.items()]
+        lst = [(price, quantity) for price, quantity in self._asks.items() if quantity]
         return sorted(lst, key=itemgetter(0), reverse=False)
 
     def add_bid(self, bid: OrderLevel):
         self._bids[bid.price] = bid.size
-        if not bid.size:
-            del self._bids[bid.price]
 
     def add_ask(self, ask: OrderLevel):
         self._asks[ask.price] = ask.size
-        if not ask.size:
-            del self._asks[ask.price]
 
     def update(self, updates: BookUpdate):
         for bid in updates.bids:
@@ -213,3 +266,23 @@ class DepthCachePlus(BaseModel):
         if and_reset_trades:
             self.trade_bunch.clear_trades()
         return depths, trades
+
+    def make_one_sec(self, ts: datetime):
+        bids, asks = self.get_bids_asks()
+        # if not bids or not asks:
+        #     logger.warning(f"no bids or asks for {symbol}")
+        #     break
+        return OneSecondEnds(
+            ts=ts,
+            bids=pl.DataFrame(
+                bids, schema={"price": pl.Float32, "size": pl.Float32}, orient='row'
+            ).sort("price", descending=True),
+            asks=pl.DataFrame(
+                asks, schema={"price": pl.Float32, "size": pl.Float32}, orient='row'
+            ).sort("price"),
+            trades=pl.DataFrame(
+                self.trade_bunch.trades,
+                schema={"price": pl.Float32, "size": pl.Float32, "side": pl.Utf8},
+                orient='row',
+            ),
+        )

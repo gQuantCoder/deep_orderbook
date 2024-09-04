@@ -1,7 +1,9 @@
 import datetime
+from typing import Iterator
 import pandas as pd
 import numpy as np
 import asyncio
+import polars as pl
 
 from tqdm.auto import tqdm
 import deep_orderbook.marketdata as md
@@ -16,29 +18,14 @@ class BookShaper:
     PriceShape = [2, 3]
 
     def __init__(self):
-        self.depth_cache = md.DepthCachePlus(symbol='')
 
         self.sec_trades = dict()
-        self.bids = None
-        self.asks = None
-        self.tpr = None
         self.ts = None
         self.px = None
         #        self.prev_px = None
         self.emaPrice = None
         self.emaNew = 1 / 32
-        self.emptyframe = pd.DataFrame(
-            columns=['p', 'q', 'delay', 'num', 'up']
-        ).set_index(['p'])
-
-    async def on_snaphsot_async(self, snapshot):
-        self.depth_cache.reset(snapshot)
-
-    async def on_depth_msg_async(self, msg: md.BinanceBookUpdate):
-        self.depth_cache.update(msg)
-        bids, asks = self.depth_cache.get_bids_asks()
-        ts = self.secondAvail(msg)
-        await self.update_ema(bids, asks, ts)
+        self.emptyframe = None
 
     async def update_ema(self, bids, asks, ts):
         self.ts = ts
@@ -57,39 +44,11 @@ class BookShaper:
         return 1 + tr_dict.E // 1000
 
     async def on_trades_bunch(self, list_trades, force_t_avail=None):
-        # print(f"{list_trades=}")
-        list_trades = [
-            {k: float(v) for k, v in trs if k not in ['M', 's', 'e', 'trade_id']}
-            for trs in list_trades
-        ]
-        if not list_trades:
-            return
-        if force_t_avail:
-            self.sec_trades[force_t_avail] = self.trades2frame(list_trades).drop(
-                ['tavail'], axis=1
-            )
-            return
-        alltrades = self.trades2frame(list_trades)
-        for i, l in alltrades.groupby('tavail'):
-            # print(f'{i}\n{l}')
-            self.sec_trades[i] = l.drop(['tavail'], axis=1)
-        return
+        list_trades = list_trades.to_pandas()
+        list_trades['up'] = 1 - 2 * (list_trades['side'] == 'SELL')
+        list_trades['num'] = len(list_trades)
 
-    @staticmethod
-    def trades2frame(list_trades):
-        ts = pd.DataFrame(list_trades).set_index('price')
-        ts['tavail'] = ts['E'] // 1000 + 1
-        ts['delay'] = ts['E'] - ts['T']
-        ts['num'] = ts['last_trade_id'] - ts['first_trade_id'] + 1
-        ts['up'] = 1 - 2 * ts['is_buyer_maker']
-        ts = ts.drop(
-            ['E', 'T', 'first_trade_id', 'last_trade_id', 'is_buyer_maker'], axis=1
-        )
-
-        # ts.loc[self.px] = 0
-        ts.sort_index(inplace=True)
-        #        self.prev_px = self.px
-        return ts
+        self.sec_trades[force_t_avail] = list_trades.drop(columns=['side'])
 
     async def make_frames_async(self, t_avail, bids=None, asks=None):
         if bids is None or asks is None:
@@ -100,7 +59,7 @@ class BookShaper:
             'price': self.px,
             'bids': pd.DataFrame(bids, columns=['price', 'size']).set_index('price'),
             'asks': pd.DataFrame(asks, columns=['price', 'size']).set_index('price'),
-            'trades': self.sec_trades.pop(t_avail, self.emptyframe),
+            'trades': self.sec_trades.pop(t_avail, self.emptyframe).set_index('price'),
             'emaPrice': self.emaPrice,
         }
         return oneSec
@@ -198,78 +157,18 @@ class BookShaper:
         if treind_a.empty:
             treind_a = reind_a * 0.0
 
-        treind_b = np.arcsinh(treind_b.astype(np.float32))
-        treind_a = np.arcsinh(treind_a.astype(np.float32))
-        reind_b = np.arcsinh(reind_b.astype(np.float32))
-        reind_a = np.arcsinh(reind_a.astype(np.float32))
-        return reind_b, reind_a, treind_b, treind_a
-
-    def sampleArrays(self, replayer, numpoints=None, apply_fnct=None):
-        arrs = []
-        trrs = []
-        pric = []
-        prev_price = None
-        i = 0
-        spacing = np.arange(64)
-        # spacing = np.square(spacing) + spacing
-        spacing = spacing / spacing[-1]
-        for bi, ai, tpi, tri in replayer:
-            prev_price = prev_price or tpi['price']
-            bib, aib, trb, tra = self.bin_books(
-                bi, ai, tri, ref_price=prev_price, zoom_frac=1 / 256, spacing=spacing
-            )
-            prev_price = tpi['emaPrice']  # 0.5*(tpi['bid'] + tpi['ask'])
-            arrs.append(np.concatenate([bib.values - aib.values]))
-            trrs.append(np.concatenate([trb.values - tra.values]))
-            pric.append(
-                np.array(
-                    [tpi['price'], tpi['emaPrice'], tpi['bid'], tpi['ask'], tpi['time']]
-                )
-            )
-            i += 1
-            if apply_fnct and i % 10 == 0:
-                apply_fnct(
-                    **{
-                        'books': np.stack(arrs),
-                        'prices': np.stack(pric),
-                        'trades': np.stack(trrs),
-                    }
-                )
-            if numpoints and i >= numpoints:
-                break
-        books = np.stack(arrs)
-        prices = np.stack(pric)
-        trades = np.stack(trrs)
-        ret = {'books': books, 'prices': prices, 'trades': trades}
-        return ret
-
-    def sampleImages(self, books, prices, trades):
-        # print(books.shape, prices.shape, trades.shape)
-        plt.margins(0.0)
-        plt.plot(prices[:, 0])
-        plt.plot(prices[:, 1])
-        plt.plot(prices[:, 2])
-        plt.plot(prices[:, 3])
-        plt.show()
-        im = np.abs(books[:, :, 0]).copy()
-        im[im == 0] = -1
-        plt.imshow(im.T, cmap='nipy_spectral', origin='lower')
-        plt.show()
-        im = np.abs(trades[:, :, 2])
-        # im[im == 0] = 3
-        plt.imshow(im.T, cmap='nipy_spectral', origin='lower')
-        plt.show()
-        im0 = books[:, :, 0].T / 10
-        im1 = trades[:, :, 0].T / 1
-        im2 = trades[:, :, 2].T / 1
-        im3 = np.stack([im0, im1, im2], -1) + 0.5
-        print(im3.shape)
-        plt.imshow(im3[:, :, :], origin='lower')
-        plt.show()
+        a_treind_b = np.arcsinh(treind_b.astype(np.float32))
+        a_treind_a = np.arcsinh(treind_a.astype(np.float32))
+        a_reind_b = np.arcsinh(reind_b.astype(np.float32))
+        a_reind_a = np.arcsinh(reind_a.astype(np.float32))
+        return a_reind_b, a_reind_a, a_treind_b, a_treind_a
 
     @staticmethod
     async def gen_array_async(
-        market_replay, markets, width_per_side=64, zoom_frac=1 / 256
+        market_replay: Iterator,
+        markets: list[str],
+        width_per_side=64,
+        zoom_frac=1 / 256,
     ):
         # market_replay = self.multireplayL2(markets)
         prev_price = {p: None for p in markets}
@@ -281,36 +180,43 @@ class BookShaper:
             market_second = {}  # collections.defaultdict(list)
             for pair in markets:
                 sec = second[pair]
-                prev_price[pair] = prev_price[pair] or sec['price']
-                bib, aib, trb, tra = BookShaper.bin_books(
-                    sec['bids'],
-                    sec['asks'],
-                    sec['trades'],
-                    ref_price=prev_price[pair],
-                    zoom_frac=zoom_frac,
-                    spacing=spacing,
+                tp, arr3d = await BookShaper.make_arr3d(
+                    zoom_frac, prev_price, spacing, pair, sec
                 )
-                prev_price[pair] = sec['emaPrice']
-                arr0 = bib.values - aib.values
-                arr1 = tra.values - trb.values
-                d = sec['time'] // (
-                    3600 * 24
-                )  # int(datetime.datetime.fromtimestamp(sec['time'], datetime.timezone.utc).strftime('%y%m%d'))
-                t = sec['time'] % (3600 * 24)  # float(utc.strftime('%H%M%S.%f'))
-                lowtrade = sec['trades'].index.min()
-                hightrade = sec['trades'].index.max()
-                # print(lowtrade, hightrade)
-                tp = np.array(
-                    [
-                        [lowtrade, sec['bids'].index[0], sec['asks'].index[0]],
-                        [d, t, hightrade],
-                    ],
-                    dtype=np.float32,
-                )
-                # print('tp', tp)
-                arr3d = np.concatenate([arr0, arr1[:, ::2]], axis=-1)
                 market_second[pair] = {'ps': [tp], 'bs': [arr3d]}
             yield market_second
+
+    @staticmethod
+    async def make_arr3d(zoom_frac, prev_price, spacing, pair, sec):
+        prev_price[pair] = prev_price[pair] or sec['price']
+        bib, aib, trb, tra = BookShaper.bin_books(
+            sec['bids'],
+            sec['asks'],
+            sec['trades'],
+            ref_price=prev_price[pair],
+            zoom_frac=zoom_frac,
+            spacing=spacing,
+        )
+        prev_price[pair] = sec['emaPrice']
+        arr0 = bib.values - aib.values
+        arr1 = tra.values - trb.values
+        d = sec['time'] // (
+            3600 * 24
+        )  # int(datetime.datetime.fromtimestamp(sec['time'], datetime.timezone.utc).strftime('%y%m%d'))
+        t = sec['time'] % (3600 * 24)  # float(utc.strftime('%H%M%S.%f'))
+        lowtrade = sec['trades'].index.min()
+        hightrade = sec['trades'].index.max()
+        # print(lowtrade, hightrade)
+        tp = np.array(
+            [
+                [lowtrade, sec['bids'].index[0], sec['asks'].index[0]],
+                [d, t, hightrade],
+            ],
+            dtype=np.float32,
+        )
+        # print('tp', tp)
+        arr3d = np.concatenate([arr0, arr1[:, ::2]], axis=-1)
+        return tp, arr3d
 
     @staticmethod
     def build_time_level_trade(books, prices, side_bips=32, side_width=64):
@@ -499,10 +405,130 @@ class BookShaper:
             yield toshow
 
 
+class ArrayShaper:
+    def __init__(self, zoom_frac=1 / 256, width_per_side=64):
+        self.zoom_frac = zoom_frac
+        self.num_side_lvl = width_per_side
+        self.prev_price = None
+        self.emaNew = 1 / 32
+        self.emaPrice = None
+
+        self._cut_scales = pl.arange(0, self.num_side_lvl, eager=True) ** 2
+        self._cut_scales = self._cut_scales / self._cut_scales[-1]
+        self.ask_bin_labels = [f"{p:03}" for p in range(self.num_side_lvl)]
+        self.ask_bin_idx = pl.DataFrame(
+            {'bin_idx': pl.Series(self.ask_bin_labels, dtype=pl.Categorical)}
+        ).sort('bin_idx')
+        self.bid_bin_labels = [f"-{lab}" for lab in self.ask_bin_labels[::-1]]
+        self.bid_bin_idx = pl.DataFrame(
+            {'bin_idx': pl.Series(self.bid_bin_labels, dtype=pl.Categorical)}
+        ).sort('bin_idx')
+        self.ALL_BIN_INDEX = self.bid_bin_idx.vstack(self.ask_bin_idx)
+        self.ALL_BIN_LABELS = self.bid_bin_labels + self.ask_bin_labels
+
+        MAX_LEN_ARRAY = 512
+        self.total_array = np.zeros((MAX_LEN_ARRAY, self.num_side_lvl * 2, 3))
+
+    def update_ema(self, price):
+        if self.emaPrice is None:
+            self.emaPrice = price
+        self.prev_price = self.emaPrice
+        self.emaPrice = price * self.emaNew + (self.emaPrice) * (1 - self.emaNew)
+
+    def price_level_binning(self, df: pl.DataFrame, all_edges):
+        return self.ALL_BIN_INDEX.join(
+            df.with_columns(
+                pl.col('price')
+                .cut(
+                    breaks=all_edges,
+                    labels=self.ALL_BIN_LABELS,
+                )
+                .alias('bin_idx')
+            )
+            .group_by('bin_idx')
+            .agg(pl.col('size').sum().alias('size')),
+            on='bin_idx',
+            how='left',
+        ).fill_null(0)
+
+    def bin_books(self, one_sec: md.OneSecondEnds, zoom_frac=None) -> pl.DataFrame:
+        """
+        This function bins order book and trade data into specified price levels,
+        applies cumulative sums, reindexes the data, and applies the arcsinh transformation.
+        """
+        zoom_frac = zoom_frac or self.zoom_frac
+        price_range = self.prev_price * zoom_frac
+
+        bid_edges: pl.Series = self.prev_price - self._cut_scales * price_range
+        ask_edges: pl.Series = self.prev_price + self._cut_scales * price_range
+        all_edges = bid_edges[1:].reverse().append(ask_edges).to_list()
+
+        dfa = one_sec.asks.with_columns((-pl.col('size')).alias('size'))
+        dfb = one_sec.bids
+        trup = one_sec.trades.filter(pl.col('side') == 'BUY')
+        trdn = one_sec.trades.filter(pl.col('side') == 'SELL').with_columns(
+            (-pl.col('size')).alias('size')
+        )
+
+        dfb = self.price_level_binning(dfb, all_edges)
+        dfa = self.price_level_binning(dfa, all_edges)
+        df_trup = self.price_level_binning(trup, all_edges)
+        df_trdn = self.price_level_binning(trdn, all_edges)
+
+        # sum the sizes for the same bin_idx
+        df_book = (
+            dfb.join(dfa, on='bin_idx', suffix='_ask', how='left')
+            .with_columns(pl.col('size') + pl.col('size_ask').alias('size'))
+            .drop('size_ask')
+        )
+        df_book = df_book.join(df_trup, on='bin_idx', how='left', suffix='_trup')
+        df_book = df_book.join(df_trdn, on='bin_idx', how='left', suffix='_trdn')
+
+        # # re-add the edges in a new column "price"
+        # df_book = df_book.with_columns(
+        #     bid_edges.reverse().append(ask_edges).cast(pl.Float32).alias('price')
+        # ).sort('price')
+
+        return df_book
+
+    async def make_arr3d(self, one_sec: md.OneSecondEnds):
+        self.update_ema(one_sec.avg_price())
+        df_book = self.bin_books(one_sec)
+        # print(df_book.reverse()[self.num_side_lvl - 5 : self.num_side_lvl + 5])
+
+        df_3d = df_book.drop('bin_idx')
+        df_3d_exp = df_3d.select(pl.all().arcsinh())
+
+        image_col = df_3d_exp.to_numpy().reshape(1, self.num_side_lvl * 2, 3)
+
+        self.total_array = np.roll(self.total_array, -1, axis=0)
+        self.total_array[-1] = image_col
+        return self.total_array
+
+
+async def iter_shapes():
+    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
+    from deep_orderbook.replayer import ParquetReplayer
+
+    # old_shaper = BookShaper()
+    shaper = ArrayShaper(zoom_frac=0.25)
+    MARKETS = ["BTC-USD"]
+    replayer = ParquetReplayer('data', date_regexp='2024-08-06')
+    async with CoinbaseFeed(
+        markets=MARKETS,
+        replayer=replayer,
+    ) as feed:
+        async for onesec in feed.one_second_iterator():
+            # old_shaper.update(onesec.symbols[MARKETS[0]])
+            arr = await shaper.make_arr3d(onesec.symbols[MARKETS[0]])
+            # print(shaper.emaPrice)
+            # print(arr[0, 59:69, :])
+            yield arr
+
+
 async def main():
-    shaper = BookShaper()
-    print(shaper)
-    print(shaper.depth_cache)
+    async for shape in iter_shapes():
+        pass
 
 
 if __name__ == '__main__':

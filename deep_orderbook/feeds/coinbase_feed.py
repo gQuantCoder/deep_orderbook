@@ -67,7 +67,7 @@ class TradeEvent(BaseModel):
 
 
 class CoinbaseMessage(md.Message):
-    channel: Literal['l2_data', 'market_trades', 'subscriptions']
+    channel: Literal['l2_data', 'market_trades', 'subscriptions', 'heartbeats']
     timestamp: datetime
     sequence_num: int = Field(alias='sequence_num')
     events: list[L2Event] | list[TradeEvent] | list[SubscriptionsEvent]
@@ -109,9 +109,16 @@ class CoinbaseFeed(BaseFeed):
         }
         self.trade_tapes: dict[str, list[md.Trade]] = collections.defaultdict(list)
         self.run_timer = False
+        self.feed_time = 0.0
+        self.next_cut_time = 0.0
         self.queue: asyncio.Queue[CoinbaseMessage] = asyncio.Queue()
+        self.queue_one_sec: asyncio.Queue[md.MulitSymbolOneSecondEnds] = asyncio.Queue(
+            1
+        )
+        self.is_live = False
 
         if not replayer:
+            self.is_live = True
             self._client = WSClient(
                 api_key=settings.api_key,
                 api_secret=settings.api_secret,
@@ -135,7 +142,6 @@ class CoinbaseFeed(BaseFeed):
                 # 'hearbeats',
             ],
         )
-        asyncio.create_task(self.start_timer())
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -219,25 +225,15 @@ class CoinbaseFeed(BaseFeed):
                 ).agg([pl.struct(['type', 'trades']).alias('events')])
         return df
 
-    async def start_timer(self):
-        self.run_timer = True
-        tnext = time.time()
-        tnext = tnext // 1 + 1
-        while self.run_timer:
-            twake = tnext
-            timesleep = twake - time.time()
-            if timesleep > 0:
-                await asyncio.sleep(timesleep)
-            else:
-                logger.warning(f"time sleep is negative: {timesleep}")
-            self.cut_trade_tape()
-            tnext += 1
-
-    def cut_trade_tape(self):
+    def cut_trade_tape(self) -> dict[str, list[md.Trade]]:
         logger.debug("cutting trade tapes")
         for symbol, tape in self.trade_tapes.items():
             self.depth_managers[symbol].trade_bunch.trades = [t for t in tape]
         self.trade_tapes = collections.defaultdict(list)
+        return {
+            symbol: self.depth_managers[symbol].trade_bunch.trades
+            for symbol in self.markets
+        }
 
     async def __aiter__(self) -> AsyncGenerator[CoinbaseMessage, None]:
         while True:
@@ -256,10 +252,15 @@ class CoinbaseFeed(BaseFeed):
             df_per_time.filter(pl.col('channel') == 'market_trades'), regroup=['trades']
         )
 
+        self.feed_time = t_win.timestamp()
+
         for msg in (CoinbaseMessage(**row) for row in df_books.iter_rows(named=True)):
             self.process_message(msg)
         for msg in (CoinbaseMessage(**row) for row in df_trade.iter_rows(named=True)):
             self.process_message(msg)
+
+        onesec = await self.on_one_second_end()
+        await self.queue_one_sec.put(onesec)
 
     def _on_message(self, msg):
         if isinstance(msg, str):
@@ -275,6 +276,7 @@ class CoinbaseFeed(BaseFeed):
         if self.feed_msg_queue:
             self.queue.put_nowait(message)
 
+        self.feed_time = message.timestamp.timestamp()
         self.process_message(message)
 
     def process_message(self, message: CoinbaseMessage | EndFeed):
@@ -282,9 +284,11 @@ class CoinbaseFeed(BaseFeed):
             logger.warning("Received EndFeed message")
             return
 
-        assert len(message.events) == 1
-
+        assert len(message.events) <= 1
         match message.channel:
+            case 'heartbeats':
+                if self.PRINT_EVENTS:
+                    logger.debug(f"timer message: {message}")
             case 'subscriptions':
                 for event in message.events:
                     assert isinstance(event, SubscriptionsEvent) and event.subscriptions
@@ -339,40 +343,54 @@ class CoinbaseFeed(BaseFeed):
     def on_close(self):
         logger.info("Connection closed!")
 
+    async def on_one_second_end(self):
+        """this function is used to run the replay of the market data in parallel for all the symbols."""
+        self.cut_trade_tape()
+        oneSec = await md.MulitSymbolOneSecondEnds.make_one_second(
+            ts=self.feed_time,
+            depth_managers=self.depth_managers,
+        )
+        return oneSec
+
+    async def one_second_iterator(self):
+        while True:
+            one_sec = await self.queue_one_sec.get()
+            yield one_sec
+
     async def multi_generator(self, *, markets: list[str] | None = None):
         """this function is used to run the replay of the market data in parallel for all the symbols."""
         markets = markets or self.markets
         symbol_shapers = {pair: BookShaper() for pair in markets}
 
-        tnext = time.time()
-        tnext = tnext // 1 + 1
+        twake = time.time() // 1 + 1
         while True:
-            twake = tnext
             timesleep = twake - time.time()
             if timesleep > 0:
                 await asyncio.sleep(timesleep)
             else:
                 logger.warning(f"time sleep is negative: {timesleep}")
 
-            logger.debug(f"generating onsec, {tnext=}")
-            oneSec = {}
+            onesec = await self.on_one_second_end()
+
+            logger.debug(f"generating onsec, {twake=}")
+            shapped_sec = {}
             for symbol, shaper in symbol_shapers.items():
                 bids, asks = self.depth_managers[symbol].get_bids_asks()
                 if not bids or not asks:
                     logger.warning(f"no bids or asks for {symbol}")
                     break
                 await shaper.update_ema(bids, asks, twake)
-                list_trades = self.depth_managers[symbol].trade_bunch.trades
-                list_trades = [t.to_binance_format() for t in list_trades]
-                await shaper.on_trades_bunch(list_trades, force_t_avail=twake)
-                oneSec[symbol] = await shaper.make_frames_async(
+
+                await shaper.on_trades_bunch(onesec.symbols[symbol].trades, force_t_avail=twake)
+
+                shapped_sec[symbol] = await shaper.make_frames_async(
                     t_avail=twake,
                     bids=bids,
                     asks=asks,
                 )
             else:
-                yield oneSec
-            tnext += 1
+                yield shapped_sec
+            twake += 1
 
 
 async def main():
@@ -381,7 +399,7 @@ async def main():
     async with CoinbaseFeed(
         markets=['ETH-USD', 'BTC-USD'], feed_msg_queue=True
     ) as feed:
-        feed.PRINT_MESSAGE = True
+        # feed.PRINT_MESSAGE = True
         await asyncio.sleep(10)
 
     with pyinstrument.Profiler() as profiler:

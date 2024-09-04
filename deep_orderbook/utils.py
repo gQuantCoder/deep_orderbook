@@ -11,7 +11,7 @@ conf = Config()
 class NoNewLineFileHandler(logging.FileHandler):
     terminator = ''
 
-def make_handlers(filename='./player.log', filename_if_no_permission='./player.log'):
+def make_handlers(filename='./replayer.log', filename_if_no_permission='./player.log'):
     mode = 'a'
     encoding = 'utf-8'
     try:
