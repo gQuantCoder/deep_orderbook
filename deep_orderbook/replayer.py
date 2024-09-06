@@ -272,8 +272,12 @@ class ParquetReplayer:
     async def feed_(self, product_ids, channel_names):
         for parquet_file in tqdm(self.parquet_files, leave=False):
             logger.info(f"Reading {parquet_file}")
-            df = pl.read_parquet(parquet_file).set_sorted('timestamp')
-            # df = df.sort('timestamp')
+            df = pl.read_parquet(parquet_file)
+
+            # should work, but deosn't seem to
+            df = df.set_sorted('timestamp')
+            # so we sort it manually...
+            df = df.sort('timestamp')
 
             # filter on product_ids and channels
             if product_ids:
@@ -307,7 +311,7 @@ async def main():
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     import pyinstrument
 
-    replayer = ParquetReplayer('data', date_regexp='2024-08-05')
+    replayer = ParquetReplayer('data', date_regexp='2024-08-06T04')
     with pyinstrument.Profiler() as profiler:
         pairs = ['BTC-USD', 'ETH-USD', 'ETH-BTC']
         async with CoinbaseFeed(
