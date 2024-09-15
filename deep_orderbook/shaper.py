@@ -198,11 +198,11 @@ class BookShaper:
         if treind_a.empty:
             treind_a = reind_a * 0.0
 
-        treind_b = np.arcsinh(treind_b.astype(np.float32))
-        treind_a = np.arcsinh(treind_a.astype(np.float32))
-        reind_b = np.arcsinh(reind_b.astype(np.float32))
-        reind_a = np.arcsinh(reind_a.astype(np.float32))
-        return reind_b, reind_a, treind_b, treind_a
+        a_treind_b = np.arcsinh(treind_b.astype(np.float32))
+        a_treind_a = np.arcsinh(treind_a.astype(np.float32))
+        a_reind_b = np.arcsinh(reind_b.astype(np.float32))
+        a_reind_a = np.arcsinh(reind_a.astype(np.float32))
+        return a_reind_b, a_reind_a, a_treind_b, a_treind_a
 
     def sampleArrays(self, replayer, numpoints=None, apply_fnct=None):
         arrs = []

@@ -270,6 +270,7 @@ class ParquetReplayer:
         asyncio.create_task(self.feed_(product_ids, channel_names))
 
     async def feed_(self, product_ids, channel_names):
+        await asyncio.sleep(0.01)
         for parquet_file in tqdm(self.parquet_files, leave=False):
             logger.info(f"Reading {parquet_file}")
             df = pl.read_parquet(parquet_file)
@@ -286,21 +287,15 @@ class ParquetReplayer:
                 df = df.filter(pl.col('channel').is_in(channel_names))
 
             with tqdm(
-                df.group_by_dynamic('timestamp', every='1h', label='right'), leave=False
-            ) as hours:
-                for t_h, df_h in hours:
-                    with tqdm(
-                        df.group_by_dynamic("timestamp", every="1s", label='right')
-                    ) as windows:
-                        if self.on_message:
-                            for t_win, df in windows:
-                                windows.set_description(f"replay: {t_win}")
-                                print(f"{t_win=}\n{df=}")
-                                # await self.on_message(t_win, df)
-                        else:
-                            raise ValueError(
-                                "on_message handler not set for ParquetReplayer."
-                            )
+                df.group_by_dynamic("timestamp", every="1s", label='right')
+            ) as windows:
+                if self.on_message:
+                    for (t_win,), df_s in windows:
+                        windows.set_description(f"replay: {t_win}")
+                        # print(f"{t_win=}\n{df_s=}")
+                        await self.on_message(t_win, df_s)
+                else:
+                    raise ValueError("on_message handler not set for ParquetReplayer.")
 
     async def unsubscribe_all_async(self):
         # This is a no-op for the replayer, since we are just replaying stored data
@@ -311,38 +306,16 @@ async def main():
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     import pyinstrument
 
-    replayer = ParquetReplayer('data', date_regexp='2024-08-06T04')
+    replayer = ParquetReplayer('data', date_regexp='2024-08-06')
     with pyinstrument.Profiler() as profiler:
         pairs = ['BTC-USD', 'ETH-USD', 'ETH-BTC']
         async with CoinbaseFeed(
             markets=pairs,
             replayer=replayer,
         ) as feed:
-            async for msg in feed.multi_generator():
-                print(msg)
+            async for onesec in feed.one_second_iterator():
+                print(f"{onesec}")
     profiler.open_in_browser(timeline=False)
-
-    single_pair = 'BTCUSDT'
-    file_replayer = Replayer('../data/crypto', date_regexp='20')
-    areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
-    num_to_output = 100
-    async for bb in areplay:
-        num_to_output -= 1
-        print(bb)
-        if num_to_output < 0:
-            break
-
-    with pyinstrument.Profiler() as profiler:
-        single_pair = 'BTC-USD'
-        file_replayer = Replayer('data/L2', date_regexp='2024-08-0')
-        areplay = file_replayer.replayL2_async(pair=single_pair, shaper=BookShaper())
-        num_to_output = 100
-        async for bb in areplay:
-            num_to_output -= 1
-            print(bb)
-            if num_to_output < 0:
-                break
-    profiler.open_in_browser(timeline=True)
 
 
 if __name__ == '__main__':

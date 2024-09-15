@@ -48,6 +48,12 @@ class OrderLevel(BaseModel):
     size: float = Field(validation_alias=AliasChoices('new_quantity', 'size'))
 
 
+class OneSecondEnds(BaseModel):
+    bids: list[OrderLevel]
+    asks: list[OrderLevel]
+    trades: list[Trade]
+
+
 class BookUpdate(BaseModel):
     bids: list[OrderLevel]
     asks: list[OrderLevel]
@@ -213,3 +219,14 @@ class DepthCachePlus(BaseModel):
         if and_reset_trades:
             self.trade_bunch.clear_trades()
         return depths, trades
+
+    def make_one_sec(self):
+        bids, asks = self.get_bids_asks()
+        # if not bids or not asks:
+        #     logger.warning(f"no bids or asks for {symbol}")
+        #     break
+        return OneSecondEnds(
+            bids=[OrderLevel(price=price, size=size) for price, size in bids],
+            asks=[OrderLevel(price=price, size=size) for price, size in asks],
+            trades=self.trade_bunch.trades,
+        )
