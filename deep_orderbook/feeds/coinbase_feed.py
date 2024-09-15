@@ -90,19 +90,6 @@ class CoinbaseMessage(md.Message):
         return self.channel == 'subscriptions'
 
 
-class MulitSymbolOneSecondEnds(BaseModel):
-    time: datetime
-    symbols: dict[str, md.OneSecondEnds] = {}
-
-    def __str__(self):
-        """returns a simplfied verion of the object.
-        for each symbol, BBO and number of trades"""
-        to_ret = f"One second: {self.time} \n"
-        for symbol, sec in self.symbols.items():
-            to_ret += f"{symbol}: BBO: {sec.bids[0]}-{sec.asks[0]}, num trades: {len(sec.trades)}\n"
-        return to_ret
-
-
 class CoinbaseFeed(BaseFeed):
     PRINT_EVENTS = False
     PRINT_MESSAGE = False
@@ -125,7 +112,9 @@ class CoinbaseFeed(BaseFeed):
         self.feed_time = 0.0
         self.next_cut_time = 0.0
         self.queue: asyncio.Queue[CoinbaseMessage] = asyncio.Queue()
-        self.queue_one_sec: asyncio.Queue[MulitSymbolOneSecondEnds] = asyncio.Queue(4)
+        self.queue_one_sec: asyncio.Queue[md.MulitSymbolOneSecondEnds] = asyncio.Queue(
+            1
+        )
         self.is_live = False
 
         if not replayer:
@@ -153,8 +142,6 @@ class CoinbaseFeed(BaseFeed):
                 # 'hearbeats',
             ],
         )
-        # if self.is_live:
-        #     asyncio.create_task(self.start_timer())
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -237,27 +224,6 @@ class CoinbaseFeed(BaseFeed):
                     maintain_order=True,
                 ).agg([pl.struct(['type', 'trades']).alias('events')])
         return df
-
-    # async def start_timer(self):
-    #     self.run_timer = True
-    #     tnext = time.time()
-    #     tnext = tnext // 1 + 1
-    #     while self.run_timer:
-    #         twake = tnext
-    #         timesleep = twake - time.time()
-    #         if timesleep > 0:
-    #             await asyncio.sleep(timesleep)
-    #         else:
-    #             logger.warning(f"time sleep is negative: {timesleep}")
-    #         self.process_message(
-    #             CoinbaseMessage(
-    #                 channel='heartbeats',
-    #                 timestamp=datetime.now(),
-    #                 sequence_num=0,
-    #                 events=[],
-    #             )
-    #         )
-    #         tnext += 1
 
     def cut_trade_tape(self) -> dict[str, list[md.Trade]]:
         logger.debug("cutting trade tapes")
@@ -380,10 +346,10 @@ class CoinbaseFeed(BaseFeed):
     async def on_one_second_end(self):
         """this function is used to run the replay of the market data in parallel for all the symbols."""
         self.cut_trade_tape()
-
-        oneSec = MulitSymbolOneSecondEnds(time=self.feed_time)
-        for symbol, depth in self.depth_managers.items():
-            oneSec.symbols[symbol] = depth.make_one_sec()
+        oneSec = await md.MulitSymbolOneSecondEnds.make_one_second(
+            time=self.feed_time,
+            depth_managers=self.depth_managers,
+        )
         return oneSec
 
     async def one_second_iterator(self):
@@ -395,14 +361,6 @@ class CoinbaseFeed(BaseFeed):
         """this function is used to run the replay of the market data in parallel for all the symbols."""
         markets = markets or self.markets
         symbol_shapers = {pair: BookShaper() for pair in markets}
-
-        # # when to cut the tape
-        # if not self.next_cut_time:
-        #     self.next_cut_time = self.feed_time // 1 + 1
-        # if self.feed_time >= self.next_cut_time:
-        #     self.on_one_second_end()
-        #     self.next_cut_time += 1
-        #     logger.debug(f"next cut time: {self.next_cut_time}")
 
         twake = time.time() // 1 + 1
         while True:

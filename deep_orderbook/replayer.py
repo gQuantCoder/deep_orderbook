@@ -313,8 +313,12 @@ async def main():
             markets=pairs,
             replayer=replayer,
         ) as feed:
+            timeout = 25
             async for onesec in feed.one_second_iterator():
                 print(f"{onesec}")
+                if timeout == 0:
+                    break
+                timeout -= 1
     profiler.open_in_browser(timeline=False)
 
 

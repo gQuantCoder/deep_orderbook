@@ -54,6 +54,26 @@ class OneSecondEnds(BaseModel):
     trades: list[Trade]
 
 
+class MulitSymbolOneSecondEnds(BaseModel):
+    time: datetime
+    symbols: dict[str, OneSecondEnds] = {}
+
+    def __str__(self):
+        """returns a simplfied verion of the object.
+        for each symbol, BBO and number of trades"""
+        to_ret = f"One second: {self.time} \n"
+        for symbol, sec in self.symbols.items():
+            to_ret += f"{symbol}: BBO: {sec.bids[0]}-{sec.asks[0]}, num trades: {len(sec.trades)}\n"
+        return to_ret
+
+    @classmethod
+    async def make_one_second(cls, time: datetime, depth_managers: dict[str, 'DepthCachePlus']):
+        oneSec = MulitSymbolOneSecondEnds(time=time)
+        for symbol, depth in depth_managers.items():
+            oneSec.symbols[symbol] = depth.make_one_sec()
+        return oneSec
+
+
 class BookUpdate(BaseModel):
     bids: list[OrderLevel]
     asks: list[OrderLevel]
@@ -161,22 +181,18 @@ class DepthCachePlus(BaseModel):
         self.trade_bunch.add_trade(trade)
 
     def get_bids(self):
-        lst = [(price, quantity) for price, quantity in self._bids.items()]
+        lst = [(price, quantity) for price, quantity in self._bids.items() if quantity]
         return sorted(lst, key=itemgetter(0), reverse=True)
 
     def get_asks(self):
-        lst = [(price, quantity) for price, quantity in self._asks.items()]
+        lst = [(price, quantity) for price, quantity in self._asks.items() if quantity]
         return sorted(lst, key=itemgetter(0), reverse=False)
 
     def add_bid(self, bid: OrderLevel):
         self._bids[bid.price] = bid.size
-        if not bid.size:
-            del self._bids[bid.price]
 
     def add_ask(self, ask: OrderLevel):
         self._asks[ask.price] = ask.size
-        if not ask.size:
-            del self._asks[ask.price]
 
     def update(self, updates: BookUpdate):
         for bid in updates.bids:
