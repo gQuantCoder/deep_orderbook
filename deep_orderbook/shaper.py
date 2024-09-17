@@ -1,4 +1,5 @@
 import datetime
+from typing import Iterator
 import pandas as pd
 import numpy as np
 import asyncio
@@ -16,12 +17,8 @@ class BookShaper:
     PriceShape = [2, 3]
 
     def __init__(self):
-        self.depth_cache = md.DepthCachePlus(symbol='')
 
         self.sec_trades = dict()
-        self.bids = None
-        self.asks = None
-        self.tpr = None
         self.ts = None
         self.px = None
         #        self.prev_px = None
@@ -30,15 +27,6 @@ class BookShaper:
         self.emptyframe = pd.DataFrame(
             columns=['p', 'q', 'delay', 'num', 'up']
         ).set_index(['p'])
-
-    async def on_snaphsot_async(self, snapshot):
-        self.depth_cache.reset(snapshot)
-
-    async def on_depth_msg_async(self, msg: md.BinanceBookUpdate):
-        self.depth_cache.update(msg)
-        bids, asks = self.depth_cache.get_bids_asks()
-        ts = self.secondAvail(msg)
-        await self.update_ema(bids, asks, ts)
 
     async def update_ema(self, bids, asks, ts):
         self.ts = ts
@@ -51,6 +39,28 @@ class BookShaper:
         ) * (1 - self.emaNew)
         self.px += 1e-12
         return self.px
+
+    async def update_ema_2(self, bids, asks, ts):
+        self.ts = ts
+        bb, ba = bids[0], asks[0]
+        price = (bb.price * ba.size + ba.price * bb.size) / (bb.size + ba.size)
+        self.px = round(price, 8)
+        self.emaPrice = self.px * self.emaNew + (
+            self.emaPrice if self.emaPrice is not None else self.px
+        ) * (1 - self.emaNew)
+        self.px += 1e-12
+        return self.px
+
+    async def update(self, one_sec: md.OneSecondEnds, ts: datetime.datetime):
+        await self.update_ema_2(one_sec.bids, one_sec.asks, ts)
+        list_trades = [t.to_binance_format() for t in one_sec.trades]
+        await self.on_trades_bunch(list_trades, force_t_avail=ts)
+        shapped_sec = await self.make_frames_async(
+            t_avail=ts,
+            bids=one_sec.bids,
+            asks=one_sec.asks,
+        )
+        return shapped_sec
 
     @staticmethod
     def secondAvail(tr_dict: md.BinanceUpdate):
@@ -243,7 +253,12 @@ class BookShaper:
         ret = {'books': books, 'prices': prices, 'trades': trades}
         return ret
 
-    def sampleImages(self, books, prices, trades):
+    def sampleImages(
+        self,
+        books: np.array,
+        prices: np.array,
+        trades: np.array,
+    ):
         # print(books.shape, prices.shape, trades.shape)
         plt.margins(0.0)
         plt.plot(prices[:, 0])
@@ -269,7 +284,10 @@ class BookShaper:
 
     @staticmethod
     async def gen_array_async(
-        market_replay, markets, width_per_side=64, zoom_frac=1 / 256
+        market_replay: Iterator,
+        markets: list[str],
+        width_per_side=64,
+        zoom_frac=1 / 256,
     ):
         # market_replay = self.multireplayL2(markets)
         prev_price = {p: None for p in markets}
@@ -499,10 +517,24 @@ class BookShaper:
             yield toshow
 
 
-async def main():
+async def iter_shapes():
+    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
+    from deep_orderbook.replayer import ParquetReplayer
+
     shaper = BookShaper()
-    print(shaper)
-    print(shaper.depth_cache)
+    MARKETS = ["BTC-USD"]
+    replayer = ParquetReplayer('data', date_regexp='2024-08-06')
+    async with CoinbaseFeed(
+        markets=MARKETS,
+        replayer=replayer,
+    ) as feed:
+        async for onesec in feed.one_second_iterator():
+            yield await shaper.update(onesec.symbols[MARKETS[0]], onesec.time)
+
+
+async def main():
+    async for shape in iter_shapes():
+        print(shape)
 
 
 if __name__ == '__main__':

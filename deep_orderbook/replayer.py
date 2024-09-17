@@ -267,7 +267,7 @@ class ParquetReplayer:
         channel_names += ['market_trades'] if 'market_trades' in channels else []
 
         # Process each parquet file individually
-        asyncio.create_task(self.feed_(product_ids, channel_names))
+        self.feed_task = asyncio.create_task(self.feed_(product_ids, channel_names))
 
     async def feed_(self, product_ids, channel_names):
         await asyncio.sleep(0.01)
@@ -298,7 +298,7 @@ class ParquetReplayer:
                     raise ValueError("on_message handler not set for ParquetReplayer.")
 
     async def unsubscribe_all_async(self):
-        # This is a no-op for the replayer, since we are just replaying stored data
+        self.feed_task.cancel()
         pass
 
 
