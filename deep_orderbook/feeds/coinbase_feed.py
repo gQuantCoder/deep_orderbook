@@ -347,7 +347,7 @@ class CoinbaseFeed(BaseFeed):
         """this function is used to run the replay of the market data in parallel for all the symbols."""
         self.cut_trade_tape()
         oneSec = await md.MulitSymbolOneSecondEnds.make_one_second(
-            time=self.feed_time,
+            ts=self.feed_time,
             depth_managers=self.depth_managers,
         )
         return oneSec
@@ -381,10 +381,7 @@ class CoinbaseFeed(BaseFeed):
                     break
                 await shaper.update_ema(bids, asks, twake)
 
-                list_trades = [
-                    t.to_binance_format() for t in onesec.symbols[symbol].trades
-                ]
-                await shaper.on_trades_bunch(list_trades, force_t_avail=twake)
+                await shaper.on_trades_bunch(onesec.symbols[symbol].trades, force_t_avail=twake)
 
                 shapped_sec[symbol] = await shaper.make_frames_async(
                     t_avail=twake,

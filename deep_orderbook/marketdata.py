@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import AliasChoices, BaseModel, Field, ValidationInfo, field_validator
 from operator import itemgetter
 from deep_orderbook.utils import logger
+import polars as pl
 
 
 class Message(BaseModel):
@@ -48,29 +49,42 @@ class OrderLevel(BaseModel):
     size: float = Field(validation_alias=AliasChoices('new_quantity', 'size'))
 
 
-class OneSecondEnds(BaseModel):
-    bids: list[OrderLevel]
-    asks: list[OrderLevel]
-    trades: list[Trade]
+class OneSecondEnds(BaseModel, arbitrary_types_allowed=True):
+    ts: datetime
+    bids: pl.DataFrame = pl.DataFrame(schema={"price": pl.Float32, "size": pl.Float32})
+    asks: pl.DataFrame = pl.DataFrame(schema={"price": pl.Float32, "size": pl.Float32})
+    trades: pl.DataFrame = pl.DataFrame(
+        schema={"price": pl.Float32, "size": pl.Float32, "side": pl.Utf8}
+    )
+
+    def bbos(self):
+        return self.bids[0], self.asks[0]
+
+    def avg_price(self) -> float:
+        bb, ba = self.bbos()
+        price = (bb.price * ba.size + ba.price * bb.size) / (bb.size + ba.size)
+        return round(price, 8)
 
 
 class MulitSymbolOneSecondEnds(BaseModel):
-    time: datetime
+    ts: datetime
     symbols: dict[str, OneSecondEnds] = {}
 
     def __str__(self):
         """returns a simplfied verion of the object.
         for each symbol, BBO and number of trades"""
-        to_ret = f"One second: {self.time} \n"
+        to_ret = f"One second: {self.ts} \n"
         for symbol, sec in self.symbols.items():
             to_ret += f"{symbol}: BBO: {sec.bids[0]}-{sec.asks[0]}, num trades: {len(sec.trades)}\n"
         return to_ret
 
     @classmethod
-    async def make_one_second(cls, time: datetime, depth_managers: dict[str, 'DepthCachePlus']):
-        oneSec = MulitSymbolOneSecondEnds(time=time)
+    async def make_one_second(
+        cls, ts: datetime, depth_managers: dict[str, 'DepthCachePlus']
+    ):
+        oneSec = MulitSymbolOneSecondEnds(ts=ts)
         for symbol, depth in depth_managers.items():
-            oneSec.symbols[symbol] = depth.make_one_sec()
+            oneSec.symbols[symbol] = depth.make_one_sec(ts=ts)
         return oneSec
 
 
@@ -236,13 +250,22 @@ class DepthCachePlus(BaseModel):
             self.trade_bunch.clear_trades()
         return depths, trades
 
-    def make_one_sec(self):
+    def make_one_sec(self, ts: datetime):
         bids, asks = self.get_bids_asks()
         # if not bids or not asks:
         #     logger.warning(f"no bids or asks for {symbol}")
         #     break
         return OneSecondEnds(
-            bids=[OrderLevel(price=price, size=size) for price, size in bids],
-            asks=[OrderLevel(price=price, size=size) for price, size in asks],
-            trades=self.trade_bunch.trades,
+            ts=ts,
+            bids=pl.DataFrame(
+                bids, schema={"price": pl.Float32, "size": pl.Float32}, orient='row'
+            ).sort("price", descending=True),
+            asks=pl.DataFrame(
+                asks, schema={"price": pl.Float32, "size": pl.Float32}, orient='row'
+            ).sort("price"),
+            trades=pl.DataFrame(
+                self.trade_bunch.trades,
+                schema={"price": pl.Float32, "size": pl.Float32, "side": pl.Utf8},
+                orient='row',
+            ),
         )
