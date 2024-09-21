@@ -58,12 +58,23 @@ class OneSecondEnds(BaseModel, arbitrary_types_allowed=True):
     )
 
     def bbos(self):
-        return self.bids[0], self.asks[0]
+        return (
+            OrderLevel(**next(self.bids.iter_rows(named=True))),
+            OrderLevel(**next(self.asks.iter_rows(named=True))),
+        )
 
     def avg_price(self) -> float:
         bb, ba = self.bbos()
         price = (bb.price * ba.size + ba.price * bb.size) / (bb.size + ba.size)
         return round(price, 8)
+
+    def trades_to_3num(self):
+        return self.trades.with_columns(
+            [
+                (1 - 2 * (pl.col('side') == 'SELL').cast(pl.Int8)).alias('up'),
+                pl.lit(len(self.trades)).alias('num'),
+            ]
+        ).drop('side')
 
 
 class MulitSymbolOneSecondEnds(BaseModel):
