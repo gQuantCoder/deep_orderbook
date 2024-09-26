@@ -435,67 +435,67 @@ class ArrayShaper:
     # Constants
     FRAC_LEVELS = 0.01
     NUM_LEVEL_BINS = 128
-    SPACING = np.cumsum(
-        0 + np.linspace(0, NUM_LEVEL_BINS, NUM_LEVEL_BINS, endpoint=False)
-    )
+    SPACING = pl.arange(0, NUM_LEVEL_BINS, eager=True) ** 2
     SPACING = SPACING / SPACING[-1]
+    BIN_LABELS = [str(b) for b in range(NUM_LEVEL_BINS)]
 
-    def bin_books(self, one_sec, zoom_frac=FRAC_LEVELS, spacing=SPACING):
+    def bin_books(
+        self, one_sec: md.OneSecondEnds, zoom_frac=FRAC_LEVELS, spacing=SPACING
+    ):
         """
         This function bins order book and trade data into specified price levels,
         applies cumulative sums, reindexes the data, and applies the arcsinh transformation.
         """
 
-        # Define price level indices.
-        b_idx = np.round(pd.Index(ref_price * (1 - spacing * zoom_frac)), 7)
-        a_idx = np.round(pd.Index(ref_price * (1 + spacing * zoom_frac)), 7)
-        t_idx = b_idx[::-1].append(a_idx)
-        t_idx_inv = t_idx[::-1]
+        # Parameters
+        ref_price = self.prev_price
+        price_range = ref_price * zoom_frac
 
-        # Bin bid data into price levels and apply arcsinh transformation.
-        reind_b = (
-            dfb.cumsum()
-            .reindex(t_idx_inv, method='ffill', fill_value=0)
-            .diff()
-            .fillna(0)[::-1]
+        bid_edges = ref_price - spacing[:-1] * price_range
+        dfb = one_sec.bids  # .filter(pl.col('price') >= ref_price - price_range)
+        dfb = (
+            dfb.with_columns(
+                pl.col('price')
+                .cut(
+                    breaks=bid_edges,
+                    labels=self.BIN_LABELS[::-1],
+                    # include_breaks=True,
+                )
+                .alias('bin_idx')
+            )
+            .group_by('bin_idx')
+            .agg(pl.col('size').sum().alias('bin_size'))
+            .sort('bin_idx', descending=True)
         )
 
-        # Bin ask data into price levels and apply arcsinh transformation.
-        reind_a = (
-            dfa.cumsum().reindex(t_idx, method='ffill', fill_value=0).diff().fillna(0)
+        ask_edges = ref_price + spacing[:-1] * price_range
+        dfa = one_sec.asks  # .filter(pl.col('price') <= ref_price + price_range)
+        dfa = (
+            dfa.with_columns(
+                pl.col('price')
+                .cut(
+                    breaks=ask_edges,
+                    labels=self.BIN_LABELS,
+                    # include_breaks=True,
+                )
+                .alias('bin_idx')
+            )
+            .group_by('bin_idx')
+            .agg(pl.col('size').sum().alias('bin_size'))
+            .sort('bin_idx', descending=False)
         )
 
-        # Bin trade data into price levels for bids and apply arcsinh transformation.
-        treind_b = (
-            tr[tr['up'] <= 0]
-            .groupby(level=0)
-            .sum()[::-1]
-            .cumsum()
-            .reindex(t_idx_inv, method='ffill', fill_value=0)
-            .diff()
-            .fillna(0.0)[::-1]
+        # Step 6: Ensure all bins are represented
+        bins_df = pl.DataFrame(
+            {'bin_idx': pl.Series(self.BIN_LABELS, dtype=pl.Categorical)}
         )
-        if treind_b.empty:
-            treind_b = reind_b * 0.0
 
-        # Bin trade data into price levels for asks and apply arcsinh transformation.
-        treind_a = (
-            tr[tr['up'] >= 0]
-            .groupby(level=0)
-            .sum()
-            .cumsum()
-            .reindex(t_idx, method='ffill', fill_value=0)
-            .diff()
-            .fillna(0.0)
-        )
-        if treind_a.empty:
-            treind_a = reind_a * 0.0
+        # Proceed with the join
+        df_bins_complete = bins_df.join(dfb, on='bin_idx', how='left').fill_null(0)
 
-        a_treind_b = np.arcsinh(treind_b.astype(np.float32))
-        a_treind_a = np.arcsinh(treind_a.astype(np.float32))
-        a_reind_b = np.arcsinh(reind_b.astype(np.float32))
-        a_reind_a = np.arcsinh(reind_a.astype(np.float32))
-        return a_reind_b, a_reind_a, a_treind_b, a_treind_a
+        # Now, df_bins_complete contains the accumulated sizes for each of the 128 bins
+        print(df_bins_complete)
+        return dfb, dfa
 
     async def make_arr3d(self, one_sec: md.OneSecondEnds):
         self.update_ema(one_sec.avg_price())
