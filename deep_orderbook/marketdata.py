@@ -67,6 +67,12 @@ class OneSecondEnds(BaseModel, arbitrary_types_allowed=True):
         bb, ba = self.bbos()
         price = (bb.price * ba.size + ba.price * bb.size) / (bb.size + ba.size)
         return round(price, 8)
+    
+    def trade_range(self) -> tuple[float, float] | None:
+        trades = self.trades
+        if len(trades) == 0:
+            return None
+        return trades['price'].min(), trades['price'].max()
 
     def trades_to_3num(self):
         return self.trades.with_columns(

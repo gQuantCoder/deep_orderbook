@@ -419,29 +419,41 @@ class ArrayShaper:
         self.prev_price = self.emaPrice
         self.emaPrice = price * self.emaNew + (self.emaPrice) * (1 - self.emaNew)
 
-    async def update(self, one_sec: md.OneSecondEnds):
-        self.update_ema(one_sec.avg_price())
-        oneSec = {
-            'time': one_sec.ts,
-            'price': self.emaPrice,
-            'bids': one_sec.bids,
-            'asks': one_sec.asks,
-            'trades': one_sec.trades_to_3num(),
-            'emaPrice': self.emaPrice,
-        }
-        oneSec = await self.make_arr3d(oneSec)
-        return oneSec
-
     # Constants
     FRAC_LEVELS = 0.01
     NUM_LEVEL_BINS = 128
     SPACING = pl.arange(0, NUM_LEVEL_BINS, eager=True) ** 2
     SPACING = SPACING / SPACING[-1]
-    BIN_LABELS = [str(b) for b in range(NUM_LEVEL_BINS)]
+    ASK_LABELS = [f"{p:03}" for p in range(NUM_LEVEL_BINS)]
+    ASK_BIN_INDEX = pl.DataFrame(
+        {'bin_idx': pl.Series(ASK_LABELS, dtype=pl.Categorical)}
+    ).sort('bin_idx')
+    BID_LABELS = [f"-{lab}" for lab in ASK_LABELS[::-1]]
+    BID_BIN_INDEX = pl.DataFrame(
+        {'bin_idx': pl.Series(BID_LABELS, dtype=pl.Categorical)}
+    ).sort('bin_idx')
+    ALL_BIN_INDEX = BID_BIN_INDEX.vstack(ASK_BIN_INDEX)
+    ALL_BIN_LABELS = BID_LABELS + ASK_LABELS
+
+    def price_level_binning(self, df: pl.DataFrame, all_edges):
+        return self.ALL_BIN_INDEX.join(
+            df.with_columns(
+                pl.col('price')
+                .cut(
+                    breaks=all_edges,
+                    labels=self.ALL_BIN_LABELS,
+                )
+                .alias('bin_idx')
+            )
+            .group_by('bin_idx')
+            .agg(pl.col('size').sum().alias('sz')),
+            on='bin_idx',
+            how='left',
+        ).fill_null(0)
 
     def bin_books(
         self, one_sec: md.OneSecondEnds, zoom_frac=FRAC_LEVELS, spacing=SPACING
-    ):
+    ) -> pl.DataFrame:
         """
         This function bins order book and trade data into specified price levels,
         applies cumulative sums, reindexes the data, and applies the arcsinh transformation.
@@ -451,74 +463,41 @@ class ArrayShaper:
         ref_price = self.prev_price
         price_range = ref_price * zoom_frac
 
-        bid_edges = ref_price - spacing[:-1] * price_range
-        dfb = one_sec.bids  # .filter(pl.col('price') >= ref_price - price_range)
-        dfb = (
-            dfb.with_columns(
-                pl.col('price')
-                .cut(
-                    breaks=bid_edges,
-                    labels=self.BIN_LABELS[::-1],
-                    # include_breaks=True,
-                )
-                .alias('bin_idx')
-            )
-            .group_by('bin_idx')
-            .agg(pl.col('size').sum().alias('bin_size'))
-            .sort('bin_idx', descending=True)
+        bid_edges: pl.Series = ref_price - spacing * price_range
+        ask_edges: pl.Series = ref_price + spacing * price_range
+        all_edges = bid_edges[1:].reverse().append(ask_edges).to_list()
+
+        dfa = one_sec.asks.with_columns((-pl.col('size')).alias('size'))
+        dfb = one_sec.bids
+        trup = one_sec.trades.filter(pl.col('side') == 'BUY')
+        trdn = one_sec.trades.filter(pl.col('side') == 'SELL').with_columns((-pl.col('size')).alias('size'))
+
+        dfb = self.price_level_binning(dfb, all_edges)
+        dfa = self.price_level_binning(dfa, all_edges)
+        df_trup = self.price_level_binning(trup, all_edges)
+        df_trdn = self.price_level_binning(trdn, all_edges)
+
+        # sum the szs for the same bin_idx
+        df_book = (
+            dfb.join(dfa, on='bin_idx', suffix='_ask', how='left')
+            .with_columns(pl.col('sz') + pl.col('sz_ask').alias('sz'))
+            .drop('sz_ask')
         )
+        df_book = df_book.join(df_trup, on='bin_idx', how='left', suffix='_trup')
+        df_book = df_book.join(df_trdn, on='bin_idx', how='left', suffix='_trdn')
 
-        ask_edges = ref_price + spacing[:-1] * price_range
-        dfa = one_sec.asks  # .filter(pl.col('price') <= ref_price + price_range)
-        dfa = (
-            dfa.with_columns(
-                pl.col('price')
-                .cut(
-                    breaks=ask_edges,
-                    labels=self.BIN_LABELS,
-                    # include_breaks=True,
-                )
-                .alias('bin_idx')
-            )
-            .group_by('bin_idx')
-            .agg(pl.col('size').sum().alias('bin_size'))
-            .sort('bin_idx', descending=False)
-        )
+        if len(trup) and len(trdn):
+            print(df_trup.filter(pl.col('sz') > 0))
+            print(trdn)
+            print(one_sec.trade_range())
+            print('trades')
 
-        # Step 6: Ensure all bins are represented
-        bins_df = pl.DataFrame(
-            {'bin_idx': pl.Series(self.BIN_LABELS, dtype=pl.Categorical)}
-        )
-
-        # Proceed with the join
-        df_bins_complete = bins_df.join(dfb, on='bin_idx', how='left').fill_null(0)
-
-        # Now, df_bins_complete contains the accumulated sizes for each of the 128 bins
-        print(df_bins_complete)
-        return dfb, dfa
+        return df_book
 
     async def make_arr3d(self, one_sec: md.OneSecondEnds):
         self.update_ema(one_sec.avg_price())
-        bib, aib, trb, tra = self.bin_books(one_sec)
-        arr0 = bib.values - aib.values
-        arr1 = tra.values - trb.values
-        d = sec['time'] // (
-            3600 * 24
-        )  # int(datetime.datetime.fromtimestamp(sec['time'], datetime.timezone.utc).strftime('%y%m%d'))
-        t = sec['time'] % (3600 * 24)  # float(utc.strftime('%H%M%S.%f'))
-        lowtrade = sec['trades'].index.min()
-        hightrade = sec['trades'].index.max()
-        # print(lowtrade, hightrade)
-        tp = np.array(
-            [
-                [lowtrade, sec['bids'].index[0], sec['asks'].index[0]],
-                [d, t, hightrade],
-            ],
-            dtype=np.float32,
-        )
-        # print('tp', tp)
-        arr3d = np.concatenate([arr0, arr1[:, ::2]], axis=-1)
-        return tp, arr3d
+        df_book = self.bin_books(one_sec)
+        return df_book
 
 
 async def iter_shapes():
