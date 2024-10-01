@@ -408,32 +408,32 @@ class BookShaper:
 class ArrayShaper:
     def __init__(self, zoom_frac=1 / 256, width_per_side=64):
         self.zoom_frac = zoom_frac
-        self.width_per_side = width_per_side
+        self.num_side_lvl = width_per_side
         self.prev_price = None
         self.emaNew = 1 / 32
         self.emaPrice = None
+
+        self._cut_scales = pl.arange(0, self.num_side_lvl, eager=True) ** 2
+        self._cut_scales = self._cut_scales / self._cut_scales[-1]
+        self.ask_bin_labels = [f"{p:03}" for p in range(self.num_side_lvl)]
+        self.ask_bin_idx = pl.DataFrame(
+            {'bin_idx': pl.Series(self.ask_bin_labels, dtype=pl.Categorical)}
+        ).sort('bin_idx')
+        self.bid_bin_labels = [f"-{lab}" for lab in self.ask_bin_labels[::-1]]
+        self.bid_bin_idx = pl.DataFrame(
+            {'bin_idx': pl.Series(self.bid_bin_labels, dtype=pl.Categorical)}
+        ).sort('bin_idx')
+        self.ALL_BIN_INDEX = self.bid_bin_idx.vstack(self.ask_bin_idx)
+        self.ALL_BIN_LABELS = self.bid_bin_labels + self.ask_bin_labels
+
+        MAX_LEN_ARRAY = 512
+        self.total_array = np.zeros((MAX_LEN_ARRAY, self.num_side_lvl * 2, 3))
 
     def update_ema(self, price):
         if self.emaPrice is None:
             self.emaPrice = price
         self.prev_price = self.emaPrice
         self.emaPrice = price * self.emaNew + (self.emaPrice) * (1 - self.emaNew)
-
-    # Constants
-    FRAC_LEVELS = 0.01
-    NUM_LEVEL_BINS = 128
-    SPACING = pl.arange(0, NUM_LEVEL_BINS, eager=True) ** 2
-    SPACING = SPACING / SPACING[-1]
-    ASK_LABELS = [f"{p:03}" for p in range(NUM_LEVEL_BINS)]
-    ASK_BIN_INDEX = pl.DataFrame(
-        {'bin_idx': pl.Series(ASK_LABELS, dtype=pl.Categorical)}
-    ).sort('bin_idx')
-    BID_LABELS = [f"-{lab}" for lab in ASK_LABELS[::-1]]
-    BID_BIN_INDEX = pl.DataFrame(
-        {'bin_idx': pl.Series(BID_LABELS, dtype=pl.Categorical)}
-    ).sort('bin_idx')
-    ALL_BIN_INDEX = BID_BIN_INDEX.vstack(ASK_BIN_INDEX)
-    ALL_BIN_LABELS = BID_LABELS + ASK_LABELS
 
     def price_level_binning(self, df: pl.DataFrame, all_edges):
         return self.ALL_BIN_INDEX.join(
@@ -446,58 +446,64 @@ class ArrayShaper:
                 .alias('bin_idx')
             )
             .group_by('bin_idx')
-            .agg(pl.col('size').sum().alias('sz')),
+            .agg(pl.col('size').sum().alias('size')),
             on='bin_idx',
             how='left',
         ).fill_null(0)
 
-    def bin_books(
-        self, one_sec: md.OneSecondEnds, zoom_frac=FRAC_LEVELS, spacing=SPACING
-    ) -> pl.DataFrame:
+    def bin_books(self, one_sec: md.OneSecondEnds, zoom_frac=None) -> pl.DataFrame:
         """
         This function bins order book and trade data into specified price levels,
         applies cumulative sums, reindexes the data, and applies the arcsinh transformation.
         """
+        zoom_frac = zoom_frac or self.zoom_frac
+        price_range = self.prev_price * zoom_frac
 
-        # Parameters
-        ref_price = self.prev_price
-        price_range = ref_price * zoom_frac
-
-        bid_edges: pl.Series = ref_price - spacing * price_range
-        ask_edges: pl.Series = ref_price + spacing * price_range
+        bid_edges: pl.Series = self.prev_price - self._cut_scales * price_range
+        ask_edges: pl.Series = self.prev_price + self._cut_scales * price_range
         all_edges = bid_edges[1:].reverse().append(ask_edges).to_list()
 
         dfa = one_sec.asks.with_columns((-pl.col('size')).alias('size'))
         dfb = one_sec.bids
         trup = one_sec.trades.filter(pl.col('side') == 'BUY')
-        trdn = one_sec.trades.filter(pl.col('side') == 'SELL').with_columns((-pl.col('size')).alias('size'))
+        trdn = one_sec.trades.filter(pl.col('side') == 'SELL').with_columns(
+            (-pl.col('size')).alias('size')
+        )
 
         dfb = self.price_level_binning(dfb, all_edges)
         dfa = self.price_level_binning(dfa, all_edges)
         df_trup = self.price_level_binning(trup, all_edges)
         df_trdn = self.price_level_binning(trdn, all_edges)
 
-        # sum the szs for the same bin_idx
+        # sum the sizes for the same bin_idx
         df_book = (
             dfb.join(dfa, on='bin_idx', suffix='_ask', how='left')
-            .with_columns(pl.col('sz') + pl.col('sz_ask').alias('sz'))
-            .drop('sz_ask')
+            .with_columns(pl.col('size') + pl.col('size_ask').alias('size'))
+            .drop('size_ask')
         )
         df_book = df_book.join(df_trup, on='bin_idx', how='left', suffix='_trup')
         df_book = df_book.join(df_trdn, on='bin_idx', how='left', suffix='_trdn')
 
-        if len(trup) and len(trdn):
-            print(df_trup.filter(pl.col('sz') > 0))
-            print(trdn)
-            print(one_sec.trade_range())
-            print('trades')
+        # # re-add the edges in a new column "price"
+        # df_book = df_book.with_columns(
+        #     bid_edges.reverse().append(ask_edges).cast(pl.Float32).alias('price')
+        # ).sort('price')
 
         return df_book
 
     async def make_arr3d(self, one_sec: md.OneSecondEnds):
         self.update_ema(one_sec.avg_price())
         df_book = self.bin_books(one_sec)
-        return df_book
+        # print(df_book.reverse()[self.num_side_lvl - 5 : self.num_side_lvl + 5])
+
+        df_3d = df_book.drop('bin_idx')
+        df_3d_exp = df_3d.select(pl.all().arcsinh())
+
+        image_col = df_3d_exp.to_numpy().reshape(1, self.num_side_lvl * 2, 3)
+
+        self.total_array = np.roll(self.total_array, -1, axis=0)
+        self.total_array[-1] = image_col
+        return self.total_array
 
 
 async def iter_shapes():
@@ -505,7 +511,7 @@ async def iter_shapes():
     from deep_orderbook.replayer import ParquetReplayer
 
     # old_shaper = BookShaper()
-    shaper = ArrayShaper()
+    shaper = ArrayShaper(zoom_frac=0.25)
     MARKETS = ["BTC-USD"]
     replayer = ParquetReplayer('data', date_regexp='2024-08-06')
     async with CoinbaseFeed(
@@ -514,12 +520,15 @@ async def iter_shapes():
     ) as feed:
         async for onesec in feed.one_second_iterator():
             # old_shaper.update(onesec.symbols[MARKETS[0]])
-            yield await shaper.make_arr3d(onesec.symbols[MARKETS[0]])
+            arr = await shaper.make_arr3d(onesec.symbols[MARKETS[0]])
+            # print(shaper.emaPrice)
+            # print(arr[0, 59:69, :])
+            yield arr
 
 
 async def main():
     async for shape in iter_shapes():
-        print(shape)
+        pass
 
 
 if __name__ == '__main__':
