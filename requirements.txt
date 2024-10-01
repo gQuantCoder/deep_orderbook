@@ -6,11 +6,11 @@
 #
 aiofiles==24.1.0
     # via -r requirements.in
-aiohappyeyeballs==2.3.5
+aiohappyeyeballs==2.4.3
     # via aiohttp
-aiohttp==3.10.1
+aiohttp==3.10.8
     # via python-binance
-aioitertools==0.11.0
+aioitertools==0.12.0
     # via -r requirements.in
 aiosignal==1.3.1
     # via aiohttp
@@ -20,66 +20,99 @@ attrs==24.2.0
     # via aiohttp
 backoff==2.2.1
     # via coinbase-advanced-py
-certifi==2024.7.4
+certifi==2024.8.30
     # via requests
-cffi==1.17.0
+cffi==1.17.1
     # via cryptography
 charset-normalizer==3.3.2
     # via requests
-coinbase-advanced-py==1.4.3
+coinbase-advanced-py==1.6.2
     # via -r requirements.in
-contourpy==1.2.1
+contourpy==1.3.0
     # via matplotlib
-cryptography==43.0.0
+cryptography==43.0.1
     # via coinbase-advanced-py
 cycler==0.12.1
     # via matplotlib
 dateparser==1.2.0
     # via python-binance
-fonttools==4.53.1
+fonttools==4.54.1
     # via matplotlib
 frozenlist==1.4.1
     # via
     #   aiohttp
     #   aiosignal
-idna==3.7
+idna==3.10
     # via
     #   requests
     #   yarl
-kiwisolver==1.4.5
+imageio==2.35.1
+    # via scikit-image
+kiwisolver==1.4.7
     # via matplotlib
-matplotlib==3.9.1.post1
-    # via -r requirements.in
-multidict==6.0.5
+lazy-loader==0.4
+    # via scikit-image
+matplotlib==3.9.2
+    # via
+    #   matplotlib-scalebar
+    #   seaborn
+    #   seaborn-image
+matplotlib-scalebar==0.8.1
+    # via seaborn-image
+multidict==6.1.0
     # via
     #   aiohttp
     #   yarl
+networkx==3.3
+    # via scikit-image
 numpy==1.26.4
     # via
     #   -r requirements.in
     #   contourpy
+    #   imageio
     #   matplotlib
+    #   pandas
+    #   scikit-image
+    #   scipy
+    #   seaborn
+    #   seaborn-image
+    #   tifffile
 packaging==24.1
-    # via matplotlib
+    # via
+    #   lazy-loader
+    #   matplotlib
+    #   pooch
+    #   scikit-image
+palettable==3.3.3
+    # via seaborn-image
+pandas==2.2.3
+    # via seaborn
 pillow==10.4.0
-    # via matplotlib
-polars==1.4.1
+    # via
+    #   imageio
+    #   matplotlib
+    #   scikit-image
+platformdirs==4.3.6
+    # via pooch
+polars==1.8.2
     # via -r requirements.in
+pooch==1.8.2
+    # via seaborn-image
 pycparser==2.22
     # via cffi
 pycryptodome==3.20.0
     # via python-binance
-pydantic==2.8.2
+pydantic==2.9.2
     # via
     #   -r requirements.in
     #   pydantic-settings
-pydantic-core==2.20.1
+pydantic-core==2.23.4
     # via pydantic
-pydantic-settings==2.4.0
+pydantic-settings==2.5.2
     # via -r requirements.in
 pyjwt==2.9.0
     # via coinbase-advanced-py
-pyparsing==3.1.2
+pyparsing==3.1.4
     # via matplotlib
 python-binance==1.0.19
     # via -r requirements.in
@@ -87,36 +120,54 @@ python-dateutil==2.9.0.post0
     # via
     #   dateparser
     #   matplotlib
+    #   pandas
 python-dotenv==1.0.1
     # via pydantic-settings
-pytz==2024.1
-    # via dateparser
-regex==2024.7.24
+pytz==2024.2
+    # via
+    #   dateparser
+    #   pandas
+regex==2024.9.11
     # via dateparser
 requests==2.32.3
     # via
     #   coinbase-advanced-py
+    #   pooch
     #   python-binance
+scikit-image==0.24.0
+    # via seaborn-image
+scipy==1.14.1
+    # via
+    #   scikit-image
+    #   seaborn-image
+seaborn==0.13.2
+    # via -r requirements.in
+seaborn-image==0.10.0
+    # via -r requirements.in
 six==1.16.0
     # via
     #   python-binance
     #   python-dateutil
+tifffile==2024.9.20
+    # via scikit-image
 tqdm==4.66.5
     # via -r requirements.in
 typing-extensions==4.12.2
     # via
     #   pydantic
     #   pydantic-core
+tzdata==2024.2
+    # via pandas
 tzlocal==5.2
     # via dateparser
 ujson==5.10.0
     # via python-binance
-urllib3==2.2.2
+urllib3==2.2.3
     # via requests
-websockets==12.0
+websockets==13.1
     # via
     #   -r requirements.in
     #   coinbase-advanced-py
     #   python-binance
-yarl==1.9.4
+yarl==1.13.1
     # via aiohttp

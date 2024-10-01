@@ -413,7 +413,7 @@ class ArrayShaper:
         self.emaNew = 1 / 32
         self.emaPrice = None
 
-        self._cut_scales = pl.arange(0, self.num_side_lvl, eager=True) ** 2
+        self._cut_scales = pl.arange(0, self.num_side_lvl, eager=True)# ** 2
         self._cut_scales = self._cut_scales / self._cut_scales[-1]
         self.ask_bin_labels = [f"{p:03}" for p in range(self.num_side_lvl)]
         self.ask_bin_idx = pl.DataFrame(
@@ -456,6 +456,7 @@ class ArrayShaper:
         This function bins order book and trade data into specified price levels,
         applies cumulative sums, reindexes the data, and applies the arcsinh transformation.
         """
+        # print(one_sec.avg_price())
         zoom_frac = zoom_frac or self.zoom_frac
         price_range = self.prev_price * zoom_frac
 
