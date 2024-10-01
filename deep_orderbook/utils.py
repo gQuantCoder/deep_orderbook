@@ -2,7 +2,7 @@ import logging
 
 
 class Config:
-    LOG_LEVEL = logging.DEBUG
+    LOG_LEVEL = logging.WARNING
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     RUN_WHERE = 'local'
 

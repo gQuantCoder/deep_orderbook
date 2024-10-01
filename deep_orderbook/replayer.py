@@ -243,12 +243,12 @@ class Replayer:
 
 
 class ParquetReplayer:
-    def __init__(self, directory: str, date_regexp: str = ''):
+    def __init__(self, directory: str, date_regexp: str = '') -> None:
         self.directory = Path(directory)
         self.date_regexp = date_regexp
         self.on_message = None
 
-    async def open_async(self):
+    async def open_async(self) -> None:
         self.parquet_files = sorted(self.directory.glob(f"{self.date_regexp}*.parquet"))
         logger.info(
             f"Found {len(self.parquet_files)} parquet files in {self.directory}"
@@ -258,10 +258,14 @@ class ParquetReplayer:
                 f"No parquet files found in {self.directory} matching {self.date_regexp}"
             )
 
-    async def close_async(self):
+    async def close_async(self) -> None:
         pass
 
-    async def subscribe_async(self, product_ids, channels):
+    async def subscribe_async(
+        self,
+        product_ids: list[str],
+        channels: list[str],
+    ) -> None:
         # weirdly, the subscription name is not necessarily the same as the channel name
         channel_names = ['l2_data'] if 'level2' in channels else []
         channel_names += ['market_trades'] if 'market_trades' in channels else []
@@ -269,7 +273,11 @@ class ParquetReplayer:
         # Process each parquet file individually
         self.feed_task = asyncio.create_task(self.feed_(product_ids, channel_names))
 
-    async def feed_(self, product_ids, channel_names):
+    async def feed_(
+        self,
+        product_ids: list[str],
+        channel_names: list[str],
+    ) -> None:
         await asyncio.sleep(0.01)
         for parquet_file in tqdm(self.parquet_files, leave=False):
             logger.info(f"Reading {parquet_file}")
@@ -297,7 +305,7 @@ class ParquetReplayer:
                 else:
                     raise ValueError("on_message handler not set for ParquetReplayer.")
 
-    async def unsubscribe_all_async(self):
+    async def unsubscribe_all_async(self) -> None:
         self.feed_task.cancel()
         pass
 
@@ -313,12 +321,12 @@ async def main():
             markets=pairs,
             replayer=replayer,
         ) as feed:
-            timeout = 25
+            max_samples = 250
             async for onesec in feed.one_second_iterator():
                 print(f"{onesec}")
-                if timeout == 0:
+                if max_samples == 0:
                     break
-                timeout -= 1
+                max_samples -= 1
     profiler.open_in_browser(timeline=False)
 
 

@@ -109,7 +109,7 @@ class CoinbaseFeed(BaseFeed):
         }
         self.trade_tapes: dict[str, list[md.Trade]] = collections.defaultdict(list)
         self.run_timer = False
-        self.feed_time = 0.0
+        self.feed_time: datetime = None  # type: ignore[assignment]
         self.next_cut_time = 0.0
         self.queue: asyncio.Queue[CoinbaseMessage] = asyncio.Queue()
         self.queue_one_sec: asyncio.Queue[md.MulitSymbolOneSecondEnds] = asyncio.Queue(
@@ -130,7 +130,7 @@ class CoinbaseFeed(BaseFeed):
             self._client = replayer
             self._client.on_message = self._on_polars
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> 'CoinbaseFeed':
         await self._client.open_async()
         # Subscribe to the necessary channels, adjust according to your requirements
         await self._client.subscribe_async(
@@ -144,13 +144,13 @@ class CoinbaseFeed(BaseFeed):
         )
         return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback):
+    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
         self.run_timer = False
         await self._client.unsubscribe_all_async()
         await self._client.close_async()
         await self.close_queue()
 
-    async def close_queue(self):
+    async def close_queue(self) -> None:
         self.queue.put_nowait(EndFeed())
         # await self.queue.()
 
@@ -199,7 +199,11 @@ class CoinbaseFeed(BaseFeed):
         return df
 
     @classmethod
-    async def depolarize(cls, df: pl.DataFrame, regroup=None) -> pl.DataFrame:
+    async def depolarize(
+        cls,
+        df: pl.DataFrame,
+        regroup: list[str] | None = None,
+    ) -> pl.DataFrame:
         if regroup:
             if 'updates' in regroup:
                 # Reconstruct the 'updates' nested structure
@@ -243,7 +247,7 @@ class CoinbaseFeed(BaseFeed):
                 return
             yield msg
 
-    async def _on_polars(self, t_win: datetime, df_per_time: pl.DataFrame):
+    async def _on_polars(self, t_win: datetime, df_per_time: pl.DataFrame) -> None:
         # print(t_win, df_per_time)
         df_books = await self.depolarize(
             df_per_time.filter(pl.col('channel') == 'l2_data'), regroup=['updates']
@@ -252,7 +256,7 @@ class CoinbaseFeed(BaseFeed):
             df_per_time.filter(pl.col('channel') == 'market_trades'), regroup=['trades']
         )
 
-        self.feed_time = t_win.timestamp()
+        self.feed_time = t_win
 
         for msg in (CoinbaseMessage(**row) for row in df_books.iter_rows(named=True)):
             self.process_message(msg)
@@ -262,7 +266,7 @@ class CoinbaseFeed(BaseFeed):
         onesec = await self.on_one_second_end()
         await self.queue_one_sec.put(onesec)
 
-    def _on_message(self, msg):
+    def _on_message(self, msg) -> None:
         if isinstance(msg, str):
             try:
                 message = CoinbaseMessage.model_validate_json(msg)
@@ -276,10 +280,10 @@ class CoinbaseFeed(BaseFeed):
         if self.feed_msg_queue:
             self.queue.put_nowait(message)
 
-        self.feed_time = message.timestamp.timestamp()
+        self.feed_time = message.timestamp
         self.process_message(message)
 
-    def process_message(self, message: CoinbaseMessage | EndFeed):
+    def process_message(self, message: CoinbaseMessage | EndFeed) -> None:
         if isinstance(message, EndFeed):
             logger.warning("Received EndFeed message")
             return
@@ -337,13 +341,13 @@ class CoinbaseFeed(BaseFeed):
             case _:
                 logger.error(f"Unhandled channel: {message.channel}")
 
-    def on_open(self):
+    def on_open(self) -> None:
         logger.info("Connection opened!")
 
-    def on_close(self):
+    def on_close(self) -> None:
         logger.info("Connection closed!")
 
-    async def on_one_second_end(self):
+    async def on_one_second_end(self) -> md.MulitSymbolOneSecondEnds:
         """this function is used to run the replay of the market data in parallel for all the symbols."""
         self.cut_trade_tape()
         oneSec = await md.MulitSymbolOneSecondEnds.make_one_second(
@@ -352,12 +356,16 @@ class CoinbaseFeed(BaseFeed):
         )
         return oneSec
 
-    async def one_second_iterator(self):
+    async def one_second_iterator(
+        self,
+    ) -> AsyncGenerator[md.MulitSymbolOneSecondEnds, None]:
         while True:
             one_sec = await self.queue_one_sec.get()
             yield one_sec
 
-    async def multi_generator(self, *, markets: list[str] | None = None):
+    async def multi_generator(
+        self, *, markets: list[str] | None = None
+    ) -> AsyncGenerator[dict[str, md.MulitSymbolOneSecondEnds], None]:
         """this function is used to run the replay of the market data in parallel for all the symbols."""
         markets = markets or self.markets
         symbol_shapers = {pair: BookShaper() for pair in markets}
@@ -381,7 +389,9 @@ class CoinbaseFeed(BaseFeed):
                     break
                 await shaper.update_ema(bids, asks, twake)
 
-                await shaper.on_trades_bunch(onesec.symbols[symbol].trades, force_t_avail=twake)
+                await shaper.on_trades_bunch(
+                    onesec.symbols[symbol].trades, force_t_avail=twake
+                )
 
                 shapped_sec[symbol] = await shaper.make_frames_async(
                     t_avail=twake,

@@ -1,5 +1,5 @@
 import datetime
-from typing import Iterator
+from typing import AsyncGenerator, Generator, Iterator
 import pandas as pd
 import numpy as np
 import asyncio
@@ -406,14 +406,14 @@ class BookShaper:
 
 
 class ArrayShaper:
-    def __init__(self, zoom_frac=1 / 256, width_per_side=64):
+    def __init__(self, zoom_frac: float = 0.004, width_per_side=64) -> None:
         self.zoom_frac = zoom_frac
         self.num_side_lvl = width_per_side
-        self.prev_price = None
+        self.prev_price: float = None  # type: ignore[assignment]
         self.emaNew = 1 / 32
-        self.emaPrice = None
+        self.emaPrice: float = None  # type: ignore[assignment]
 
-        self._cut_scales = pl.arange(0, self.num_side_lvl, eager=True)# ** 2
+        self._cut_scales = pl.arange(0, self.num_side_lvl, eager=True)  # ** 2
         self._cut_scales = self._cut_scales / self._cut_scales[-1]
         self.ask_bin_labels = [f"{p:03}" for p in range(self.num_side_lvl)]
         self.ask_bin_idx = pl.DataFrame(
@@ -428,14 +428,17 @@ class ArrayShaper:
 
         MAX_LEN_ARRAY = 512
         self.total_array = np.zeros((MAX_LEN_ARRAY, self.num_side_lvl * 2, 3))
+        self.prices_array = np.zeros((MAX_LEN_ARRAY, 2))
 
-    def update_ema(self, price):
+    def update_ema(self, price: float) -> None:
         if self.emaPrice is None:
             self.emaPrice = price
         self.prev_price = self.emaPrice
         self.emaPrice = price * self.emaNew + (self.emaPrice) * (1 - self.emaNew)
 
-    def price_level_binning(self, df: pl.DataFrame, all_edges):
+    def price_level_binning(
+        self, df: pl.DataFrame, all_edges: list[float]
+    ) -> pl.DataFrame:
         return self.ALL_BIN_INDEX.join(
             df.with_columns(
                 pl.col('price')
@@ -451,14 +454,16 @@ class ArrayShaper:
             how='left',
         ).fill_null(0)
 
-    def bin_books(self, one_sec: md.OneSecondEnds, zoom_frac=None) -> pl.DataFrame:
+    def bin_books(
+        self,
+        one_sec: md.OneSecondEnds,
+    ) -> pl.DataFrame:
         """
         This function bins order book and trade data into specified price levels,
         applies cumulative sums, reindexes the data, and applies the arcsinh transformation.
         """
         # print(one_sec.avg_price())
-        zoom_frac = zoom_frac or self.zoom_frac
-        price_range = self.prev_price * zoom_frac
+        price_range = self.prev_price * self.zoom_frac
 
         bid_edges: pl.Series = self.prev_price - self._cut_scales * price_range
         ask_edges: pl.Series = self.prev_price + self._cut_scales * price_range
@@ -492,7 +497,7 @@ class ArrayShaper:
 
         return df_book
 
-    async def make_arr3d(self, one_sec: md.OneSecondEnds):
+    async def make_arr3d(self, one_sec: md.OneSecondEnds) -> np.ndarray:
         self.update_ema(one_sec.avg_price())
         df_book = self.bin_books(one_sec)
         # print(df_book.reverse()[self.num_side_lvl - 5 : self.num_side_lvl + 5])
@@ -504,16 +509,97 @@ class ArrayShaper:
 
         self.total_array = np.roll(self.total_array, -1, axis=0)
         self.total_array[-1] = image_col
+
+        self.prices_array = np.roll(self.prices_array, -1, axis=0)
+        self.prices_array[-1] = np.array([lev.price for lev in one_sec.bbos()])
         return self.total_array
 
+    async def build_time_level_trade(self, side_bips=32, side_width=64):
+        """
+        This function builds a time level trade matrix. It calculates the time
+        it takes for the price to hit a certain level.
+        The levels are defined by the side_bips and side_width parameters.
 
-async def iter_shapes():
+        Parameters:
+        books (numpy array): The order book data.
+        prices (numpy array): The price data.
+        side_bips (int): The number of basis points to consider on each side of
+        the price. Default is 32.
+        side_width (int): The width of the price band to consider. Default is 64.
+
+        Returns:
+        numpy array: A matrix of time it takes for the price to hit each level.
+        """
+        books, prices = self.total_array, self.prices_array
+
+        # Define constants
+        mult = 0.0001 * side_bips / side_width
+        FUTURE = 120
+
+        # Initialize time2levels matrix with default value
+        time2levels = np.zeros_like(books[:, : 2 * side_width, :1]) + FUTURE
+
+        # Calculate the price step
+        pricestep = prices[-1, 1] * mult
+
+        # Loop over all prices
+        for i in tqdm(range(prices.shape[0])):
+
+            # Initialize timeupdn list
+            timeupdn = []
+
+            # Loop over all price levels
+            for j in range(side_width):
+
+                # Calculate the threshold
+                thresh = j * pricestep
+                # Get the bid and ask prices
+                b, a = prices[i]
+                bids = prices[i : i + FUTURE, 0]
+                asks = prices[i : i + FUTURE, 1]
+
+                # Calculate the waitUp and waitDn conditions
+                waitUp = bids < a + thresh
+                waitDn = asks > b - thresh
+
+                # Calculate the tradeUp and tradeDn conditions
+                lowtrade = prices[i : i + FUTURE, 0]
+                hightrade = prices[i : i + FUTURE, 1]
+                tradeUp = hightrade >= a + thresh
+                tradeDn = lowtrade <= b - thresh
+
+                # Update the tradeUp and tradeDn conditions
+                tradeUp[0] = False
+                tradeDn[0] = False
+
+                # Update the waitUp and waitDn conditions
+                waitUp &= ~tradeUp
+                waitDn &= ~tradeDn
+
+                # Calculate the timeUp and timeDn
+                timeUp = np.argmin(waitUp) or FUTURE * 10
+                timeDn = np.argmin(waitDn) or FUTURE * 10
+
+                # Update the timeupdn list
+                timeupdn.insert(0, [timeDn])
+                timeupdn.append([timeUp])
+
+            # Update the time2levels matrix
+            time2levels[i] = timeupdn
+
+        # Ensure that the minimum value in time2levels is greater than 0
+        assert time2levels.min() > 0
+
+        # Return the time2levels matrix as a float32 numpy array
+        return time2levels.astype(np.float32)
+
+async def iter_shapes() -> AsyncGenerator[np.ndarray, None]:
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     from deep_orderbook.replayer import ParquetReplayer
 
     # old_shaper = BookShaper()
     shaper = ArrayShaper(zoom_frac=0.25)
-    MARKETS = ["BTC-USD"]
+    MARKETS = ["ETH-USD"]
     replayer = ParquetReplayer('data', date_regexp='2024-08-06')
     async with CoinbaseFeed(
         markets=MARKETS,
@@ -522,8 +608,9 @@ async def iter_shapes():
         async for onesec in feed.one_second_iterator():
             # old_shaper.update(onesec.symbols[MARKETS[0]])
             arr = await shaper.make_arr3d(onesec.symbols[MARKETS[0]])
-            # print(shaper.emaPrice)
-            # print(arr[0, 59:69, :])
+            print(shaper.emaPrice)
+            print(arr[-1, 59:69, :])
+            t2l = await shaper.build_time_level_trade()
             yield arr
 
 
