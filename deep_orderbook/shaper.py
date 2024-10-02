@@ -428,7 +428,7 @@ class ArrayShaper:
 
         MAX_LEN_ARRAY = 512
         self.total_array = np.zeros((MAX_LEN_ARRAY, self.num_side_lvl * 2, 3))
-        self.prices_array = np.zeros((MAX_LEN_ARRAY, 2))
+        self.prices_array = np.zeros((MAX_LEN_ARRAY, 2)) + np.nan
 
     def update_ema(self, price: float) -> None:
         if self.emaPrice is None:
@@ -514,7 +514,7 @@ class ArrayShaper:
         self.prices_array[-1] = np.array([lev.price for lev in one_sec.bbos()])
         return self.total_array
 
-    async def build_time_level_trade(self, side_bips=32, side_width=64):
+    async def build_time_level_trade(self, side_bips=32, side_width=16):
         """
         This function builds a time level trade matrix. It calculates the time
         it takes for the price to hit a certain level.
@@ -543,7 +543,7 @@ class ArrayShaper:
         pricestep = prices[-1, 1] * mult
 
         # Loop over all prices
-        for i in tqdm(range(prices.shape[0])):
+        for i in range(prices.shape[0]):
 
             # Initialize timeupdn list
             timeupdn = []
