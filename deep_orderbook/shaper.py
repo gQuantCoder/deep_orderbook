@@ -406,7 +406,7 @@ class BookShaper:
 
 
 class ArrayShaper:
-    def __init__(self, zoom_frac: float = 0.004, width_per_side=64) -> None:
+    def __init__(self, zoom_frac: float = 0.004, width_per_side=64, window_length=256) -> None:
         self.zoom_frac = zoom_frac
         self.num_side_lvl = width_per_side
         self.prev_price: float = None  # type: ignore[assignment]
@@ -426,9 +426,8 @@ class ArrayShaper:
         self.ALL_BIN_INDEX = self.bid_bin_idx.vstack(self.ask_bin_idx)
         self.ALL_BIN_LABELS = self.bid_bin_labels + self.ask_bin_labels
 
-        MAX_LEN_ARRAY = 512
-        self.total_array = np.zeros((MAX_LEN_ARRAY, self.num_side_lvl * 2, 3))
-        self.prices_array = np.zeros((MAX_LEN_ARRAY, 2)) + np.nan
+        self.total_array = np.zeros((window_length, self.num_side_lvl * 2, 3))
+        self.prices_array = np.zeros((window_length, 2)) + np.nan
 
     def update_ema(self, price: float) -> None:
         if self.emaPrice is None:
@@ -605,19 +604,22 @@ async def iter_shapes() -> AsyncGenerator[np.ndarray, None]:
         markets=MARKETS,
         replayer=replayer,
     ) as feed:
-        async for onesec in feed.one_second_iterator():
+        async for onesec in feed.one_second_iterator(max_samples=100):
             # old_shaper.update(onesec.symbols[MARKETS[0]])
             arr = await shaper.make_arr3d(onesec.symbols[MARKETS[0]])
-            print(shaper.emaPrice)
-            print(arr[-1, 59:69, :])
+            # print(shaper.emaPrice)
+            # print(arr[-1, 59:69, :])
             t2l = await shaper.build_time_level_trade()
             yield arr
 
 
 async def main():
-    async for shape in iter_shapes():
-        pass
-
+    import pyinstrument
+    profiler = pyinstrument.Profiler()
+    with profiler:
+        async for shape in iter_shapes():
+            pass
+    profiler.open_in_browser()
 
 if __name__ == '__main__':
     asyncio.run(main())

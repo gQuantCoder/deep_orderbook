@@ -358,8 +358,10 @@ class CoinbaseFeed(BaseFeed):
 
     async def one_second_iterator(
         self,
+        max_samples: int = -1,
     ) -> AsyncGenerator[md.MulitSymbolOneSecondEnds, None]:
-        while True:
+        while max_samples != 0:
+            max_samples -= 1
             one_sec = await self.queue_one_sec.get()
             yield one_sec
 
