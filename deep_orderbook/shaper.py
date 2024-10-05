@@ -515,16 +515,14 @@ class ArrayShaper:
 
     async def build_time_level_trade(self, side_bips=32, side_width=16):
         """
-        This function builds a time level trade matrix. It calculates the time
-        it takes for the price to hit a certain level.
-        The levels are defined by the side_bips and side_width parameters.
+        Vectorized version of build_time_level_trade.
+        Calculates the time it takes for the price to hit certain levels without explicit for-loops.
 
         Parameters:
         books (numpy array): The order book data.
-        prices (numpy array): The price data.
-        side_bips (int): The number of basis points to consider on each side of
-        the price. Default is 32.
-        side_width (int): The width of the price band to consider. Default is 64.
+        prices (numpy array): The price data with shape (T, 2) where T is the number of time steps.
+        side_bips (int): The number of basis points to consider on each side of the price.
+        side_width (int): The width of the price band to consider.
 
         Returns:
         numpy array: A matrix of time it takes for the price to hit each level.
@@ -533,64 +531,85 @@ class ArrayShaper:
 
         # Define constants
         mult = 0.0001 * side_bips / side_width
-        FUTURE = 120
+        FUTURE = 64
 
-        # Initialize time2levels matrix with default value
-        time2levels = np.zeros_like(books[:, : 2 * side_width, :1]) + FUTURE
+        T = prices.shape[0]
+        T_effective = T - FUTURE + 1  # Effective time steps considering FUTURE window
 
         # Calculate the price step
         pricestep = prices[-1, 1] * mult
 
-        # Loop over all prices
-        for i in range(prices.shape[0]):
+        # Compute thresholds for each level
+        thresh = np.arange(side_width) * pricestep  # Shape: (side_width,)
 
-            # Initialize timeupdn list
-            timeupdn = []
+        # Get bid and ask prices up to T_effective
+        b = prices[:T_effective, 0]  # Bid prices, shape: (T_effective,)
+        a = prices[:T_effective, 1]  # Ask prices, shape: (T_effective,)
 
-            # Loop over all price levels
-            for j in range(side_width):
+        # Compute price levels for thresholds
+        a_plus_thresh = a[:, np.newaxis] + thresh[np.newaxis, :]  # Shape: (T_effective, side_width)
+        b_minus_thresh = b[:, np.newaxis] - thresh[np.newaxis, :]  # Shape: (T_effective, side_width)
 
-                # Calculate the threshold
-                thresh = j * pricestep
-                # Get the bid and ask prices
-                b, a = prices[i]
-                bids = prices[i : i + FUTURE, 0]
-                asks = prices[i : i + FUTURE, 1]
+        # Get future bids and asks using sliding window view
+        asks_future = np.lib.stride_tricks.sliding_window_view(prices[:, 1], window_shape=FUTURE)
+        bids_future = np.lib.stride_tricks.sliding_window_view(prices[:, 0], window_shape=FUTURE)
 
-                # Calculate the waitUp and waitDn conditions
-                waitUp = bids < a + thresh
-                waitDn = asks > b - thresh
+        # Limit asks_future and bids_future to T_effective
+        asks_future = asks_future[:T_effective]  # Shape: (T_effective, FUTURE)
+        bids_future = bids_future[:T_effective]  # Shape: (T_effective, FUTURE)
 
-                # Calculate the tradeUp and tradeDn conditions
-                lowtrade = prices[i : i + FUTURE, 0]
-                hightrade = prices[i : i + FUTURE, 1]
-                tradeUp = hightrade >= a + thresh
-                tradeDn = lowtrade <= b - thresh
+        # Expand dimensions for broadcasting
+        asks_future = asks_future[:, :, np.newaxis]  # Shape: (T_effective, FUTURE, 1)
+        bids_future = bids_future[:, :, np.newaxis]  # Shape: (T_effective, FUTURE, 1)
+        a_plus_thresh = a_plus_thresh[:, np.newaxis, :]  # Shape: (T_effective, 1, side_width)
+        b_minus_thresh = b_minus_thresh[:, np.newaxis, :]  # Shape: (T_effective, 1, side_width)
 
-                # Update the tradeUp and tradeDn conditions
-                tradeUp[0] = False
-                tradeDn[0] = False
+        # Compute tradeUp and tradeDn conditions
+        tradeUp = asks_future >= a_plus_thresh  # Shape: (T_effective, FUTURE, side_width)
+        tradeDn = bids_future <= b_minus_thresh  # Shape: (T_effective, FUTURE, side_width)
 
-                # Update the waitUp and waitDn conditions
-                waitUp &= ~tradeUp
-                waitDn &= ~tradeDn
+        # Exclude the current time step
+        tradeUp[:, 0, :] = False
+        tradeDn[:, 0, :] = False
 
-                # Calculate the timeUp and timeDn
-                timeUp = np.argmin(waitUp) or FUTURE * 10
-                timeDn = np.argmin(waitDn) or FUTURE * 10
+        # Compute timeUp and timeDn by finding the first occurrence where the condition is True
+        tradeUp_any = tradeUp.any(axis=1)  # Shape: (T_effective, side_width)
+        timeUp = np.where(
+            tradeUp_any,
+            np.argmax(tradeUp, axis=1) + 1,  # Add 1 because we skipped the first time step
+            FUTURE * 10
+        )
 
-                # Update the timeupdn list
-                timeupdn.insert(0, [timeDn])
-                timeupdn.append([timeUp])
+        tradeDn_any = tradeDn.any(axis=1)
+        timeDn = np.where(
+            tradeDn_any,
+            np.argmax(tradeDn, axis=1) + 1,
+            FUTURE * 10
+        )
 
-            # Update the time2levels matrix
-            time2levels[i] = timeupdn
+        # multiply timeDn and timeUp by the distance to the reference price
+        timeDn = timeDn * 1/(thresh[np.newaxis, :] + 1)
+        timeUp = timeUp * 1/(thresh[np.newaxis, :] + 1)
+
+        # Reverse timeDn along the side_width axis to match the original order
+        timeDn_reversed = timeDn[:, ::-1]
+
+        # Concatenate timeDn and timeUp to form the time2levels matrix
+        time2levels = np.concatenate([timeDn_reversed, timeUp], axis=1)  # Shape: (T_effective, 2 * side_width)
+
+        # Add a new axis to match the expected output shape
+        time2levels = time2levels[:, :, np.newaxis]  # Shape: (T_effective, 2 * side_width, 1)
+
+        # Initialize the full time2levels array with FUTURE * 10 for time steps beyond T_effective
+        time2levels_full = np.full((T, 2 * side_width, 1), FUTURE * 10, dtype=np.float32)
+
+        # Assign the computed values to the corresponding positions
+        time2levels_full[:T_effective] = time2levels.astype(np.float32)
 
         # Ensure that the minimum value in time2levels is greater than 0
-        assert time2levels.min() > 0
+        assert time2levels_full.min() >= 0
 
-        # Return the time2levels matrix as a float32 numpy array
-        return time2levels.astype(np.float32)
+        return 1/time2levels_full
 
 async def iter_shapes() -> AsyncGenerator[np.ndarray, None]:
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
