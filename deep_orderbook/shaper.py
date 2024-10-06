@@ -406,7 +406,9 @@ class BookShaper:
 
 
 class ArrayShaper:
-    def __init__(self, zoom_frac: float = 0.004, width_per_side=64, window_length=256) -> None:
+    def __init__(
+        self, zoom_frac: float = 0.004, width_per_side=64, window_length=256
+    ) -> None:
         self.zoom_frac = zoom_frac
         self.num_side_lvl = width_per_side
         self.prev_price: float = None  # type: ignore[assignment]
@@ -416,15 +418,17 @@ class ArrayShaper:
         self._cut_scales = pl.arange(0, self.num_side_lvl, eager=True)  # ** 2
         self._cut_scales = self._cut_scales / self._cut_scales[-1]
         self.ask_bin_labels = [f"{p:03}" for p in range(self.num_side_lvl)]
-        self.ask_bin_idx = pl.DataFrame(
-            {'bin_idx': pl.Series(self.ask_bin_labels, dtype=pl.Categorical)}
-        ).sort('bin_idx')
         self.bid_bin_labels = [f"-{lab}" for lab in self.ask_bin_labels[::-1]]
+        self.ALL_BIN_LABELS = self.bid_bin_labels + self.ask_bin_labels
+        self.lev_labels = pl.Enum(self.ALL_BIN_LABELS)
+
+        self.ask_bin_idx = pl.DataFrame(
+            {'bin_idx': pl.Series(self.ask_bin_labels, dtype=self.lev_labels)}
+        ).sort('bin_idx')
         self.bid_bin_idx = pl.DataFrame(
-            {'bin_idx': pl.Series(self.bid_bin_labels, dtype=pl.Categorical)}
+            {'bin_idx': pl.Series(self.bid_bin_labels, dtype=self.lev_labels)}
         ).sort('bin_idx')
         self.ALL_BIN_INDEX = self.bid_bin_idx.vstack(self.ask_bin_idx)
-        self.ALL_BIN_LABELS = self.bid_bin_labels + self.ask_bin_labels
 
         self.total_array = np.zeros((window_length, self.num_side_lvl * 2, 3))
         self.prices_array = np.zeros((window_length, 2)) + np.nan
@@ -438,17 +442,17 @@ class ArrayShaper:
     def price_level_binning(
         self, df: pl.DataFrame, all_edges: list[float]
     ) -> pl.DataFrame:
-        return self.ALL_BIN_INDEX.join(
-            df.with_columns(
-                pl.col('price')
-                .cut(
-                    breaks=all_edges,
-                    labels=self.ALL_BIN_LABELS,
-                )
-                .alias('bin_idx')
+        df_binned = df.with_columns(
+            pl.col('price')
+            .cut(
+                breaks=all_edges,
+                labels=self.ALL_BIN_LABELS,
             )
-            .group_by('bin_idx')
-            .agg(pl.col('size').sum().alias('size')),
+            .cast(self.lev_labels)
+            .alias('bin_idx')
+        )
+        return self.ALL_BIN_INDEX.join(
+            df_binned.group_by('bin_idx').agg(pl.col('size').sum().alias('size')),
             on='bin_idx',
             how='left',
         ).fill_null(0)
@@ -588,8 +592,8 @@ class ArrayShaper:
         )
 
         # multiply timeDn and timeUp by the distance to the reference price
-        timeDn = timeDn * 1/(thresh[np.newaxis, :] + 1)
-        timeUp = timeUp * 1/(thresh[np.newaxis, :] + 1)
+        timeDn = timeDn * 1 / (thresh[np.newaxis, :] + 1)
+        timeUp = timeUp * 1 / (thresh[np.newaxis, :] + 1)
 
         # Reverse timeDn along the side_width axis to match the original order
         timeDn_reversed = timeDn[:, ::-1]
@@ -609,7 +613,8 @@ class ArrayShaper:
         # Ensure that the minimum value in time2levels is greater than 0
         assert time2levels_full.min() >= 0
 
-        return 1/time2levels_full
+        return 1 / time2levels_full
+
 
 async def iter_shapes() -> AsyncGenerator[np.ndarray, None]:
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
@@ -634,11 +639,13 @@ async def iter_shapes() -> AsyncGenerator[np.ndarray, None]:
 
 async def main():
     import pyinstrument
+
     profiler = pyinstrument.Profiler()
     with profiler:
         async for shape in iter_shapes():
             pass
     profiler.open_in_browser()
+
 
 if __name__ == '__main__':
     asyncio.run(main())

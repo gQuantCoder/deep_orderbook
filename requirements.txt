@@ -6,69 +6,80 @@
 #
 aiofiles==24.1.0
     # via -r requirements.in
-aiohappyeyeballs==2.4.3
-    # via aiohttp
-aiohttp==3.10.8
-    # via python-binance
-aioitertools==0.12.0
+aioitertools==0.11.0
     # via -r requirements.in
-aiosignal==1.3.1
-    # via aiohttp
 annotated-types==0.7.0
     # via pydantic
-attrs==24.2.0
-    # via aiohttp
 backoff==2.2.1
     # via coinbase-advanced-py
-certifi==2024.8.30
+bleach==6.1.0
+    # via panel
+bokeh==3.6.0
+    # via
+    #   -r requirements.in
+    #   holoviews
+    #   panel
+certifi==2024.7.4
     # via requests
-cffi==1.17.1
+cffi==1.17.0
     # via cryptography
 charset-normalizer==3.3.2
     # via requests
-coinbase-advanced-py==1.6.2
+coinbase-advanced-py==1.4.3
     # via -r requirements.in
-contourpy==1.3.0
-    # via matplotlib
-cryptography==43.0.1
+colorcet==3.1.0
+    # via holoviews
+contourpy==1.2.1
+    # via
+    #   bokeh
+    #   matplotlib
+cryptography==43.0.0
     # via coinbase-advanced-py
 cycler==0.12.1
     # via matplotlib
-dateparser==1.2.0
-    # via python-binance
-fonttools==4.54.1
+fonttools==4.53.1
     # via matplotlib
-frozenlist==1.4.1
-    # via
-    #   aiohttp
-    #   aiosignal
-idna==3.10
-    # via
-    #   requests
-    #   yarl
+holoviews==1.19.1
+    # via -r requirements.in
+idna==3.7
+    # via requests
 imageio==2.35.1
     # via scikit-image
-kiwisolver==1.4.7
+jinja2==3.1.4
+    # via bokeh
+kiwisolver==1.4.5
     # via matplotlib
 lazy-loader==0.4
     # via scikit-image
-matplotlib==3.9.2
+linkify-it-py==2.0.3
+    # via panel
+markdown==3.7
+    # via panel
+markdown-it-py==3.0.0
+    # via
+    #   mdit-py-plugins
+    #   panel
+markupsafe==2.1.5
+    # via jinja2
+matplotlib==3.9.1.post1
     # via
     #   matplotlib-scalebar
     #   seaborn
     #   seaborn-image
 matplotlib-scalebar==0.8.1
     # via seaborn-image
-multidict==6.1.0
-    # via
-    #   aiohttp
-    #   yarl
+mdit-py-plugins==0.4.2
+    # via panel
+mdurl==0.1.2
+    # via markdown-it-py
 networkx==3.3
     # via scikit-image
 numpy==1.26.4
     # via
     #   -r requirements.in
+    #   bokeh
     #   contourpy
+    #   holoviews
     #   imageio
     #   matplotlib
     #   pandas
@@ -79,61 +90,79 @@ numpy==1.26.4
     #   tifffile
 packaging==24.1
     # via
+    #   bokeh
+    #   holoviews
     #   lazy-loader
     #   matplotlib
+    #   panel
+    #   plotly
     #   pooch
     #   scikit-image
 palettable==3.3.3
     # via seaborn-image
 pandas==2.2.3
-    # via seaborn
+    # via
+    #   -r requirements.in
+    #   bokeh
+    #   holoviews
+    #   panel
+    #   seaborn
+panel==1.5.2
+    # via
+    #   -r requirements.in
+    #   holoviews
+param==2.1.1
+    # via
+    #   holoviews
+    #   panel
+    #   pyviz-comms
 pillow==10.4.0
     # via
+    #   bokeh
     #   imageio
     #   matplotlib
     #   scikit-image
 platformdirs==4.3.6
     # via pooch
-polars==1.8.2
+plotly==5.24.1
+    # via -r requirements.in
+polars==1.4.1
     # via -r requirements.in
 pooch==1.8.2
     # via seaborn-image
 pycparser==2.22
     # via cffi
-pycryptodome==3.20.0
-    # via python-binance
-pydantic==2.9.2
+pydantic==2.8.2
     # via
     #   -r requirements.in
     #   pydantic-settings
-pydantic-core==2.23.4
+pydantic-core==2.20.1
     # via pydantic
-pydantic-settings==2.5.2
+pydantic-settings==2.4.0
     # via -r requirements.in
 pyjwt==2.9.0
     # via coinbase-advanced-py
-pyparsing==3.1.4
+pyparsing==3.1.2
     # via matplotlib
-python-binance==1.0.19
-    # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via
-    #   dateparser
     #   matplotlib
     #   pandas
 python-dotenv==1.0.1
     # via pydantic-settings
-pytz==2024.2
+pytz==2024.1
+    # via pandas
+pyviz-comms==3.0.3
     # via
-    #   dateparser
-    #   pandas
-regex==2024.9.11
-    # via dateparser
+    #   holoviews
+    #   panel
+pyyaml==6.0.2
+    # via bokeh
 requests==2.32.3
     # via
     #   coinbase-advanced-py
+    #   panel
     #   pooch
-    #   python-binance
 scikit-image==0.24.0
     # via seaborn-image
 scipy==1.14.1
@@ -146,28 +175,34 @@ seaborn-image==0.10.0
     # via -r requirements.in
 six==1.16.0
     # via
-    #   python-binance
+    #   bleach
     #   python-dateutil
+tenacity==9.0.0
+    # via plotly
 tifffile==2024.9.20
     # via scikit-image
+tornado==6.4.1
+    # via bokeh
 tqdm==4.66.5
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   panel
 typing-extensions==4.12.2
     # via
+    #   panel
     #   pydantic
     #   pydantic-core
 tzdata==2024.2
     # via pandas
-tzlocal==5.2
-    # via dateparser
-ujson==5.10.0
-    # via python-binance
-urllib3==2.2.3
+uc-micro-py==1.0.3
+    # via linkify-it-py
+urllib3==2.2.2
     # via requests
-websockets==13.1
+webencodings==0.5.1
+    # via bleach
+websockets==12.0
     # via
     #   -r requirements.in
     #   coinbase-advanced-py
-    #   python-binance
-yarl==1.13.1
-    # via aiohttp
+xyzservices==2024.9.0
+    # via bokeh

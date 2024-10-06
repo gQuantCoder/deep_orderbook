@@ -1,18 +1,23 @@
-tqdm
-aioitertools
-aiofiles
-websockets
-seaborn
-seaborn-image
-coinbase-advanced-py
-python-binance
+coinbase-advanced-py==1.4.3
+websockets==12.0
 
 pydantic
 pydantic-settings
-polars>1.7
 
-numpy<2
+tqdm
+aioitertools
+aiofiles
 
+
+seaborn
+seaborn-image
+
+holoviews 
+bokeh 
+panel 
+numpy 
+polars 
+pandas
 
 plotly
-nbformat
+
