@@ -12,12 +12,14 @@ aiofiles
 seaborn
 seaborn-image
 
-holoviews 
-bokeh 
+plotly
+
 panel 
-numpy 
+numpy<2
 polars 
 pandas
 
-plotly
 
+holoviews 
+bokeh 
+jupyter-bokeh
