@@ -508,7 +508,8 @@ class ArrayShaper:
         df_3d = df_book.drop('bin_idx')
         df_3d_exp = df_3d.select(pl.all().arcsinh())
 
-        image_col = df_3d_exp.to_numpy().reshape(1, self.num_side_lvl * 2, 3)
+        # add a new first axis to represent time
+        image_col = df_3d_exp.to_numpy().reshape((1, -1, 3))
 
         self.total_array = np.roll(self.total_array, -1, axis=0)
         self.total_array[-1] = image_col
@@ -620,7 +621,6 @@ async def iter_shapes() -> AsyncGenerator[np.ndarray, None]:
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     from deep_orderbook.replayer import ParquetReplayer
 
-    # old_shaper = BookShaper()
     shaper = ArrayShaper(zoom_frac=0.25)
     MARKETS = ["ETH-USD"]
     replayer = ParquetReplayer('data', date_regexp='2024-08-06')
@@ -628,13 +628,12 @@ async def iter_shapes() -> AsyncGenerator[np.ndarray, None]:
         markets=MARKETS,
         replayer=replayer,
     ) as feed:
-        async for onesec in feed.one_second_iterator(max_samples=100):
-            # old_shaper.update(onesec.symbols[MARKETS[0]])
-            arr = await shaper.make_arr3d(onesec.symbols[MARKETS[0]])
-            # print(shaper.emaPrice)
-            # print(arr[-1, 59:69, :])
-            t2l = await shaper.build_time_level_trade()
-            yield arr
+        async for onesec in feed.one_second_iterator(max_samples=200):
+            books_array = await shaper.make_arr3d(onesec.symbols[MARKETS[0]])
+            time_levels = await shaper.build_time_level_trade()
+            # print(books_array.shape)
+            # print(time_levels.shape)
+            yield books_array, time_levels
 
 
 async def main():
