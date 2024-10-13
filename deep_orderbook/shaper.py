@@ -617,7 +617,7 @@ class ArrayShaper:
         return 1 / time2levels_full
 
 
-async def iter_shapes() -> AsyncGenerator[np.ndarray, None]:
+async def iter_shapes(max_samples=200) -> AsyncGenerator[tuple[np.ndarray, np.ndarray], None]:
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     from deep_orderbook.replayer import ParquetReplayer
 
@@ -628,7 +628,7 @@ async def iter_shapes() -> AsyncGenerator[np.ndarray, None]:
         markets=MARKETS,
         replayer=replayer,
     ) as feed:
-        async for onesec in feed.one_second_iterator(max_samples=200):
+        async for onesec in feed.one_second_iterator(max_samples=max_samples):
             books_array = await shaper.make_arr3d(onesec.symbols[MARKETS[0]])
             time_levels = await shaper.build_time_level_trade()
             # print(books_array.shape)
