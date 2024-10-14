@@ -14,6 +14,8 @@ import polars as pl
 from deep_orderbook.shaper import BookShaper
 from deep_orderbook.utils import logger
 
+from deep_orderbook.config import ReplayConfig
+
 
 class Replayer:
     def __init__(self, data_folder, date_regexp=''):
@@ -243,9 +245,15 @@ class Replayer:
 
 
 class ParquetReplayer:
-    def __init__(self, directory: str, date_regexp: str = '') -> None:
-        self.directory = Path(directory)
-        self.date_regexp = date_regexp
+    def __init__(
+        self,
+        config: ReplayConfig = ReplayConfig(),
+        directory: str = '',
+        date_regexp: str = '',
+    ) -> None:
+        self.config = config
+        self.directory = Path(directory) if directory else config.data_dir
+        self.date_regexp = date_regexp or config.date_regexp
         self.on_message = None
 
     async def open_async(self) -> None:
@@ -300,7 +308,8 @@ class ParquetReplayer:
                 if self.on_message:
                     for (t_win,), df_s in windows:
                         windows.set_description(f"replay: {t_win}")
-                        # print(f"{t_win=}\n{df_s=}")
+                        if t_win.time() < self.config.skip_until_time:
+                            continue
                         await self.on_message(t_win, df_s)
                 else:
                     raise ValueError("on_message handler not set for ParquetReplayer.")
@@ -314,19 +323,19 @@ async def main():
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     import pyinstrument
 
-    replayer = ParquetReplayer('data', date_regexp='2024-08-06')
+    config = ReplayConfig(
+        markets=['BTC-USD', 'ETH-USD', 'ETH-BTC'],
+        date_regexp='2024-08-06',
+        max_samples=250,
+        skip_until_time="05:30",
+    )
     with pyinstrument.Profiler() as profiler:
-        pairs = ['BTC-USD', 'ETH-USD', 'ETH-BTC']
         async with CoinbaseFeed(
-            markets=pairs,
-            replayer=replayer,
+            config=config,
+            replayer=ParquetReplayer(config=config),
         ) as feed:
-            max_samples = 250
             async for onesec in feed.one_second_iterator():
                 print(f"{onesec}")
-                if max_samples == 0:
-                    break
-                max_samples -= 1
     profiler.open_in_browser(timeline=False)
 
 

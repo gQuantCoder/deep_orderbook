@@ -10,6 +10,7 @@ import polars as pl
 
 from coinbase.websocket import WSClient  # type: ignore[import-untyped]
 from deep_orderbook import marketdata as md
+from deep_orderbook.config import FeedConfig
 from deep_orderbook.shaper import BookShaper
 from deep_orderbook.feeds.base_feed import BaseFeed, EndFeed
 from deep_orderbook.utils import logger
@@ -96,13 +97,15 @@ class CoinbaseFeed(BaseFeed):
 
     def __init__(
         self,
-        markets: list[str],
+        config: FeedConfig = FeedConfig(),
+        markets: list[str] | None = None,
         feed_msg_queue=False,
         replayer: Iterator[CoinbaseMessage] | None = None,
     ) -> None:
         settings = Settings()
+        self.config = config
         self.feed_msg_queue = feed_msg_queue
-        self.markets = markets
+        self.markets = markets or config.markets
         self.msg_history: list[str] = []
         self.depth_managers: dict[str, md.DepthCachePlus] = {
             s: md.DepthCachePlus() for s in self.markets
@@ -358,10 +361,10 @@ class CoinbaseFeed(BaseFeed):
 
     async def one_second_iterator(
         self,
-        max_samples: int = -1,
     ) -> AsyncGenerator[md.MulitSymbolOneSecondEnds, None]:
-        while max_samples != 0:
-            max_samples -= 1
+        num_samples = self.config.max_samples
+        while num_samples != 0:
+            num_samples -= 1
             one_sec = await self.queue_one_sec.get()
             yield one_sec
 
