@@ -26,18 +26,20 @@ class ReplayConfig(FeedConfig):
 
 class ShaperConfig(BaseConfig):
     zoom_frac: float = 0.004
+    num_side_lvl: int = 64
+    time_accumulate: int = 256
     side_bips: int = 100
     side_width: int = 50
 
-    time_accumulate: int = 256
     look_ahead: int = 64
 
 
 class TrainConfig(BaseConfig):
-    batch_size: int = 32
-    epochs: int = 10
-    learning_rate: float = 0.001
     device: str = "cuda"  # "cpu" or "cuda"
+    epochs: int = 10
+    learning_rate: float = 0.00001
+
+    batch_size: int = 32
     criterion: str = "MSELoss"  # "MSELoss" or "L1Loss"
 
 

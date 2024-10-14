@@ -7,6 +7,8 @@ from typing import AsyncGenerator, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
+from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
+
 
 # Define a Residual Block with dilated convolutions
 class ResidualBlock(nn.Module):
@@ -14,7 +16,9 @@ class ResidualBlock(nn.Module):
         super(ResidualBlock, self).__init__()
         padding = (
             (kernel_size[0] - 1) * dilation[0],  # Time dimension padding for causality
-            (kernel_size[1] - 1) * dilation[1] // 2  # Symmetric padding for Price dimension
+            (kernel_size[1] - 1)
+            * dilation[1]
+            // 2,  # Symmetric padding for Price dimension
         )
         self.conv1 = nn.Conv2d(
             in_channels, out_channels, kernel_size=kernel_size, dilation=dilation
@@ -33,7 +37,12 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         residual = x
         # Causal padding for time dimension and symmetric padding for price dimension
-        pad_t = (self.padding[1], self.padding[1], self.padding[0], 0)  # Left, Right, Top, Bottom
+        pad_t = (
+            self.padding[1],
+            self.padding[1],
+            self.padding[0],
+            0,
+        )  # Left, Right, Top, Bottom
         x = F.pad(x, pad_t)  # Pad (Left, Right, Top, Bottom)
         out = self.relu(self.conv1(x))
         out = F.pad(out, pad_t)
@@ -44,28 +53,29 @@ class ResidualBlock(nn.Module):
         out = self.relu(out)
         return out
 
+
 # Define the deeper Temporal Convolutional Network model
 class TCNModel(nn.Module):
     def __init__(self, input_channels, output_channels):
         super().__init__()
         num_levels = 8
         levels = [input_channels] + [64] * num_levels
-        dilations = [(2 ** i, 1) for i in range(num_levels)]  # Exponential dilation in time dimension
+        dilations = [
+            (2**i, 1) for i in range(num_levels)
+        ]  # Exponential dilation in time dimension
         kernel_size = (3, 3)
         self.layers = nn.ModuleList()
         for i in range(num_levels):
             self.layers.append(
                 ResidualBlock(
                     in_channels=levels[i],
-                    out_channels=levels[i+1],
+                    out_channels=levels[i + 1],
                     kernel_size=kernel_size,
-                    dilation=dilations[i]
+                    dilation=dilations[i],
                 )
             )
         self.final_conv = nn.Conv2d(
-            in_channels=levels[-1],
-            out_channels=output_channels,
-            kernel_size=1
+            in_channels=levels[-1], out_channels=output_channels, kernel_size=1
         )
 
     def forward(self, x):
@@ -77,6 +87,7 @@ class TCNModel(nn.Module):
         # Adjust PriceDimension to match target (e.g., 32)
         out = F.adaptive_avg_pool2d(out, (out.shape[2], 32))
         return out
+
 
 # Trainer class to handle training logic and predictions
 class Trainer:
@@ -133,26 +144,27 @@ class Trainer:
 
 
 # Asynchronous data generator
-async def iter_shapes_t2l(date_regexp='2024-08-05', max_samples=0):
+async def iter_shapes_t2l(replay_config: ReplayConfig, shaper_config: ShaperConfig):
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     from deep_orderbook.replayer import ParquetReplayer
     from deep_orderbook.shaper import ArrayShaper
 
-    symbol_shaper = ArrayShaper(zoom_frac=0.004)
+    symbol_shaper = ArrayShaper(config=shaper_config)
     MARKETS = ["ETH-USD"]
-    replayer = ParquetReplayer('data', date_regexp=date_regexp)
     async with CoinbaseFeed(
-        markets=MARKETS,
-        replayer=replayer,
+        config=replay_config,
+        replayer=ParquetReplayer(config=replay_config),
     ) as feed:
-        async for onesec in feed.one_second_iterator(max_samples=max_samples):
+        async for onesec in feed.one_second_iterator():
             books_array = await symbol_shaper.make_arr3d(onesec.symbols[MARKETS[0]])
             time_levels = await symbol_shaper.build_time_level_trade()
             yield books_array, time_levels, symbol_shaper.prices_array
 
 
 # Function to train and predict
-async def train_and_predict(max_samples=100, epoch=5):
+async def train_and_predict(
+    config: TrainConfig, replay_config: ReplayConfig, shaper_config: ShaperConfig
+):
     # Device configuration
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'{device=}')
@@ -163,7 +175,7 @@ async def train_and_predict(max_samples=100, epoch=5):
 
     # Initialize model, optimizer, and loss function
     model = TCNModel(input_channels, output_channels)
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.MSELoss()
 
     # Create the trainer
@@ -173,14 +185,17 @@ async def train_and_predict(max_samples=100, epoch=5):
     losses = []
 
     # Iterate over data
-    epoch_left = epoch
+    epoch_left = config.epochs
     while epoch_left > 0:
         epoch_left -= 1
         async for books_array, time_levels, pxar in iter_shapes_t2l(
-            max_samples=max_samples
+            replay_config=replay_config, shaper_config=shaper_config
         ):
+            time_levels[time_levels > 0.1] = 1
             # Perform a training step
-            loss, prediction = trainer.train_step(books_array[:256-64], time_levels[:256-64])
+            loss, prediction = trainer.train_step(
+                books_array[: 256 - 64], time_levels[: 256 - 64]
+            )
             losses.append(loss)
             prediction = trainer.predict(books_array)
 
@@ -189,7 +204,12 @@ async def train_and_predict(max_samples=100, epoch=5):
 
 # Main function to run the script
 async def main():
-    async for books_array, time_levels, pxar, prediction, loss in train_and_predict():
+    train_config = TrainConfig()
+    replay_config = ReplayConfig()
+    shaper_config = ShaperConfig()
+    async for books_array, time_levels, pxar, prediction, loss in train_and_predict(
+        train_config, replay_config, shaper_config
+    ):
         print(f'{loss=}')
 
 

@@ -124,7 +124,7 @@ class Visualizer:
             self.fig_widget.data[3].y = bidask[:, 1]
 
             # Update prediction heatmap
-            if pred_shape:
+            if pred_shape is not None:
                 self.fig_widget.data[4].z = pred_shape
 
             if self.losses:

@@ -6,6 +6,7 @@ import asyncio
 import polars as pl
 
 from tqdm.auto import tqdm
+from deep_orderbook.config import ShaperConfig
 import deep_orderbook.marketdata as md
 import aioitertools
 
@@ -168,7 +169,7 @@ class BookShaper:
         market_replay: Iterator,
         markets: list[str],
         width_per_side=64,
-        zoom_frac=1 / 256,
+        zoom_frac=0.004,
     ):
         # market_replay = self.multireplayL2(markets)
         prev_price = {p: None for p in markets}
@@ -406,18 +407,15 @@ class BookShaper:
 
 
 class ArrayShaper:
-    def __init__(
-        self, zoom_frac: float = 0.004, width_per_side=64, window_length=256
-    ) -> None:
-        self.zoom_frac = zoom_frac
-        self.num_side_lvl = width_per_side
+    def __init__(self, config: ShaperConfig) -> None:
+        self.config = config
         self.prev_price: float = None  # type: ignore[assignment]
         self.emaNew = 1 / 32
         self.emaPrice: float = None  # type: ignore[assignment]
 
-        self._cut_scales = pl.arange(0, self.num_side_lvl, eager=True)  # ** 2
+        self._cut_scales = pl.arange(0, self.config.num_side_lvl, eager=True)  # ** 2
         self._cut_scales = self._cut_scales / self._cut_scales[-1]
-        self.ask_bin_labels = [f"{p:03}" for p in range(self.num_side_lvl)]
+        self.ask_bin_labels = [f"{p:03}" for p in range(self.config.num_side_lvl)]
         self.bid_bin_labels = [f"-{lab}" for lab in self.ask_bin_labels[::-1]]
         self.ALL_BIN_LABELS = self.bid_bin_labels + self.ask_bin_labels
         self.lev_labels = pl.Enum(self.ALL_BIN_LABELS)
@@ -430,8 +428,10 @@ class ArrayShaper:
         ).sort('bin_idx')
         self.ALL_BIN_INDEX = self.bid_bin_idx.vstack(self.ask_bin_idx)
 
-        self.total_array = np.zeros((window_length, self.num_side_lvl * 2, 3))
-        self.prices_array = np.zeros((window_length, 2)) + np.nan
+        self.total_array = np.zeros(
+            (self.config.time_accumulate, self.config.num_side_lvl * 2, 3)
+        )
+        self.prices_array = np.zeros((self.config.time_accumulate, 2)) + np.nan
 
     def update_ema(self, price: float) -> None:
         if self.emaPrice is None:
@@ -466,7 +466,7 @@ class ArrayShaper:
         applies cumulative sums, reindexes the data, and applies the arcsinh transformation.
         """
         # print(one_sec.avg_price())
-        price_range = self.prev_price * self.zoom_frac
+        price_range = self.prev_price * self.config.zoom_frac
 
         bid_edges: pl.Series = self.prev_price - self._cut_scales * price_range
         ask_edges: pl.Series = self.prev_price + self._cut_scales * price_range
@@ -552,12 +552,20 @@ class ArrayShaper:
         a = prices[:T_effective, 1]  # Ask prices, shape: (T_effective,)
 
         # Compute price levels for thresholds
-        a_plus_thresh = a[:, np.newaxis] + thresh[np.newaxis, :]  # Shape: (T_effective, side_width)
-        b_minus_thresh = b[:, np.newaxis] - thresh[np.newaxis, :]  # Shape: (T_effective, side_width)
+        a_plus_thresh = (
+            a[:, np.newaxis] + thresh[np.newaxis, :]
+        )  # Shape: (T_effective, side_width)
+        b_minus_thresh = (
+            b[:, np.newaxis] - thresh[np.newaxis, :]
+        )  # Shape: (T_effective, side_width)
 
         # Get future bids and asks using sliding window view
-        asks_future = np.lib.stride_tricks.sliding_window_view(prices[:, 1], window_shape=FUTURE)
-        bids_future = np.lib.stride_tricks.sliding_window_view(prices[:, 0], window_shape=FUTURE)
+        asks_future = np.lib.stride_tricks.sliding_window_view(
+            prices[:, 1], window_shape=FUTURE
+        )
+        bids_future = np.lib.stride_tricks.sliding_window_view(
+            prices[:, 0], window_shape=FUTURE
+        )
 
         # Limit asks_future and bids_future to T_effective
         asks_future = asks_future[:T_effective]  # Shape: (T_effective, FUTURE)
@@ -566,12 +574,20 @@ class ArrayShaper:
         # Expand dimensions for broadcasting
         asks_future = asks_future[:, :, np.newaxis]  # Shape: (T_effective, FUTURE, 1)
         bids_future = bids_future[:, :, np.newaxis]  # Shape: (T_effective, FUTURE, 1)
-        a_plus_thresh = a_plus_thresh[:, np.newaxis, :]  # Shape: (T_effective, 1, side_width)
-        b_minus_thresh = b_minus_thresh[:, np.newaxis, :]  # Shape: (T_effective, 1, side_width)
+        a_plus_thresh = a_plus_thresh[
+            :, np.newaxis, :
+        ]  # Shape: (T_effective, 1, side_width)
+        b_minus_thresh = b_minus_thresh[
+            :, np.newaxis, :
+        ]  # Shape: (T_effective, 1, side_width)
 
         # Compute tradeUp and tradeDn conditions
-        tradeUp = asks_future >= a_plus_thresh  # Shape: (T_effective, FUTURE, side_width)
-        tradeDn = bids_future <= b_minus_thresh  # Shape: (T_effective, FUTURE, side_width)
+        tradeUp = (
+            asks_future >= a_plus_thresh
+        )  # Shape: (T_effective, FUTURE, side_width)
+        tradeDn = (
+            bids_future <= b_minus_thresh
+        )  # Shape: (T_effective, FUTURE, side_width)
 
         # Exclude the current time step
         tradeUp[:, 0, :] = False
@@ -581,16 +597,13 @@ class ArrayShaper:
         tradeUp_any = tradeUp.any(axis=1)  # Shape: (T_effective, side_width)
         timeUp = np.where(
             tradeUp_any,
-            np.argmax(tradeUp, axis=1) + 1,  # Add 1 because we skipped the first time step
-            FUTURE * 10
+            np.argmax(tradeUp, axis=1)
+            + 1,  # Add 1 because we skipped the first time step
+            FUTURE * 10,
         )
 
         tradeDn_any = tradeDn.any(axis=1)
-        timeDn = np.where(
-            tradeDn_any,
-            np.argmax(tradeDn, axis=1) + 1,
-            FUTURE * 10
-        )
+        timeDn = np.where(tradeDn_any, np.argmax(tradeDn, axis=1) + 1, FUTURE * 10)
 
         # multiply timeDn and timeUp by the distance to the reference price
         timeDn = timeDn * 1 / (thresh[np.newaxis, :] + 1)
@@ -600,13 +613,19 @@ class ArrayShaper:
         timeDn_reversed = timeDn[:, ::-1]
 
         # Concatenate timeDn and timeUp to form the time2levels matrix
-        time2levels = np.concatenate([timeDn_reversed, timeUp], axis=1)  # Shape: (T_effective, 2 * side_width)
+        time2levels = np.concatenate(
+            [timeDn_reversed, timeUp], axis=1
+        )  # Shape: (T_effective, 2 * side_width)
 
         # Add a new axis to match the expected output shape
-        time2levels = time2levels[:, :, np.newaxis]  # Shape: (T_effective, 2 * side_width, 1)
+        time2levels = time2levels[
+            :, :, np.newaxis
+        ]  # Shape: (T_effective, 2 * side_width, 1)
 
         # Initialize the full time2levels array with FUTURE * 10 for time steps beyond T_effective
-        time2levels_full = np.full((T, 2 * side_width, 1), FUTURE * 10, dtype=np.float32)
+        time2levels_full = np.full(
+            (T, 2 * side_width, 1), FUTURE * 10, dtype=np.float32
+        )
 
         # Assign the computed values to the corresponding positions
         time2levels_full[:T_effective] = time2levels.astype(np.float32)
@@ -617,11 +636,15 @@ class ArrayShaper:
         return 1 / time2levels_full
 
 
-async def iter_shapes(max_samples=200) -> AsyncGenerator[tuple[np.ndarray, np.ndarray], None]:
+async def iter_shapes(
+    max_samples=200,
+) -> AsyncGenerator[tuple[np.ndarray, np.ndarray], None]:
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     from deep_orderbook.replayer import ParquetReplayer
 
-    shaper = ArrayShaper(zoom_frac=0.25)
+    shaper_config = ShaperConfig()
+
+    shaper = ArrayShaper(config=shaper_config)
     MARKETS = ["ETH-USD"]
     replayer = ParquetReplayer('data', date_regexp='2024-08-06')
     async with CoinbaseFeed(
