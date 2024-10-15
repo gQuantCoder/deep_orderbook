@@ -319,6 +319,17 @@ class ParquetReplayer:
         pass
 
 
+async def iter_sec(config: ReplayConfig):
+    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
+
+    async with CoinbaseFeed(
+        config=config,
+        replayer=ParquetReplayer(config=config),
+    ) as feed:
+        async for onesec in feed.one_second_iterator():
+            yield onesec
+
+
 async def main():
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     import pyinstrument

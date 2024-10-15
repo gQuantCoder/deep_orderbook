@@ -105,27 +105,33 @@ class Visualizer:
 
     def update(
         self,
-        books_z_data: np.ndarray,
-        level_reach_z_data: np.ndarray,
-        bidask: np.ndarray,
-        pred_shape=None,
+        books_z_data: np.ndarray | None,
+        level_reach_z_data: np.ndarray | None,
+        bidask: np.ndarray | None,
+        pred_t2l=None,
     ):
         """Updates the figure widget with new data."""
         with self.fig_widget.batch_update():
+            books_z_data, level_reach_z_data, bidask = self.for_image_display(
+                books_z_data, level_reach_z_data, bidask
+            )
             # Update heatmaps
-            self.fig_widget.data[0].z = books_z_data
-            self.fig_widget.data[1].z = level_reach_z_data
+            if books_z_data is not None:
+                self.fig_widget.data[0].z = np.clip(books_z_data, -1, 1)
+            if level_reach_z_data is not None:
+                self.fig_widget.data[1].z = np.clip(level_reach_z_data, -1, 1)
 
             # Update bid and ask price traces
-            times = np.arange(bidask.shape[0])
-            self.fig_widget.data[2].x = times
-            self.fig_widget.data[2].y = bidask[:, 0]
-            self.fig_widget.data[3].x = times
-            self.fig_widget.data[3].y = bidask[:, 1]
+            if bidask is not None:
+                times = np.arange(bidask.shape[0])
+                self.fig_widget.data[2].x = times
+                self.fig_widget.data[2].y = bidask[:, 0]
+                self.fig_widget.data[3].x = times
+                self.fig_widget.data[3].y = bidask[:, 1]
 
             # Update prediction heatmap
-            if pred_shape is not None:
-                self.fig_widget.data[4].z = pred_shape
+            if pred_t2l is not None:
+                self.fig_widget.data[4].z = np.clip(pred_t2l, -1, 1)
 
             if self.losses:
                 self.fig_widget.data[5].x = np.arange(len(self.losses))
@@ -136,12 +142,30 @@ class Visualizer:
         self.losses.append(loss_value)
         self.losses = self.losses[-512:]  # Keep only the last 512 values
 
+    @staticmethod
+    def for_image_display(
+        books_array: np.ndarray | None = None,
+        t2l_array: np.ndarray | None = None,
+        prices_array: np.ndarray | None = None,
+    ) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+        im_data = None
+        t2l_data = None
+        if books_array is not None:
+            im_data = books_array.copy()
+            im_data[:, :, 0] *= -0.5
+            im_data[:, :, 1:3] *= 1e6
+            im_data = im_data.mean(axis=2).T
+        if t2l_array is not None:
+            t2l_data = t2l_array[:, :, 0].T
+
+        return im_data, t2l_data, prices_array
+
 
 if __name__ == '__main__':
     vis = Visualizer()
     data_dict = {
-        "books_z_data": np.random.rand(10, 10),
-        "level_reach_z_data": np.random.rand(10, 10),
+        "books_z_data": np.random.rand(10, 10, 3),
+        "level_reach_z_data": np.random.rand(10, 10, 1),
         "bidask": np.random.rand(10, 2),
     }
     vis.update(**data_dict)

@@ -31,6 +31,8 @@ class ShaperConfig(BaseConfig):
     side_bips: int = 100
     side_width: int = 50
 
+    for_image_display: bool = False
+
     look_ahead: int = 64
 
 

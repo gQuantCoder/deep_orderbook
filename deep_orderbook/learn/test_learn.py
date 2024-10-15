@@ -143,28 +143,12 @@ class Trainer:
             return predictions.squeeze()  # Remove batch dimension if needed
 
 
-# Asynchronous data generator
-async def iter_shapes_t2l(replay_config: ReplayConfig, shaper_config: ShaperConfig):
-    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
-    from deep_orderbook.replayer import ParquetReplayer
-    from deep_orderbook.shaper import ArrayShaper
-
-    symbol_shaper = ArrayShaper(config=shaper_config)
-    MARKETS = ["ETH-USD"]
-    async with CoinbaseFeed(
-        config=replay_config,
-        replayer=ParquetReplayer(config=replay_config),
-    ) as feed:
-        async for onesec in feed.one_second_iterator():
-            books_array = await symbol_shaper.make_arr3d(onesec.symbols[MARKETS[0]])
-            time_levels = await symbol_shaper.build_time_level_trade()
-            yield books_array, time_levels, symbol_shaper.prices_array
-
-
 # Function to train and predict
 async def train_and_predict(
     config: TrainConfig, replay_config: ReplayConfig, shaper_config: ShaperConfig
 ):
+    from deep_orderbook.shaper import iter_shapes_t2l
+
     # Device configuration
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'{device=}')

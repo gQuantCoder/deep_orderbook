@@ -6,7 +6,7 @@ import asyncio
 import polars as pl
 
 from tqdm.auto import tqdm
-from deep_orderbook.config import ShaperConfig
+from deep_orderbook.config import ReplayConfig, ShaperConfig
 import deep_orderbook.marketdata as md
 import aioitertools
 
@@ -500,9 +500,9 @@ class ArrayShaper:
 
         return df_book
 
-    async def make_arr3d(self, one_sec: md.OneSecondEnds) -> np.ndarray:
-        self.update_ema(one_sec.avg_price())
-        df_book = self.bin_books(one_sec)
+    async def make_arr3d(self, new_books: md.OneSecondEnds) -> np.ndarray:
+        self.update_ema(new_books.avg_price())
+        df_book = self.bin_books(new_books)
         # print(df_book.reverse()[self.num_side_lvl - 5 : self.num_side_lvl + 5])
 
         df_3d = df_book.drop('bin_idx')
@@ -515,7 +515,7 @@ class ArrayShaper:
         self.total_array[-1] = image_col
 
         self.prices_array = np.roll(self.prices_array, -1, axis=0)
-        self.prices_array[-1] = np.array([lev.price for lev in one_sec.bbos()])
+        self.prices_array[-1] = np.array([lev.price for lev in new_books.bbos()])
         return self.total_array
 
     async def build_time_level_trade(self, side_bips=32, side_width=16):
@@ -538,26 +538,22 @@ class ArrayShaper:
         mult = 0.0001 * side_bips / side_width
         FUTURE = 64
 
-        T = prices.shape[0]
-        T_effective = T - FUTURE + 1  # Effective time steps considering FUTURE window
+        num_t = prices.shape[0]
+        T_eff = num_t - FUTURE + 1  # Effective time steps considering FUTURE window
 
         # Calculate the price step
         pricestep = prices[-1, 1] * mult
 
         # Compute thresholds for each level
-        thresh = np.arange(side_width) * pricestep  # Shape: (side_width,)
+        thresh = np.arange(side_width) * pricestep  # (side_width,)
 
-        # Get bid and ask prices up to T_effective
-        b = prices[:T_effective, 0]  # Bid prices, shape: (T_effective,)
-        a = prices[:T_effective, 1]  # Ask prices, shape: (T_effective,)
+        # Get bid and ask prices up to T_eff
+        b = prices[:T_eff, 0]  # Bid prices, (T_eff,)
+        a = prices[:T_eff, 1]  # Ask prices, (T_eff,)
 
         # Compute price levels for thresholds
-        a_plus_thresh = (
-            a[:, np.newaxis] + thresh[np.newaxis, :]
-        )  # Shape: (T_effective, side_width)
-        b_minus_thresh = (
-            b[:, np.newaxis] - thresh[np.newaxis, :]
-        )  # Shape: (T_effective, side_width)
+        a_plus_thresh = a[:, np.newaxis] + thresh[np.newaxis, :]  # (T_eff, side_width)
+        b_minus_thresh = b[:, np.newaxis] - thresh[np.newaxis, :]  # (T_eff, side_width)
 
         # Get future bids and asks using sliding window view
         asks_future = np.lib.stride_tricks.sliding_window_view(
@@ -567,40 +563,27 @@ class ArrayShaper:
             prices[:, 0], window_shape=FUTURE
         )
 
-        # Limit asks_future and bids_future to T_effective
-        asks_future = asks_future[:T_effective]  # Shape: (T_effective, FUTURE)
-        bids_future = bids_future[:T_effective]  # Shape: (T_effective, FUTURE)
+        # Limit asks_future and bids_future to T_eff
+        asks_future = asks_future[:T_eff]  # (T_eff, FUTURE)
+        bids_future = bids_future[:T_eff]  # (T_eff, FUTURE)
 
         # Expand dimensions for broadcasting
-        asks_future = asks_future[:, :, np.newaxis]  # Shape: (T_effective, FUTURE, 1)
-        bids_future = bids_future[:, :, np.newaxis]  # Shape: (T_effective, FUTURE, 1)
-        a_plus_thresh = a_plus_thresh[
-            :, np.newaxis, :
-        ]  # Shape: (T_effective, 1, side_width)
-        b_minus_thresh = b_minus_thresh[
-            :, np.newaxis, :
-        ]  # Shape: (T_effective, 1, side_width)
+        asks_future = asks_future[:, :, np.newaxis]  # (T_eff, FUTURE, 1)
+        bids_future = bids_future[:, :, np.newaxis]  # (T_eff, FUTURE, 1)
+        a_plus_thresh = a_plus_thresh[:, np.newaxis, :]  # (T_eff, 1, side_width)
+        b_minus_thresh = b_minus_thresh[:, np.newaxis, :]  # (T_eff, 1, side_width)
 
         # Compute tradeUp and tradeDn conditions
-        tradeUp = (
-            asks_future >= a_plus_thresh
-        )  # Shape: (T_effective, FUTURE, side_width)
-        tradeDn = (
-            bids_future <= b_minus_thresh
-        )  # Shape: (T_effective, FUTURE, side_width)
+        tradeUp = asks_future >= a_plus_thresh  # (T_eff, FUTURE, side_width)
+        tradeDn = bids_future <= b_minus_thresh  # (T_eff, FUTURE, side_width)
 
         # Exclude the current time step
         tradeUp[:, 0, :] = False
         tradeDn[:, 0, :] = False
 
         # Compute timeUp and timeDn by finding the first occurrence where the condition is True
-        tradeUp_any = tradeUp.any(axis=1)  # Shape: (T_effective, side_width)
-        timeUp = np.where(
-            tradeUp_any,
-            np.argmax(tradeUp, axis=1)
-            + 1,  # Add 1 because we skipped the first time step
-            FUTURE * 10,
-        )
+        tradeUp_any = tradeUp.any(axis=1)  # (T_eff, side_width)
+        timeUp = np.where(tradeUp_any, np.argmax(tradeUp, axis=1) + 1, FUTURE * 10)
 
         tradeDn_any = tradeDn.any(axis=1)
         timeDn = np.where(tradeDn_any, np.argmax(tradeDn, axis=1) + 1, FUTURE * 10)
@@ -615,56 +598,54 @@ class ArrayShaper:
         # Concatenate timeDn and timeUp to form the time2levels matrix
         time2levels = np.concatenate(
             [timeDn_reversed, timeUp], axis=1
-        )  # Shape: (T_effective, 2 * side_width)
+        )  # (T_eff, 2 * side_width)
 
         # Add a new axis to match the expected output shape
-        time2levels = time2levels[
-            :, :, np.newaxis
-        ]  # Shape: (T_effective, 2 * side_width, 1)
+        time2levels = time2levels[:, :, np.newaxis]  # (T_eff, 2 * side_width, 1)
 
-        # Initialize the full time2levels array with FUTURE * 10 for time steps beyond T_effective
+        # Initialize the full time2levels array with FUTURE * 10 for time steps beyond T_eff
         time2levels_full = np.full(
-            (T, 2 * side_width, 1), FUTURE * 10, dtype=np.float32
+            (num_t, 2 * side_width, 1), FUTURE * 10, dtype=np.float32
         )
 
         # Assign the computed values to the corresponding positions
-        time2levels_full[:T_effective] = time2levels.astype(np.float32)
+        time2levels_full[:T_eff] = time2levels.astype(np.float32)
 
         # Ensure that the minimum value in time2levels is greater than 0
         assert time2levels_full.min() >= 0
 
         return 1 / time2levels_full
+    
 
-
-async def iter_shapes(
-    max_samples=200,
-) -> AsyncGenerator[tuple[np.ndarray, np.ndarray], None]:
+async def iter_shapes_t2l(
+    replay_config: ReplayConfig, shaper_config: ShaperConfig
+) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray], None]:
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     from deep_orderbook.replayer import ParquetReplayer
 
-    shaper_config = ShaperConfig()
-
     shaper = ArrayShaper(config=shaper_config)
-    MARKETS = ["ETH-USD"]
-    replayer = ParquetReplayer('data', date_regexp='2024-08-06')
     async with CoinbaseFeed(
-        markets=MARKETS,
-        replayer=replayer,
+        config=replay_config,
+        replayer=ParquetReplayer(config=replay_config),
     ) as feed:
-        async for onesec in feed.one_second_iterator(max_samples=max_samples):
-            books_array = await shaper.make_arr3d(onesec.symbols[MARKETS[0]])
+        async for onesec in feed.one_second_iterator():
+            new_books = onesec.symbols[replay_config.markets[0]]
+            books_array = await shaper.make_arr3d(new_books)
             time_levels = await shaper.build_time_level_trade()
-            # print(books_array.shape)
-            # print(time_levels.shape)
-            yield books_array, time_levels
+            yield books_array, time_levels, shaper.prices_array
 
 
 async def main():
     import pyinstrument
 
+    replay_config = ReplayConfig(date_regexp='2024-08-04', max_samples=250)
+    shaper_config = ShaperConfig()
+
     profiler = pyinstrument.Profiler()
     with profiler:
-        async for shape in iter_shapes():
+        async for shape in iter_shapes_t2l(
+            replay_config=replay_config, shaper_config=shaper_config
+        ):
             pass
     profiler.open_in_browser()
 
