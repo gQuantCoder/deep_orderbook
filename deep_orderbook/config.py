@@ -11,7 +11,7 @@ class BaseConfig(BaseModel):
 
 
 class FeedConfig(BaseConfig):
-    markets: list[str] = ["ETH-BTC", "BTC-USD", "ETH-USD"]
+    markets: list[str] = ["ETH-USD", "BTC-USD", "ETH-BTC"]
     max_samples: int = -1
 
     def only_first_market(self) -> list[str]:

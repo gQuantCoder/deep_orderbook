@@ -11,8 +11,8 @@ class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, dilation):
         super().__init__()
         padding = (
-            (kernel_size[0] - 1) * dilation[0],  # Time dimension padding for causality
-            (kernel_size[1] - 1) * dilation[1] // 2,  # Symmetric padding for Price dimension
+            (kernel_size[0] - 1) * dilation[0],  # Time dimension pad for causality
+            (kernel_size[1] - 1) * dilation[1] // 2,  # Symmetric pad for Price
         )
         self.conv1 = nn.Conv2d(
             in_channels, out_channels, kernel_size=kernel_size, dilation=dilation
@@ -46,11 +46,10 @@ class ResidualBlock(nn.Module):
 class TCNModel(nn.Module):
     """Temporal Convolutional Network with Residual Blocks."""
 
-    def __init__(self, input_channels, output_channels):
+    def __init__(self, input_channels, output_channels, num_levels = 4):
         super().__init__()
-        num_levels = 8
         levels = [input_channels] + [64] * num_levels
-        dilations = [(2 ** i, 1) for i in range(num_levels)]  # Exponential dilation
+        dilations = [(2**i, 1) for i in range(num_levels)]  # Exponential dilation
         kernel_size = (3, 3)
         self.layers = nn.ModuleList()
         for i in range(num_levels):
