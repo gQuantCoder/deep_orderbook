@@ -140,7 +140,7 @@ class Visualizer:
     def add_loss(self, loss_value):
         """Adds a loss value to the loss history."""
         self.losses.append(loss_value)
-        self.losses = self.losses[-512:]  # Keep only the last 512 values
+        self.losses = self.losses[-256:]  # Keep only the last 512 values
 
     @staticmethod
     def for_image_display(

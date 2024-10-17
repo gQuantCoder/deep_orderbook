@@ -14,13 +14,12 @@ from deep_orderbook.learn.trainer import Trainer
 
 # Function to train and predict
 async def train_and_predict(
-    config: TrainConfig, replay_config: ReplayConfig, shaper_config: ShaperConfig, test_config:ReplayConfig
+    config: TrainConfig,
+    replay_config: ReplayConfig,
+    shaper_config: ShaperConfig,
+    test_config: ReplayConfig,
 ):
     from deep_orderbook.shaper import iter_shapes_t2l
-
-    # Device configuration
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'{device=}')
 
     # Model parameters
     input_channels = 3  # FeatureDimension of books_array
@@ -32,9 +31,16 @@ async def train_and_predict(
     criterion = nn.MSELoss()
 
     # Create the trainer
-    trainer = Trainer(model, optimizer, criterion, device, replay_config, shaper_config)
+    trainer = Trainer(
+        model,
+        optimizer,
+        criterion,
+        train_config=config,
+        replay_config=replay_config,
+        shaper_config=shaper_config,
+    )
     # Start data loading workers
-    trainer.start_data_loading(num_workers=2)
+    trainer.start_data_loading()
 
     # Lists to store losses and predictions for plotting
     losses = []
@@ -44,7 +50,8 @@ async def train_and_predict(
     while epoch_left > 0:
         epoch_left -= 1
         async for books_array, time_levels, pxar in iter_shapes_t2l(
-            replay_config=test_config, shaper_config=shaper_config.but(only_full_arrays=False)
+            replay_config=test_config,
+            shaper_config=shaper_config.but(only_full_arrays=False),
         ):
             time_levels[time_levels > 0.02] = 1
             # Perform a training step

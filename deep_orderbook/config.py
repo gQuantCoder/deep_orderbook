@@ -53,12 +53,12 @@ class ShaperConfig(BaseConfig):
 class TrainConfig(BaseConfig):
     device: str = "cuda"  # "cpu" or "cuda"
     epochs: int = 10
-    learning_rate: float = 0.00001
+    learning_rate: float = 0.001
 
     num_workers: int = 8  # Number of data loading threads
     data_queue_size: int = 256  # Maximum number of items in the data queue
 
-    batch_size: int = 32
+    batch_size: int = 4
     criterion: str = "MSELoss"  # "MSELoss" or "L1Loss"
 
 

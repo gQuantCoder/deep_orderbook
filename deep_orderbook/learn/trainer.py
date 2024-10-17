@@ -5,28 +5,38 @@ import numpy as np
 import queue
 import threading
 from deep_orderbook.learn.data_loader import DataLoaderWorker
-from deep_orderbook.config import ReplayConfig, ShaperConfig
+from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
 
 
 class Trainer:
     """Trainer class to handle training and prediction."""
 
     def __init__(
-        self, model, optimizer, criterion, device, replay_config, shaper_config
+        self,
+        model,
+        optimizer,
+        criterion,
+        train_config: TrainConfig,
+        replay_config: ReplayConfig,
+        shaper_config: ShaperConfig,
     ):
-        self.model = model.to(device)
         self.optimizer = optimizer
         self.criterion = criterion
-        self.device = device
+        # Device configuration
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print(f'{self.device=}')
+        self.model = model.to(self.device)
         self.data_queue = queue.Queue(
             maxsize=1000
         )  # Queue is a member of the Trainer class
+        self.train_config = train_config
         self.replay_config = replay_config
         self.shaper_config = shaper_config
         self.workers = []
 
-    def start_data_loading(self, num_workers=1):
+    def start_data_loading(self):
         """Starts data loading workers."""
+        num_workers = self.train_config.num_workers
         for _ in range(num_workers):
             data_loader_worker = DataLoaderWorker(
                 data_queue=self.data_queue,
@@ -37,50 +47,79 @@ class Trainer:
             self.workers.append(data_loader_worker)
 
     def train_step(self):
-        """Performs a training step using data from the queue."""
-        try:
-            # Get data from queue
-            books_array, time_levels, pxar = self.data_queue.get(timeout=30)
-            # Preprocess data
-            time_levels[time_levels > 0.02] = 1
-            time_cut = (
-                self.shaper_config.time_accumulate - self.shaper_config.look_ahead
-            )
+        """Performs a training step using a batch of data from the queue."""
+        books_array_list = []
+        time_levels_list = []
+        pxar_list = []
+        batch_size = self.train_config.batch_size
+        while len(books_array_list) < batch_size:
+            try:
+                books_array, time_levels, pxar = self.data_queue.get(timeout=30)
+                books_array_list.append(books_array)
+                time_levels_list.append(time_levels)
+                pxar_list.append(pxar)
+            except queue.Empty:
+                if len(books_array_list) == 0:
+                    print("Data queue is empty. Waiting for data...")
+                    return None
+                else:
+                    print(
+                        "Not enough samples for a full batch. Proceeding with available samples."
+                    )
+                    break
 
-            self.model.train()
-            # Convert numpy arrays to torch tensors and move to the device
-            books_tensor = torch.tensor(
-                books_array[:time_cut], dtype=torch.float32, device=self.device
-            )
-            t2l_tensor = torch.tensor(
-                time_levels[:time_cut], dtype=torch.float32, device=self.device
-            )
+        # Preprocess data
+        for i in range(len(books_array_list)):
+            time_levels_list[i][time_levels_list[i] > 0.02] = 1
 
-            # Rearrange dimensions to match PyTorch convention
-            books_tensor = books_tensor.permute(2, 0, 1).unsqueeze(0)
-            t2l_tensor = t2l_tensor.permute(2, 0, 1).unsqueeze(0)
+        time_steps_used = (
+            self.shaper_config.time_accumulate - self.shaper_config.look_ahead
+        )
 
-            # Forward pass
-            output = self.model(books_tensor)
+        self.model.train()
 
-            # Compute loss
-            loss = self.criterion(output, t2l_tensor)
+        # Stack samples into batches
+        books_tensor = torch.stack(
+            [
+                torch.tensor(books_array[:time_steps_used], dtype=torch.float32)
+                for books_array in books_array_list
+            ],
+            dim=0,
+        ).to(self.device)
 
-            # Backward pass and optimization
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+        time_levels_tensor = torch.stack(
+            [
+                torch.tensor(time_levels[:time_steps_used], dtype=torch.float32)
+                for time_levels in time_levels_list
+            ],
+            dim=0,
+        ).to(self.device)
 
-            return (
-                loss.item(),
-                output.detach().cpu().numpy(),
-                # books_array,
-                # time_levels,
-                # pxar,
-            )
-        except queue.Empty:
-            print("Data queue is empty.")
-            return None
+        # Rearrange dimensions to match PyTorch convention
+        books_tensor = books_tensor.permute(
+            0, 3, 1, 2
+        )  # (BatchSize, Channels, Time, Price)
+        time_levels_tensor = time_levels_tensor.permute(0, 3, 1, 2)
+
+        # Forward pass
+        output = self.model(books_tensor)
+
+        # Compute loss
+        loss = self.criterion(output, time_levels_tensor)
+
+        # Backward pass and optimization
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        # Return first sample for visualization
+        return (
+            loss.item(),
+            output[0].detach().cpu().numpy(),
+            # books_array_list[0],
+            # time_levels_list[0],
+            # pxar_list[0],
+        )
 
     def predict(self, books_array: np.ndarray) -> np.ndarray:
         self.model.eval()
@@ -93,6 +132,16 @@ class Trainer:
             predictions = output.detach().cpu().numpy()
         return predictions.squeeze()
 
+    def save_model(self, filepath='trained_model.pth'):
+        """Saves the trained model."""
+        torch.save(self.model.state_dict(), filepath)
+
+    def load_model(self, filepath='trained_model.pth'):
+        """Loads a trained model."""
+        self.model.load_state_dict(torch.load(filepath, map_location=self.device))
+        self.model.to(self.device)
+        self.model.eval()
+
 
 def main():
     # Example usage of Trainer
@@ -101,10 +150,6 @@ def main():
     import torch.nn as nn
     import asyncio
     from deep_orderbook.config import ReplayConfig, ShaperConfig
-
-    # Device configuration
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'Device: {device}')
 
     # Model parameters
     input_channels = 3
@@ -117,24 +162,28 @@ def main():
 
     # Configurations
     replay_config = ReplayConfig(date_regexp="2024-0")
-    shaper_config = ShaperConfig(only_full_arrays=True)
+    shaper_config = ShaperConfig(only_full_arrays=False)
 
     # Create the trainer
-    trainer = Trainer(model, optimizer, criterion, device, replay_config, shaper_config)
+    trainer = Trainer(model, optimizer, criterion, replay_config, shaper_config)
 
     # Start data loading workers
-    trainer.start_data_loading(num_workers=2)
+    trainer.start_data_loading(num_workers=4)
 
     # Training loop
-    for _ in range(1000):  # For example, perform 10 training steps
+    num_training_steps = 100
+
+    for step in range(num_training_steps):
         result = trainer.train_step()
         if result is not None:
             loss, prediction = result
-            print(f"Training loss: {loss}")
+            print(f"Training step {step + 1}/{num_training_steps}, Loss: {loss}")
         else:
-            # Wait for data to be available
-            print("Waiting for data...")
             asyncio.run(asyncio.sleep(1))
+
+    # Save the trained model
+    trainer.save_model('trained_model.pth')
+    print("Model training completed and saved.")
 
 
 if __name__ == '__main__':
