@@ -1,5 +1,6 @@
 import datetime
 from pathlib import Path
+import random
 from typing import Self
 from pydantic import BaseModel
 
@@ -21,7 +22,18 @@ class FeedConfig(BaseConfig):
 class ReplayConfig(FeedConfig):
     data_dir: Path = Path("data")
     date_regexp: str = "2024-08-05"
+    one_path: Path | None = None
     skip_until_time: datetime.time = datetime.time(0, 0)
+
+    def file_list(self) -> list[Path]:
+        if self.one_path:
+            return [self.one_path]
+        return sorted(self.data_dir.glob(f"{self.date_regexp}*.parquet"))
+
+    def but_random_file(self) -> Self:
+        list_of_all_files = self.file_list()
+        random_file = random.choice(list_of_all_files)
+        return self.but(one_path=random_file)
 
 
 class ShaperConfig(BaseConfig):
@@ -40,6 +52,7 @@ class TrainConfig(BaseConfig):
     device: str = "cuda"  # "cpu" or "cuda"
     epochs: int = 10
     learning_rate: float = 0.00001
+    num_workers: int = 4  # Number of data loading threads
 
     batch_size: int = 32
     criterion: str = "MSELoss"  # "MSELoss" or "L1Loss"

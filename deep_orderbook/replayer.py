@@ -257,7 +257,7 @@ class ParquetReplayer:
         self.on_message = None
 
     async def open_async(self) -> None:
-        self.parquet_files = sorted(self.directory.glob(f"{self.date_regexp}*.parquet"))
+        self.parquet_files = self.config.file_list()
         logger.info(
             f"Found {len(self.parquet_files)} parquet files in {self.directory}"
         )

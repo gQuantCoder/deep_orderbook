@@ -643,7 +643,7 @@ async def main():
 
     profiler = pyinstrument.Profiler()
     with profiler:
-        async for shape in iter_shapes_t2l(
+        async for books_array, time_levels, pxar in iter_shapes_t2l(
             replay_config=replay_config, shaper_config=shaper_config
         ):
             pass
