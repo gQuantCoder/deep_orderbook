@@ -2,7 +2,7 @@
 
 import threading
 import asyncio
-
+import queue
 
 class DataLoaderWorker:
     """Data loading worker that reads data from files and puts it into a queue."""
@@ -36,7 +36,7 @@ class DataLoaderWorker:
                         shaper_config=self.shaper_config,
                     ):
                         self.data_queue.put((books_array, time_levels, pxar))
-                        # # Optional sleep interval
+                        # Optional sleep interval
                         # await asyncio.sleep(0.1)
 
                 loop.run_until_complete(load_data())
@@ -48,14 +48,13 @@ class DataLoaderWorker:
 
 async def main():
     # Example usage of DataLoaderWorker
-    import queue
     from deep_orderbook.config import ReplayConfig, ShaperConfig
 
     # Create a queue for data
     data_queue = queue.Queue(maxsize=1000)
 
     # Define shaper configuration
-    shaper_config = ShaperConfig()
+    shaper_config = ShaperConfig(only_full_arrays=True)
 
     replay_config = ReplayConfig(date_regexp="2024-0")
     print(f"{replay_config.file_list()=}")
@@ -69,7 +68,7 @@ async def main():
     # Consume data from the queue
     try:
         while True:
-            data = data_queue.get(timeout=5)
+            data = data_queue.get(timeout=30)
             books_array, time_levels, pxar = data
             print(
                 f"Queue size: {data_queue.qsize()}, {books_array.shape=}, {time_levels.shape=}"

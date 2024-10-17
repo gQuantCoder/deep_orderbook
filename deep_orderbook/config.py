@@ -43,6 +43,8 @@ class ShaperConfig(BaseConfig):
     side_bips: int = 100
     side_width: int = 50
 
+    only_full_arrays: bool = False
+
     for_image_display: bool = False
 
     look_ahead: int = 64
@@ -52,7 +54,9 @@ class TrainConfig(BaseConfig):
     device: str = "cuda"  # "cpu" or "cuda"
     epochs: int = 10
     learning_rate: float = 0.00001
-    num_workers: int = 4  # Number of data loading threads
+
+    num_workers: int = 8  # Number of data loading threads
+    data_queue_size: int = 256  # Maximum number of items in the data queue
 
     batch_size: int = 32
     criterion: str = "MSELoss"  # "MSELoss" or "L1Loss"

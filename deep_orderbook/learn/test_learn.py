@@ -14,7 +14,7 @@ from deep_orderbook.learn.trainer import Trainer
 
 # Function to train and predict
 async def train_and_predict(
-    config: TrainConfig, replay_config: ReplayConfig, shaper_config: ShaperConfig
+    config: TrainConfig, replay_config: ReplayConfig, shaper_config: ShaperConfig, test_config:ReplayConfig
 ):
     from deep_orderbook.shaper import iter_shapes_t2l
 
@@ -32,7 +32,9 @@ async def train_and_predict(
     criterion = nn.MSELoss()
 
     # Create the trainer
-    trainer = Trainer(model, optimizer, criterion, device)
+    trainer = Trainer(model, optimizer, criterion, device, replay_config, shaper_config)
+    # Start data loading workers
+    trainer.start_data_loading(num_workers=2)
 
     # Lists to store losses and predictions for plotting
     losses = []
@@ -42,14 +44,11 @@ async def train_and_predict(
     while epoch_left > 0:
         epoch_left -= 1
         async for books_array, time_levels, pxar in iter_shapes_t2l(
-            replay_config=replay_config, shaper_config=shaper_config
+            replay_config=test_config, shaper_config=shaper_config.but(only_full_arrays=False)
         ):
             time_levels[time_levels > 0.02] = 1
             # Perform a training step
-            time_steps_used = shaper_config.time_accumulate - shaper_config.look_ahead
-            loss, prediction = trainer.train_step(
-                books_array[:time_steps_used], time_levels[:time_steps_used]
-            )
+            loss, prediction = trainer.train_step()
             losses.append(loss)
             prediction = trainer.predict(books_array)
 

@@ -632,6 +632,10 @@ async def iter_shapes_t2l(
             new_books = onesec.symbols[replay_config.markets[0]]
             books_array = await shaper.make_arr3d(new_books)
             time_levels = await shaper.build_time_level_trade()
+            if shaper_config.only_full_arrays:
+                # print(np.isnan(shaper.prices_array).sum())
+                if np.isnan(shaper.prices_array).any():
+                    continue
             yield books_array, time_levels, shaper.prices_array
 
 
