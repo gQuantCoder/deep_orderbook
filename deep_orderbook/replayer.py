@@ -287,13 +287,16 @@ class ParquetReplayer:
         channel_names: list[str],
     ) -> None:
         await asyncio.sleep(0.01)
-        for parquet_file in tqdm(self.parquet_files, leave=False):
+        for parquet_file in self.parquet_files:
+            if not self.on_message:
+                raise ValueError("on_message handler not set for ParquetReplayer.")
+
             logger.info(f"Reading {parquet_file}")
             df = pl.read_parquet(parquet_file)
 
-            # should work, but deosn't seem to
+            # should work, but doesn't seem to
             df = df.set_sorted('timestamp')
-            # so we sort it manually...
+            # # # so we sort it manually...
             df = df.sort('timestamp')
 
             # filter on product_ids and channels
@@ -302,17 +305,14 @@ class ParquetReplayer:
             if channel_names:
                 df = df.filter(pl.col('channel').is_in(channel_names))
 
-            with tqdm(
-                df.group_by_dynamic("timestamp", every="1s", label='right')
-            ) as windows:
-                if self.on_message:
-                    for (t_win,), df_s in windows:
-                        windows.set_description(f"replay: {t_win}")
-                        if t_win.time() < self.config.skip_until_time:
-                            continue
-                        await self.on_message(t_win, df_s)
-                else:
-                    raise ValueError("on_message handler not set for ParquetReplayer.")
+            grouped = df.group_by_dynamic("timestamp", every="1s", label='right')
+            # grouped.explain(streaming=True)
+            with tqdm(grouped, leave=False, desc="grouped") as windows:
+                for (t_win,), df_s in windows:
+                    windows.set_description(f"replay: {t_win}")
+                    if t_win.time() < self.config.skip_until_time:
+                        continue
+                    await self.on_message(t_win, df_s)
 
     async def unsubscribe_all_async(self) -> None:
         self.feed_task.cancel()
@@ -336,9 +336,9 @@ async def main():
 
     config = ReplayConfig(
         markets=['BTC-USD', 'ETH-USD', 'ETH-BTC'],
-        date_regexp='2024-08-06',
+        date_regexp='2024-08-05',
         max_samples=250,
-        skip_until_time="05:30",
+        # skip_until_time="05:30",
     )
     with pyinstrument.Profiler() as profiler:
         async with CoinbaseFeed(

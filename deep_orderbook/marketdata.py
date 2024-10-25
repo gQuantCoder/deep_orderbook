@@ -57,6 +57,9 @@ class OneSecondEnds(BaseModel, arbitrary_types_allowed=True):
         schema={"price": pl.Float32, "size": pl.Float32, "side": pl.Utf8}
     )
 
+    def is_empty(self):
+        return len(self.bids) == 0 or len(self.asks) == 0
+    
     def bbos(self):
         return (
             OrderLevel(**next(self.bids.iter_rows(named=True))),
@@ -211,6 +214,12 @@ class DepthCachePlus(BaseModel):
     def add_trade(self, trade: Trade):
         self.trade_bunch.add_trade(trade)
 
+    def add_bid(self, bid: OrderLevel):
+        self._bids[bid.price] = bid.size
+
+    def add_ask(self, ask: OrderLevel):
+        self._asks[ask.price] = ask.size
+
     def get_bids(self):
         lst = [(price, quantity) for price, quantity in self._bids.items() if quantity]
         return sorted(lst, key=itemgetter(0), reverse=True)
@@ -218,12 +227,6 @@ class DepthCachePlus(BaseModel):
     def get_asks(self):
         lst = [(price, quantity) for price, quantity in self._asks.items() if quantity]
         return sorted(lst, key=itemgetter(0), reverse=False)
-
-    def add_bid(self, bid: OrderLevel):
-        self._bids[bid.price] = bid.size
-
-    def add_ask(self, ask: OrderLevel):
-        self._asks[ask.price] = ask.size
 
     def update(self, updates: BookUpdate):
         for bid in updates.bids:

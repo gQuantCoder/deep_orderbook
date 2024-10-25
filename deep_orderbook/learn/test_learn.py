@@ -26,7 +26,7 @@ async def train_and_predict(
     output_channels = 1  # ValueDimension of time_levels
 
     # Initialize model, optimizer, and loss function
-    model = TCNModel(input_channels, output_channels)
+    model = TCNModel(input_channels, output_channels, num_levels=config.num_levels)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.MSELoss()
 
@@ -55,11 +55,14 @@ async def train_and_predict(
         ):
             time_levels[time_levels > 0.02] = 1
             # Perform a training step
-            loss, prediction = trainer.train_step()
-            losses.append(loss)
-            prediction = trainer.predict(books_array)
+            try:
+                loss, prediction = trainer.train_step()
+                losses.append(loss)
+                prediction = trainer.predict(books_array)
 
-            yield books_array, time_levels, pxar, prediction, loss
+                yield books_array, time_levels, pxar, prediction, loss
+            except Exception as e:
+                print(f"Exception in training: {e}")
 
 
 # Main function to run the script

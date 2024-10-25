@@ -3,6 +3,8 @@
 import threading
 import asyncio
 import queue
+from deep_orderbook.utils import logger
+
 
 class DataLoaderWorker:
     """Data loading worker that reads data from files and puts it into a queue."""
@@ -24,24 +26,33 @@ class DataLoaderWorker:
 
         while True:
             try:
+                rand_replay_config = self.replay_config.but_random_file()
+                logger.info(f"Loading data from {rand_replay_config.file_list()}")
+
                 # Create a new event loop for this thread
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-
-                rand_replay_config = self.replay_config.but_random_file()
 
                 async def load_data():
                     async for books_array, time_levels, pxar in iter_shapes_t2l(
                         replay_config=rand_replay_config,
                         shaper_config=self.shaper_config,
                     ):
-                        self.data_queue.put((books_array, time_levels, pxar))
+                        try:
+                            self.data_queue.put(
+                                (books_array, time_levels, pxar),
+                                # block=False,
+                            )
+                        except queue.Full:
+                            pass
                         # Optional sleep interval
                         # await asyncio.sleep(0.1)
 
                 loop.run_until_complete(load_data())
             except Exception as e:
-                print(f"Exception in data loading worker: {e}")
+                print(
+                    f"Exception in data loading worker: {e}\n with :{rand_replay_config.file_list()}"
+                )
             finally:
                 loop.close()
 

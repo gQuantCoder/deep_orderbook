@@ -7,6 +7,8 @@ import polars as pl
 
 from tqdm.auto import tqdm
 from deep_orderbook.config import ReplayConfig, ShaperConfig
+from deep_orderbook.utils import logger
+
 import deep_orderbook.marketdata as md
 import aioitertools
 
@@ -630,6 +632,9 @@ async def iter_shapes_t2l(
     ) as feed:
         async for onesec in feed.one_second_iterator():
             new_books = onesec.symbols[replay_config.markets[0]]
+            if new_books.is_empty():
+                logger.warning('Empty books')
+                continue            
             books_array = await shaper.make_arr3d(new_books)
             time_levels = await shaper.build_time_level_trade()
             if shaper_config.only_full_arrays:

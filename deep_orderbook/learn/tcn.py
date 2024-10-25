@@ -48,7 +48,7 @@ class TCNModel(nn.Module):
 
     def __init__(self, input_channels, output_channels, num_levels = 4):
         super().__init__()
-        levels = [input_channels] + [64] * num_levels
+        levels = [input_channels] + [16] * num_levels
         dilations = [(2**i, 1) for i in range(num_levels)]  # Exponential dilation
         kernel_size = (3, 3)
         self.layers = nn.ModuleList()

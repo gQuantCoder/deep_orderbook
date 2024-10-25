@@ -57,6 +57,7 @@ class TrainConfig(BaseConfig):
 
     num_workers: int = 8  # Number of data loading threads
     data_queue_size: int = 256  # Maximum number of items in the data queue
+    num_levels: int = 4
 
     batch_size: int = 4
     criterion: str = "MSELoss"  # "MSELoss" or "L1Loss"

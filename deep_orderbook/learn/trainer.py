@@ -6,6 +6,7 @@ import queue
 import threading
 from deep_orderbook.learn.data_loader import DataLoaderWorker
 from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
+from deep_orderbook.utils import logger
 
 
 class Trainer:
@@ -26,9 +27,7 @@ class Trainer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f'{self.device=}')
         self.model = model.to(self.device)
-        self.data_queue = queue.Queue(
-            maxsize=1000
-        )  # Queue is a member of the Trainer class
+        self.data_queue = queue.Queue(maxsize=train_config.data_queue_size)
         self.train_config = train_config
         self.replay_config = replay_config
         self.shaper_config = shaper_config
@@ -54,7 +53,7 @@ class Trainer:
         batch_size = self.train_config.batch_size
         while len(books_array_list) < batch_size:
             try:
-                books_array, time_levels, pxar = self.data_queue.get(timeout=30)
+                books_array, time_levels, pxar = self.data_queue.get(timeout=120)
                 books_array_list.append(books_array)
                 time_levels_list.append(time_levels)
                 pxar_list.append(pxar)
@@ -156,28 +155,46 @@ def main():
     output_channels = 1
 
     # Initialize model, optimizer, and loss function
-    model = TCNModel(input_channels, output_channels)
+    model = TCNModel(input_channels, output_channels, num_levels=4)
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     criterion = nn.MSELoss()
 
     # Configurations
-    replay_config = ReplayConfig(date_regexp="2024-0")
-    shaper_config = ShaperConfig(only_full_arrays=False)
+    train_config = TrainConfig(
+        num_workers=8, batch_size=32, data_queue_size=512, num_levels=8
+    )
+    replay_config = ReplayConfig(
+        date_regexp='2024-0', data_dir='/media/photoDS216/crypto/'
+    )
+    shaper_config = ShaperConfig(only_full_arrays=True)
 
     # Create the trainer
-    trainer = Trainer(model, optimizer, criterion, replay_config, shaper_config)
+    trainer = Trainer(
+        model,
+        optimizer,
+        criterion,
+        train_config=train_config,
+        replay_config=replay_config,
+        shaper_config=shaper_config,
+    )
 
     # Start data loading workers
-    trainer.start_data_loading(num_workers=4)
+    trainer.start_data_loading()
 
     # Training loop
     num_training_steps = 100
+    while trainer.data_queue.qsize() < train_config.data_queue_size:
+        logger.info(f"Waiting for data. Queue size: {trainer.data_queue.qsize()}")
+        asyncio.run(asyncio.sleep(5))
 
     for step in range(num_training_steps):
         result = trainer.train_step()
         if result is not None:
             loss, prediction = result
-            print(f"Training step {step + 1}/{num_training_steps}, Loss: {loss}")
+            logger.warning(
+                f"Training step {step + 1}/{num_training_steps}, queue: {trainer.data_queue.qsize()}, Loss: {loss}"
+            )
+            # print(f"Training step {step + 1}/{num_training_steps}, Loss: {loss}")
         else:
             asyncio.run(asyncio.sleep(1))
 
@@ -187,4 +204,5 @@ def main():
 
 
 if __name__ == '__main__':
+    logger.setLevel('INFO')
     main()
