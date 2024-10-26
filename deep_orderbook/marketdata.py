@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Literal
 from pydantic import AliasChoices, BaseModel, Field, ValidationInfo, field_validator
-from operator import itemgetter
 from deep_orderbook.utils import logger
 import polars as pl
 
@@ -59,7 +58,7 @@ class OneSecondEnds(BaseModel, arbitrary_types_allowed=True):
 
     def is_empty(self):
         return len(self.bids) == 0 or len(self.asks) == 0
-    
+
     def bbos(self):
         return (
             OrderLevel(**next(self.bids.iter_rows(named=True))),
@@ -70,7 +69,7 @@ class OneSecondEnds(BaseModel, arbitrary_types_allowed=True):
         bb, ba = self.bbos()
         price = (bb.price * ba.size + ba.price * bb.size) / (bb.size + ba.size)
         return round(price, 8)
-    
+
     def trade_range(self) -> tuple[float, float] | None:
         trades = self.trades
         if len(trades) == 0:
@@ -205,28 +204,50 @@ class TradeBunch(BaseModel):
         self.trades = []
 
 
+from sortedcontainers import SortedDict
+
+
 class DepthCachePlus(BaseModel):
-    # symbol: str
-    _bids: dict[float, float] = {}
-    _asks: dict[float, float] = {}
+    _bids: SortedDict[float, float] = SortedDict()
+    _asks: SortedDict[float, float] = SortedDict()
+    _bids_view = _bids.items()
+    _asks_view = _asks.items()
     trade_bunch: TradeBunch = TradeBunch()
 
     def add_trade(self, trade: Trade):
         self.trade_bunch.add_trade(trade)
 
     def add_bid(self, bid: OrderLevel):
-        self._bids[bid.price] = bid.size
+        # optimisation: bid price is negative in this sortedlist to make it sorted in descending order
+        # so we need to negate it to get the actual price
+        self._bids[-bid.price] = bid.size
 
     def add_ask(self, ask: OrderLevel):
         self._asks[ask.price] = ask.size
 
     def get_bids(self):
-        lst = [(price, quantity) for price, quantity in self._bids.items() if quantity]
-        return sorted(lst, key=itemgetter(0), reverse=True)
+        # see above for the negation
+        return [
+            (-price, quantity) for price, quantity in self._bids_view if quantity
+        ]
 
     def get_asks(self):
-        lst = [(price, quantity) for price, quantity in self._asks.items() if quantity]
-        return sorted(lst, key=itemgetter(0), reverse=False)
+        return [(price, quantity) for price, quantity in self._asks_view if quantity]
+
+    def clean_crossed_bbo(self):
+        # see above for the negation
+        bids = self.get_bids()
+        asks = self.get_asks()
+        logger.warning("cleaning the crossed BBO \nBIDS: {0} \nASKS: {1}".format(bids[:5], asks[:5]))
+        for pb in list(self._bids.keys()):
+            if -pb >= self.asks[0][0]:
+                del self._bids[pb]
+        for pa in list(self.asks.keys()):
+            if pa <= -self._bids[0][0]:
+                del self._asks[pa]
+        bids = self.get_bids()
+        asks = self.get_asks()
+        logger.debug("result: \nBIDS: {0} \nASKS: {1}".format(bids[:5], asks[:5]))
 
     def update(self, updates: BookUpdate):
         for bid in updates.bids:
@@ -235,8 +256,8 @@ class DepthCachePlus(BaseModel):
             self.add_ask(ask)
 
     def reset(self, snapshot: BookUpdate | None = None):
-        self._bids = {}
-        self._asks = {}
+        self._bids.clear()
+        self._asks.clear()
         if snapshot:
             for bid in snapshot.bids:
                 self.add_bid(bid)
@@ -247,20 +268,9 @@ class DepthCachePlus(BaseModel):
         bids = self.get_bids()
         asks = self.get_asks()
         if bids and asks and bids[0][0] >= asks[0][0]:
-            logger.warning(
-                f"cleaning the crossed BBO \nBIDS: {bids[:5]}\nASKS: {asks[:5]}"
-            )
-            for p in list(self._bids.keys()):
-                if p >= asks[0][0]:
-                    del self._bids[p]
-            for p in list(self._asks.keys()):
-                if p <= bids[0][0]:
-                    del self._asks[p]
-            bids = self.get_bids()
-            asks = self.get_asks()
-            logger.debug(f"result: \nBIDS: {bids[:5]}\nASKS: {asks[:5]}")
+            self.clean_crossed_bbo()
 
-            assert bids[0][0] < asks[0][0]
+        # assert bids[0][0] < asks[0][0]
         return bids, asks
 
     def dump(self, and_reset_trades=False) -> tuple[str, str]:

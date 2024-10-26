@@ -72,7 +72,7 @@ class Trainer:
             time_levels_list[i][time_levels_list[i] > 0.02] = 1
 
         time_steps_used = (
-            self.shaper_config.time_accumulate - self.shaper_config.look_ahead
+            self.shaper_config.rolling_window_size - self.shaper_config.look_ahead
         )
 
         self.model.train()

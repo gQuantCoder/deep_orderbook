@@ -1,7 +1,6 @@
 import asyncio
 import collections
 from pathlib import Path
-import time
 from typing import AsyncGenerator, Iterator, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field, ValidationError
@@ -11,7 +10,6 @@ import polars as pl
 from coinbase.websocket import WSClient  # type: ignore[import-untyped]
 from deep_orderbook import marketdata as md
 from deep_orderbook.config import FeedConfig
-from deep_orderbook.shaper import BookShaper
 from deep_orderbook.feeds.base_feed import BaseFeed, EndFeed
 from deep_orderbook.utils import logger
 
@@ -367,45 +365,6 @@ class CoinbaseFeed(BaseFeed):
             num_samples -= 1
             one_sec = await self.queue_one_sec.get()
             yield one_sec
-
-    async def multi_generator(
-        self, *, markets: list[str] | None = None
-    ) -> AsyncGenerator[dict[str, md.MulitSymbolOneSecondEnds], None]:
-        """this function is used to run the replay of the market data in parallel for all the symbols."""
-        markets = markets or self.markets
-        symbol_shapers = {pair: BookShaper() for pair in markets}
-
-        twake = time.time() // 1 + 1
-        while True:
-            timesleep = twake - time.time()
-            if timesleep > 0:
-                await asyncio.sleep(timesleep)
-            else:
-                logger.warning(f"time sleep is negative: {timesleep}")
-
-            onesec = await self.on_one_second_end()
-
-            logger.debug(f"generating onsec, {twake=}")
-            shapped_sec = {}
-            for symbol, shaper in symbol_shapers.items():
-                bids, asks = self.depth_managers[symbol].get_bids_asks()
-                if not bids or not asks:
-                    logger.warning(f"no bids or asks for {symbol}")
-                    break
-                await shaper.update_ema(bids, asks, twake)
-
-                await shaper.on_trades_bunch(
-                    onesec.symbols[symbol].trades, force_t_avail=twake
-                )
-
-                shapped_sec[symbol] = await shaper.make_frames_async(
-                    t_avail=twake,
-                    bids=bids,
-                    asks=asks,
-                )
-            else:
-                yield shapped_sec
-            twake += 1
 
 
 async def main():

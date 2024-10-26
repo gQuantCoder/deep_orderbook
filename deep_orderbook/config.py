@@ -39,7 +39,7 @@ class ReplayConfig(FeedConfig):
 class ShaperConfig(BaseConfig):
     zoom_frac: float = 0.004
     num_side_lvl: int = 64
-    time_accumulate: int = 256
+    rolling_window_size: int = 256
     side_bips: int = 100
     side_width: int = 50
 
