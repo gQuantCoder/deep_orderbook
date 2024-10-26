@@ -70,12 +70,6 @@ class OneSecondEnds(BaseModel, arbitrary_types_allowed=True):
         price = (bb.price * ba.size + ba.price * bb.size) / (bb.size + ba.size)
         return round(price, 8)
 
-    def trade_range(self) -> tuple[float, float] | None:
-        trades = self.trades
-        if len(trades) == 0:
-            return None
-        return trades['price'].min(), trades['price'].max()
-
     def trades_to_3num(self):
         return self.trades.with_columns(
             [
@@ -204,47 +198,46 @@ class TradeBunch(BaseModel):
         self.trades = []
 
 
-from sortedcontainers import SortedDict
-
-
 class DepthCachePlus(BaseModel):
-    _bids: SortedDict[float, float] = SortedDict()
-    _asks: SortedDict[float, float] = SortedDict()
-    _bids_view = _bids.items()
-    _asks_view = _asks.items()
+    s_bids: dict[float, float] = {}
+    s_asks: dict[float, float] = {}
     trade_bunch: TradeBunch = TradeBunch()
 
-    def add_trade(self, trade: Trade):
+    def add_trade(self, trade: Trade) -> None:
         self.trade_bunch.add_trade(trade)
 
-    def add_bid(self, bid: OrderLevel):
-        # optimisation: bid price is negative in this sortedlist to make it sorted in descending order
-        # so we need to negate it to get the actual price
-        self._bids[-bid.price] = bid.size
+    def add_bid(self, bid: OrderLevel) -> None:
+        self.s_bids[bid.price] = bid.size
 
     def add_ask(self, ask: OrderLevel):
-        self._asks[ask.price] = ask.size
+        self.s_asks[ask.price] = ask.size
 
-    def get_bids(self):
-        # see above for the negation
-        return [
-            (-price, quantity) for price, quantity in self._bids_view if quantity
-        ]
+    def get_bids(self) -> list[tuple[float, float]]:
+        return sorted(
+            [(price, quantity) for price, quantity in self.s_bids.items() if quantity],
+            reverse=True,
+        )
 
-    def get_asks(self):
-        return [(price, quantity) for price, quantity in self._asks_view if quantity]
+    def get_asks(self) -> list[tuple[float, float]]:
+        return sorted(
+            [(price, quantity) for price, quantity in self.s_asks.items() if quantity]
+        )
 
-    def clean_crossed_bbo(self):
+    def clean_crossed_bbo(self) -> None:
         # see above for the negation
         bids = self.get_bids()
         asks = self.get_asks()
-        logger.warning("cleaning the crossed BBO \nBIDS: {0} \nASKS: {1}".format(bids[:5], asks[:5]))
-        for pb in list(self._bids.keys()):
-            if -pb >= self.asks[0][0]:
-                del self._bids[pb]
-        for pa in list(self.asks.keys()):
-            if pa <= -self._bids[0][0]:
-                del self._asks[pa]
+        logger.warning(
+            "cleaning the crossed BBO \nBIDS: {0} \nASKS: {1}".format(
+                bids[:5], asks[:5]
+            )
+        )
+        for pb in list(self.s_bids.keys()):
+            if pb >= asks[0][0]:
+                del self.s_bids[pb]
+        for pa in list(self.s_asks.keys()):
+            if pa <= bids[0][0]:
+                del self.s_asks[pa]
         bids = self.get_bids()
         asks = self.get_asks()
         logger.debug("result: \nBIDS: {0} \nASKS: {1}".format(bids[:5], asks[:5]))
@@ -256,8 +249,8 @@ class DepthCachePlus(BaseModel):
             self.add_ask(ask)
 
     def reset(self, snapshot: BookUpdate | None = None):
-        self._bids.clear()
-        self._asks.clear()
+        self.s_bids.clear()
+        self.s_asks.clear()
         if snapshot:
             for bid in snapshot.bids:
                 self.add_bid(bid)
