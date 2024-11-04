@@ -56,7 +56,7 @@ class OneSecondEnds(BaseModel, arbitrary_types_allowed=True):
         schema={"price": pl.Float32, "size": pl.Float32, "side": pl.Utf8}
     )
 
-    def is_empty(self):
+    def no_bbo(self):
         return len(self.bids) == 0 or len(self.asks) == 0
 
     def bbos(self):

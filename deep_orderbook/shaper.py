@@ -121,7 +121,7 @@ class ArrayShaper:
 
         return self.total_array
 
-    async def build_time_level_trade(self, side_bips=32, side_width=16):
+    async def build_time_level_trade(self) -> np.ndarray:
         """
         Vectorized version of build_time_level_trade.
         Calculates the time it takes for the price to hit certain levels without explicit for-loops.
@@ -136,10 +136,12 @@ class ArrayShaper:
         numpy array: A matrix of time it takes for the price to hit each level.
         """
         books, prices = self.total_array, self.prices_array
+        FUTURE = self.config.look_ahead
+        side_bips = self.config.look_ahead_side_bips
+        side_width = self.config.look_ahead_side_width
 
         # Define constants
         mult = 0.0001 * side_bips / side_width
-        FUTURE = 64
 
         num_t = prices.shape[0]
         T_eff = num_t - FUTURE + 1  # Effective time steps considering FUTURE window
@@ -186,10 +188,10 @@ class ArrayShaper:
 
         # Compute timeUp and timeDn by finding the first occurrence where the condition is True
         tradeUp_any = tradeUp.any(axis=1)  # (T_eff, side_width)
-        timeUp = np.where(tradeUp_any, np.argmax(tradeUp, axis=1) + 1, FUTURE * 10)
+        timeUp = np.where(tradeUp_any, np.argmax(tradeUp, axis=1) + 1, 1e9)
 
         tradeDn_any = tradeDn.any(axis=1)
-        timeDn = np.where(tradeDn_any, np.argmax(tradeDn, axis=1) + 1, FUTURE * 10)
+        timeDn = np.where(tradeDn_any, np.argmax(tradeDn, axis=1) + 1, 1e9)
 
         # multiply timeDn and timeUp by the distance to the reference price
         timeDn = timeDn * 1 / (thresh[np.newaxis, :] + 1)
@@ -206,9 +208,9 @@ class ArrayShaper:
         # Add a new axis to match the expected output shape
         time2levels = time2levels[:, :, np.newaxis]  # (T_eff, 2 * side_width, 1)
 
-        # Initialize the full time2levels array with FUTURE * 10 for time steps beyond T_eff
+        # Initialize the full time2levels array with 1e9 for time steps beyond T_eff
         time2levels_full = np.full(
-            (num_t, 2 * side_width, 1), FUTURE * 10, dtype=np.float32
+            (num_t, 2 * side_width, 1), 1e9, dtype=np.float32
         )
 
         # Assign the computed values to the corresponding positions
@@ -234,7 +236,7 @@ async def iter_shapes_t2l(
     ) as feed:
         async for onesec in feed.one_second_iterator():
             new_books = onesec.symbols[replay_config.markets[0]]
-            if new_books.is_empty():
+            if new_books.no_bbo():
                 logger.warning('Empty books')
                 continue
             books_array = await shaper.make_arr3d(new_books)

@@ -21,14 +21,18 @@ class FeedConfig(BaseConfig):
 
 class ReplayConfig(FeedConfig):
     data_dir: Path = Path("data")
-    date_regexp: str = "2024-08-05"
+    date_regexp: str = "2024-09"
     one_path: Path | None = None
     skip_until_time: datetime.time = datetime.time(0, 0)
+    every: str = "1s"
 
     def file_list(self) -> list[Path]:
         if self.one_path:
             return [self.one_path]
         return sorted(self.data_dir.glob(f"{self.date_regexp}*.parquet"))
+    
+    def num_files(self) -> int:
+        return len(self.file_list())
 
     def but_random_file(self) -> Self:
         list_of_all_files = self.file_list()
@@ -38,16 +42,16 @@ class ReplayConfig(FeedConfig):
 
 class ShaperConfig(BaseConfig):
     zoom_frac: float = 0.004
-    num_side_lvl: int = 64
+    num_side_lvl: int = 32
     rolling_window_size: int = 256
-    side_bips: int = 100
-    side_width: int = 50
 
     only_full_arrays: bool = False
 
     for_image_display: bool = False
 
-    look_ahead: int = 64
+    look_ahead: int = 8
+    look_ahead_side_bips: int = 8
+    look_ahead_side_width: int = 16
 
 
 class TrainConfig(BaseConfig):
@@ -55,7 +59,7 @@ class TrainConfig(BaseConfig):
     epochs: int = 10
     learning_rate: float = 0.001
 
-    num_workers: int = 8  # Number of data loading threads
+    num_workers: int = 1  # Number of data loading threads
     data_queue_size: int = 256  # Maximum number of items in the data queue
     num_levels: int = 4
 

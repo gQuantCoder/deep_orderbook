@@ -3,13 +3,16 @@
 import threading
 import asyncio
 import queue
+from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.utils import logger
 
 
 class DataLoaderWorker:
     """Data loading worker that reads data from files and puts it into a queue."""
 
-    def __init__(self, *, data_queue, replay_config, shaper_config):
+    def __init__(
+        self, *, data_queue, replay_config: ReplayConfig, shaper_config: ShaperConfig
+    ):
         self.data_queue = data_queue
         self.replay_config = replay_config
         self.shaper_config = shaper_config
@@ -17,7 +20,7 @@ class DataLoaderWorker:
     def start(self):
         """Starts the data loading worker in a separate thread."""
         t = threading.Thread(target=self.run)
-        t.daemon = True
+        # t.daemon = True
         t.start()
 
     def run(self):
@@ -27,7 +30,7 @@ class DataLoaderWorker:
         while True:
             try:
                 rand_replay_config = self.replay_config.but_random_file()
-                logger.info(f"Loading data from {rand_replay_config.file_list()}")
+                logger.warning(f"Loading data from {rand_replay_config.file_list()}")
 
                 # Create a new event loop for this thread
                 loop = asyncio.new_event_loop()
@@ -47,9 +50,14 @@ class DataLoaderWorker:
                             pass
                         # Optional sleep interval
                         # await asyncio.sleep(0.1)
+                    logger.info(f"load_data completed")
 
                 loop.run_until_complete(load_data())
+                logger.info(
+                    f"Data loading completed for {rand_replay_config.file_list()}"
+                )
             except Exception as e:
+                logger.error(f"Exception in data loading worker: {e}")
                 print(
                     f"Exception in data loading worker: {e}\n with :{rand_replay_config.file_list()}"
                 )
@@ -61,30 +69,36 @@ async def main():
     # Example usage of DataLoaderWorker
     from deep_orderbook.config import ReplayConfig, ShaperConfig
 
+    replay_config = ReplayConfig(date_regexp="2024-0")
+    shaper_config = ShaperConfig(only_full_arrays=False)
+    print(f"{replay_config.file_list()=}")
+
     # Create a queue for data
     data_queue = queue.Queue(maxsize=1000)
-
-    # Define shaper configuration
-    shaper_config = ShaperConfig(only_full_arrays=True)
-
-    replay_config = ReplayConfig(date_regexp="2024-0")
-    print(f"{replay_config.file_list()=}")
 
     # Initialize and start the data loader worker
     data_loader_worker = DataLoaderWorker(
         data_queue=data_queue, replay_config=replay_config, shaper_config=shaper_config
     )
-    data_loader_worker.start()
+    num_workers = 4
+    for _ in range(num_workers):
+        data_loader_worker = DataLoaderWorker(
+            data_queue=data_queue,
+            replay_config=replay_config,
+            shaper_config=shaper_config,
+        )
+        data_loader_worker.start()
 
     # Consume data from the queue
     try:
         while True:
             data = data_queue.get(timeout=30)
             books_array, time_levels, pxar = data
-            print(
-                f"Queue size: {data_queue.qsize()}, {books_array.shape=}, {time_levels.shape=}"
-            )
-            await asyncio.sleep(1)
+            if qs := data_queue.qsize():
+                logger.info(
+                    f"Queue size: {qs}, books: {books_array.shape}, t2l: {time_levels.shape}"
+                )
+            await asyncio.sleep(0.1)
     except queue.Empty:
         print("Data queue is empty.")
 

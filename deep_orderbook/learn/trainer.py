@@ -3,7 +3,6 @@
 import torch
 import numpy as np
 import queue
-import threading
 from deep_orderbook.learn.data_loader import DataLoaderWorker
 from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
 from deep_orderbook.utils import logger
@@ -27,11 +26,13 @@ class Trainer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f'{self.device=}')
         self.model = model.to(self.device)
-        self.data_queue = queue.Queue(maxsize=train_config.data_queue_size)
+        self.data_queue: queue.Queue[tuple[np.ndarray, np.ndarray, np.ndarray]] = (
+            queue.Queue(maxsize=train_config.data_queue_size)
+        )
         self.train_config = train_config
         self.replay_config = replay_config
         self.shaper_config = shaper_config
-        self.workers = []
+        self.workers: list[DataLoaderWorker] = []
 
     def start_data_loading(self):
         """Starts data loading workers."""
@@ -59,17 +60,13 @@ class Trainer:
                 pxar_list.append(pxar)
             except queue.Empty:
                 if len(books_array_list) == 0:
-                    print("Data queue is empty. Waiting for data...")
+                    logger.warning("Data queue is empty. Waiting for data...")
                     return None
                 else:
-                    print(
+                    logger.warning(
                         "Not enough samples for a full batch. Proceeding with available samples."
                     )
                     break
-
-        # Preprocess data
-        for i in range(len(books_array_list)):
-            time_levels_list[i][time_levels_list[i] > 0.02] = 1
 
         time_steps_used = (
             self.shaper_config.rolling_window_size - self.shaper_config.look_ahead

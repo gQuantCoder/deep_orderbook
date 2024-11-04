@@ -9,6 +9,10 @@ from deep_orderbook.utils import logger
 from deep_orderbook.config import ReplayConfig
 
 
+class EndReplay:
+    pass
+
+
 class ParquetReplayer:
     def __init__(
         self,
@@ -70,14 +74,20 @@ class ParquetReplayer:
             if channel_names:
                 df = df.filter(pl.col('channel').is_in(channel_names))
 
-            grouped = df.group_by_dynamic("timestamp", every="1s", label='right')
+            grouped = df.group_by_dynamic(
+                "timestamp", every=self.config.every, label='right'
+            )
             # grouped.explain(streaming=True)
             with tqdm(grouped, leave=False, desc="grouped") as windows:
                 for (t_win,), df_s in windows:
-                    windows.set_description(f"replay: {t_win}")
+                    windows.set_description(
+                        f"replay: {t_win!s:25.22}, num trades: {len(df_s.filter(pl.col('channel') == 'market_trades')):>3}"
+                    )
                     if t_win.time() < self.config.skip_until_time:
                         continue
                     await self.on_message(t_win, df_s)
+            logger.info(f"Finished {parquet_file}")
+        await self.on_message(t_win, EndReplay())
 
     async def unsubscribe_all_async(self) -> None:
         self.feed_task.cancel()
@@ -101,8 +111,9 @@ async def main():
 
     config = ReplayConfig(
         markets=['BTC-USD', 'ETH-USD', 'ETH-BTC'],
-        date_regexp='2024-08-05',
+        date_regexp='2024-09',
         max_samples=250,
+        every='100ms',
         # skip_until_time="05:30",
     )
     with pyinstrument.Profiler() as profiler:

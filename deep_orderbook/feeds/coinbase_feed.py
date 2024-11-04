@@ -11,6 +11,7 @@ from coinbase.websocket import WSClient  # type: ignore[import-untyped]
 from deep_orderbook import marketdata as md
 from deep_orderbook.config import FeedConfig
 from deep_orderbook.feeds.base_feed import BaseFeed, EndFeed
+from deep_orderbook.replayer import EndReplay
 from deep_orderbook.utils import logger
 
 
@@ -114,7 +115,7 @@ class CoinbaseFeed(BaseFeed):
         self.next_cut_time = 0.0
         self.queue: asyncio.Queue[CoinbaseMessage] = asyncio.Queue()
         self.queue_one_sec: asyncio.Queue[md.MulitSymbolOneSecondEnds] = asyncio.Queue(
-            1
+            16
         )
         self.is_live = False
 
@@ -248,7 +249,11 @@ class CoinbaseFeed(BaseFeed):
                 return
             yield msg
 
-    async def _on_polars(self, t_win: datetime, df_per_time: pl.DataFrame) -> None:
+    async def _on_polars(self, t_win: datetime, df_per_time: pl.DataFrame | EndReplay) -> None:
+        if isinstance(df_per_time, EndReplay):
+            logger.warning("Received EndReplayFeed message")
+            await self.queue_one_sec.put(None)  # type: ignore[arg-type]
+            return
         # print(t_win, df_per_time)
         df_books = await self.depolarize(
             df_per_time.filter(pl.col('channel') == 'l2_data'), regroup=['updates']
@@ -266,6 +271,9 @@ class CoinbaseFeed(BaseFeed):
 
         onesec = await self.on_one_second_end()
         await self.queue_one_sec.put(onesec)
+        await asyncio.sleep(0.00001)
+        if qs := self.queue_one_sec.qsize():
+            logger.info(f"queue_one_sec size: {qs}")
 
     def _on_message(self, msg) -> None:
         if isinstance(msg, str):
@@ -364,6 +372,8 @@ class CoinbaseFeed(BaseFeed):
         while num_samples != 0:
             num_samples -= 1
             one_sec = await self.queue_one_sec.get()
+            if not one_sec:
+                return
             yield one_sec
 
 
