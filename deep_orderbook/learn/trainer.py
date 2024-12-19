@@ -1,11 +1,12 @@
 # trainer.py
 
+import multiprocessing
 import torch
 import numpy as np
-import queue
 from deep_orderbook.learn.data_loader import DataLoaderWorker
 from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
 from deep_orderbook.utils import logger
+import time
 
 
 class Trainer:
@@ -26,13 +27,13 @@ class Trainer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f'{self.device=}')
         self.model = model.to(self.device)
-        self.data_queue: queue.Queue[tuple[np.ndarray, np.ndarray, np.ndarray]] = (
-            queue.Queue(maxsize=train_config.data_queue_size)
+        self.data_queue: multiprocessing.Queue = multiprocessing.Queue(
+            maxsize=train_config.data_queue_size
         )
         self.train_config = train_config
         self.replay_config = replay_config
         self.shaper_config = shaper_config
-        self.workers: list[DataLoaderWorker] = []
+        self.workers: list[multiprocessing.Process] = []
 
     def start_data_loading(self):
         """Starts data loading workers."""
@@ -43,8 +44,8 @@ class Trainer:
                 replay_config=self.replay_config,
                 shaper_config=self.shaper_config,
             )
-            data_loader_worker.start()
-            self.workers.append(data_loader_worker)
+            process = data_loader_worker.start()
+            self.workers.append(process)
 
     def train_step(self):
         """Performs a training step using a batch of data from the queue."""
@@ -58,9 +59,9 @@ class Trainer:
                 books_array_list.append(books_array)
                 time_levels_list.append(time_levels)
                 pxar_list.append(pxar)
-            except queue.Empty:
+            except Exception as e:
                 if len(books_array_list) == 0:
-                    logger.warning("Data queue is empty. Waiting for data...")
+                    logger.warning(f"Data queue is empty. Waiting for data... {e}")
                     return None
                 else:
                     logger.warning(
@@ -108,13 +109,10 @@ class Trainer:
         loss.backward()
         self.optimizer.step()
 
-        # Return first sample for visualization
+        # Return loss value
         return (
             loss.item(),
             output[0].detach().cpu().numpy(),
-            # books_array_list[0],
-            # time_levels_list[0],
-            # pxar_list[0],
         )
 
     def predict(self, books_array: np.ndarray) -> np.ndarray:
@@ -144,7 +142,6 @@ def main():
     from deep_orderbook.learn.tcn import TCNModel
     import torch.optim as optim
     import torch.nn as nn
-    import asyncio
     from deep_orderbook.config import ReplayConfig, ShaperConfig
 
     # Model parameters
@@ -180,9 +177,11 @@ def main():
 
     # Training loop
     num_training_steps = 100
-    while trainer.data_queue.qsize() < train_config.data_queue_size:
+
+    # Wait for the data queue to have at least one batch
+    while trainer.data_queue.qsize() < trainer.train_config.batch_size:
         logger.info(f"Waiting for data. Queue size: {trainer.data_queue.qsize()}")
-        asyncio.run(asyncio.sleep(5))
+        time.sleep(1)
 
     for step in range(num_training_steps):
         result = trainer.train_step()
@@ -191,9 +190,8 @@ def main():
             logger.warning(
                 f"Training step {step + 1}/{num_training_steps}, queue: {trainer.data_queue.qsize()}, Loss: {loss}"
             )
-            # print(f"Training step {step + 1}/{num_training_steps}, Loss: {loss}")
         else:
-            asyncio.run(asyncio.sleep(1))
+            time.sleep(1)
 
     # Save the trained model
     trainer.save_model('trained_model.pth')
