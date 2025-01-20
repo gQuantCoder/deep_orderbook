@@ -21,9 +21,9 @@ class Visualizer:
             rows=5,
             cols=1,
             subplot_titles=(
+                "Bid and Ask Price Levels",
                 "Books",
                 "Level Proximity",
-                "Bid and Ask Price Levels",
                 "Prediction",
                 "Loss",
             ),
@@ -43,6 +43,22 @@ class Visualizer:
 
     def _initialize_traces(self):
         """Initializes and adds traces to the figure widget."""
+        # Line traces for Bid and Ask Price Levels
+        self.bid_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="lines",
+            line=dict(color="green"),
+            showlegend=False,
+        )
+        self.ask_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="lines",
+            line=dict(color="red"),
+            showlegend=False,
+        )
+
         # Heatmap for Books
         self.im_trace = go.Heatmap(
             z=np.zeros((10, 10)),
@@ -59,22 +75,6 @@ class Visualizer:
             zmin=0,
             zmax=1,
             showscale=False,
-        )
-
-        # Line traces for Bid and Ask Price Levels
-        self.bid_trace = go.Scatter(
-            x=[],
-            y=[],
-            mode="lines",
-            line=dict(color="green"),
-            showlegend=False,
-        )
-        self.ask_trace = go.Scatter(
-            x=[],
-            y=[],
-            mode="lines",
-            line=dict(color="red"),
-            showlegend=False,
         )
 
         # Heatmap for Prediction
@@ -96,10 +96,10 @@ class Visualizer:
         )
 
         # Add traces to the figure widget
-        self.fig_widget.add_trace(self.im_trace, row=1, col=1)
-        self.fig_widget.add_trace(self.t2l_trace, row=2, col=1)
-        self.fig_widget.add_trace(self.bid_trace, row=3, col=1)
-        self.fig_widget.add_trace(self.ask_trace, row=3, col=1)
+        self.fig_widget.add_trace(self.bid_trace, row=1, col=1)
+        self.fig_widget.add_trace(self.ask_trace, row=1, col=1)
+        self.fig_widget.add_trace(self.im_trace, row=2, col=1)
+        self.fig_widget.add_trace(self.t2l_trace, row=3, col=1)
         self.fig_widget.add_trace(self.pred_trace, row=4, col=1)
         self.fig_widget.add_trace(self.loss_trace, row=5, col=1)
 
@@ -115,19 +115,19 @@ class Visualizer:
             books_z_data, level_reach_z_data, bidask = self.for_image_display(
                 books_z_data, level_reach_z_data, bidask
             )
-            # Update heatmaps
-            if books_z_data is not None:
-                self.fig_widget.data[0].z = np.clip(books_z_data, -1, 1)
-            if level_reach_z_data is not None:
-                self.fig_widget.data[1].z = np.clip(level_reach_z_data, -1, 1)
-
             # Update bid and ask price traces
             if bidask is not None:
                 times = np.arange(bidask.shape[0])
-                self.fig_widget.data[2].x = times
-                self.fig_widget.data[2].y = bidask[:, 0]
-                self.fig_widget.data[3].x = times
-                self.fig_widget.data[3].y = bidask[:, 1]
+                self.fig_widget.data[0].x = times
+                self.fig_widget.data[0].y = bidask[:, 0]
+                self.fig_widget.data[1].x = times
+                self.fig_widget.data[1].y = bidask[:, 1]
+
+            # Update heatmaps
+            if books_z_data is not None:
+                self.fig_widget.data[2].z = np.clip(books_z_data, -1, 1)
+            if level_reach_z_data is not None:
+                self.fig_widget.data[3].z = np.clip(level_reach_z_data, -1, 1)
 
             # Update prediction heatmap
             if pred_t2l is not None:

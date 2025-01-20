@@ -5,6 +5,7 @@ import asyncio
 from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.utils import logger
 
+multiprocessing.set_start_method('spawn', force=True)
 
 class DataLoaderWorker:
     """Data loading worker that reads data from files and puts it into a queue."""
