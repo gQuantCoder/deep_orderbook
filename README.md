@@ -6,7 +6,24 @@ Orderbooks contain so much more organic informations than moving averages...
 
 ## installation
 
-  ```pip install deep_orderbook```
+edit ` credentials/coinbase.txt `
+```
+api_key="organizations/xxxxxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/apiKeys/xxxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxx"
+api_secret="-----BEGIN EC PRIVATE KEY-----\xxxxxxxxxxxxxxxxx...xxxxxxxxxxxxxxxxxxx\n-----END EC PRIVATE KEY-----\n"
+```
+
+  ``` pip install -r requirements.txt ```
+  ``` pip install deep_orderbook -e ```
+
+## record data:
+```
+python deep_orderbook/consumers/recorder.py
+```
+
+## visualization
+Open a jupyterlab notebook and execute: `live.ipynb` or `replay.ipynb`
+machine learning example: `learn.ipynb`
+
 
 ## example of output
 

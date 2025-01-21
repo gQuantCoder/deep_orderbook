@@ -209,9 +209,7 @@ class ArrayShaper:
         time2levels = time2levels[:, :, np.newaxis]  # (T_eff, 2 * side_width, 1)
 
         # Initialize the full time2levels array with 1e9 for time steps beyond T_eff
-        time2levels_full = np.full(
-            (num_t, 2 * side_width, 1), 1e9, dtype=np.float32
-        )
+        time2levels_full = np.full((num_t, 2 * side_width, 1), 1e9, dtype=np.float32)
 
         # Assign the computed values to the corresponding positions
         time2levels_full[:T_eff] = time2levels.astype(np.float32)
@@ -225,6 +223,7 @@ class ArrayShaper:
 async def iter_shapes_t2l(
     replay_config: ReplayConfig,
     shaper_config: ShaperConfig,
+    live=False,
 ) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray], None]:
     from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
     from deep_orderbook.replayer import ParquetReplayer
@@ -232,7 +231,7 @@ async def iter_shapes_t2l(
     shaper = ArrayShaper(config=shaper_config)
     async with CoinbaseFeed(
         config=replay_config,
-        replayer=ParquetReplayer(config=replay_config),
+        replayer=ParquetReplayer(config=replay_config) if not live else None,
     ) as feed:
         async for onesec in feed.one_second_iterator():
             new_books = onesec.symbols[replay_config.markets[0]]
@@ -257,10 +256,13 @@ async def main():
     profiler = pyinstrument.Profiler()
     with profiler:
         async for books_array, time_levels, pxar in iter_shapes_t2l(
-            replay_config=replay_config, shaper_config=shaper_config
+            replay_config=replay_config,
+            shaper_config=shaper_config,
+            # live=True,
         ):
+            print(f"{books_array.shape=}, {time_levels.shape=}, {pxar.shape=}")
             pass
-    profiler.open_in_browser()
+    # profiler.open_in_browser()
 
 
 if __name__ == '__main__':

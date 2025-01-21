@@ -92,7 +92,7 @@ class MulitSymbolOneSecondEnds(BaseModel):
         return to_ret
 
     @classmethod
-    async def make_one_second(
+    def make_one_second(
         cls, ts: datetime, depth_managers: dict[str, 'DepthCachePlus']
     ):
         oneSec = MulitSymbolOneSecondEnds(ts=ts)

@@ -249,7 +249,9 @@ class CoinbaseFeed(BaseFeed):
                 return
             yield msg
 
-    async def _on_polars(self, t_win: datetime, df_per_time: pl.DataFrame | EndReplay) -> None:
+    async def _on_polars(
+        self, t_win: datetime, df_per_time: pl.DataFrame | EndReplay
+    ) -> None:
         if isinstance(df_per_time, EndReplay):
             logger.warning("Received EndReplayFeed message")
             await self.queue_one_sec.put(None)  # type: ignore[arg-type]
@@ -269,7 +271,7 @@ class CoinbaseFeed(BaseFeed):
         for msg in (CoinbaseMessage(**row) for row in df_trade.iter_rows(named=True)):
             self.process_message(msg)
 
-        onesec = await self.on_one_second_end()
+        onesec = self.on_one_second_end()
         await self.queue_one_sec.put(onesec)
         await asyncio.sleep(0.00001)
         if qs := self.queue_one_sec.qsize():
@@ -288,6 +290,18 @@ class CoinbaseFeed(BaseFeed):
 
         if self.feed_msg_queue:
             self.queue.put_nowait(message)
+
+        # if we passed to the next (or several) seconds, we send to the queue
+        number_of_seconds_past_last_message = (
+            (int(message.timestamp.timestamp()) - int(self.feed_time.timestamp()))
+            if self.feed_time
+            else None
+        )
+        while number_of_seconds_past_last_message:
+            number_of_seconds_past_last_message -= 1
+            onesec = self.on_one_second_end()
+            if not self.queue_one_sec.full():
+                self.queue_one_sec.put_nowait(onesec)
 
         self.feed_time = message.timestamp
         self.process_message(message)
@@ -356,10 +370,10 @@ class CoinbaseFeed(BaseFeed):
     def on_close(self) -> None:
         logger.info("Connection closed!")
 
-    async def on_one_second_end(self) -> md.MulitSymbolOneSecondEnds:
+    def on_one_second_end(self) -> md.MulitSymbolOneSecondEnds:
         """this function is used to run the replay of the market data in parallel for all the symbols."""
         self.cut_trade_tape()
-        oneSec = await md.MulitSymbolOneSecondEnds.make_one_second(
+        oneSec = md.MulitSymbolOneSecondEnds.make_one_second(
             ts=self.feed_time,
             depth_managers=self.depth_managers,
         )
