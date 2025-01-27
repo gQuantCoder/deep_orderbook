@@ -217,7 +217,7 @@ tenacity==9.0.0
     # via plotly
 tifffile==2024.9.20
     # via scikit-image
-tornado==6.4.1
+tornado==6.4.2
     # via bokeh
 tqdm==4.66.5
     # via
