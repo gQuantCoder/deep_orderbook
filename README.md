@@ -1,5 +1,10 @@
 # deep_orderbook
-Orderbooks contain so much more organic informations than moving averages... 
+## Orderbooks contain so much more organic informations than moving averages... ##
+
+I have seen to many people thinking that machine learning could be applied to finance by feeding a time series into a deep neural network and expecting the contraption to give the next few values.
+I can think of a few reasons why this is a very naive approach that would not only be doomed to fail, but also that wouldn't possibly represent the actual data necessary to make decision in automated trading.
+
+This project aims at not only preparing the data in a form that is very adapted to modern image recognition neural network (where recent progress has been spectacular), but also to prepare the gound for a prediction that would be meaningful to the actual dynamic of trading.
 
 
 (Work in progress on my free time)
