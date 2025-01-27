@@ -60,7 +60,7 @@ ipywidgets==8.1.5
     # via jupyter-bokeh
 jedi==0.19.1
     # via ipython
-jinja2==3.1.4
+jinja2==3.1.5
     # via bokeh
 jupyter-bokeh==4.0.5
     # via -r requirements.in
