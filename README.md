@@ -1,10 +1,9 @@
 # deep_orderbook
 ## Orderbooks contain so much more organic informations than moving averages... ##
 
-I have seen to many people thinking that machine learning could be applied to finance by feeding a time series into a deep neural network and expecting the contraption to give the next few values.
-I can think of a few reasons why this is a very naive approach that would not only be doomed to fail, but also that wouldn't possibly represent the actual data necessary to make decision in automated trading.
+I've noticed that many people assume machine learning can be applied to finance by simply feeding a time series into a deep neural network, expecting it to predict the next few values. This approach is not only overly simplistic but also fundamentally flawed, as it fails to capture the complexity of financial data and the nuances required for effective decision-making in automated trading.
 
-This project aims at not only preparing the data in a form that is very adapted to modern image recognition neural network (where recent progress has been spectacular), but also to prepare the gound for a prediction that would be meaningful to the actual dynamic of trading.
+This project aims to go beyond these limitations by transforming financial data into a format optimized for modern image recognition neural networks—an area that has seen remarkable advancements. Additionally, it lays the foundation for predictions that are aligned with the actual dynamics of trading, making them more relevant and actionable.
 
 
 (Work in progress on my free time)
