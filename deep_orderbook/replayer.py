@@ -1,206 +1,130 @@
-import glob
-import json
-import sys
-import time, datetime
-import pandas as pd
-import numpy as np
+from pathlib import Path
 import asyncio
-import itertools
-import aiofiles
-import aioitertools
 from tqdm.auto import tqdm
-import zipfile
+from rich import print
+import polars as pl
 
-from deep_orderbook.shapper import BookShapper
+from deep_orderbook.utils import logger
 
-MARKETS = ["ETHBTC", "BTCUSDT", "ETHUSDT", "BNBBTC", "BNBETH", "BNBUSDT"]
+from deep_orderbook.config import ReplayConfig
 
 
-class Replayer:
-    def __init__(self, data_folder, date_regexp=''):
-        self.data_folder = data_folder
-        self.date_regexp = date_regexp
-        self.dates = self.zipped_dates()
-        if self.dates:
-            print(f"using zipped file generator.")
-            self.file_generator = self.book_updates_trades_and_snapshots_zip
-        else:
-            self.dates = self.raw_files_dates()
-            if self.dates:
-                print(f"using raw file generator.")
-                self.file_generator = self.book_updates_trades_and_snapshots_raw
-        if self.dates:
-            print(f"dates: [{self.dates[0]} .. {self.dates[-1]}]")
-        else:
-            print(f"the data folder doen't seem to contain any raw or zipped files: {self.data_folder}")
+class EndReplay:
+    pass
 
-    def raw_files(self):
-        zs = sorted(glob.glob(f'{self.data_folder}/*/{self.date_regexp}*.json'))
-        yield from zs
 
-    def raw_files_dates(self):
-        dates = itertools.groupby(self.raw_files(), lambda fn: fn.split('/')[-1].split('T')[0])
-        return [d[0] for d in dates]
+class ParquetReplayer:
+    def __init__(
+        self,
+        config: ReplayConfig = ReplayConfig(),
+        directory: str = '',
+        date_regexp: str = '',
+    ) -> None:
+        self.config = config
+        self.directory = Path(directory) if directory else config.data_dir
+        self.date_regexp = date_regexp or config.date_regexp
+        self.on_message = None
 
-    def zipped(self):
-        zs = sorted(glob.glob(f'{self.data_folder}/{self.date_regexp}*.zip'))
-        yield from zs
+    async def open_async(self) -> None:
+        self.parquet_files = self.config.file_list()
+        logger.info(
+            f"Found {len(self.parquet_files)} parquet files in {self.directory}"
+        )
+        if not self.parquet_files:
+            raise FileNotFoundError(
+                f"No parquet files found in {self.directory} matching {self.date_regexp}"
+            )
 
-    def zipped_dates(self):
-        dates = itertools.groupby(self.zipped(), lambda fn: fn.split('/')[-1].split('.')[0])
-        return [d[0] for d in dates]
+    async def close_async(self) -> None:
+        pass
 
-    @staticmethod
-    def loadjson(filename, open_fc=open):
-        return json.load(open_fc(filename))
+    async def subscribe_async(
+        self,
+        product_ids: list[str],
+        channels: list[str],
+    ) -> None:
+        # weirdly, the subscription name is not necessarily the same as the channel name
+        channel_names = ['l2_data'] if 'level2' in channels else []
+        channel_names += ['market_trades'] if 'market_trades' in channels else []
 
-    def snapshots(self, pair):
-        return sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*snapshot.json'))
+        # Process each parquet file individually
+        self.feed_task = asyncio.create_task(self.feed_(product_ids, channel_names))
 
-    def updates_files(self, pair):
-        Bs = sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*update.json'))
-        return Bs
+    async def feed_(
+        self,
+        product_ids: list[str],
+        channel_names: list[str],
+    ) -> None:
+        await asyncio.sleep(0.01)
+        for parquet_file in self.parquet_files:
+            if not self.on_message:
+                raise ValueError("on_message handler not set for ParquetReplayer.")
 
-    def trades_file(self, pair):
-        Ts = sorted(glob.glob(f'{self.data_folder}/{pair}/{self.date_regexp}*trades.json'))
-        return Ts
+            logger.info(f"Reading {parquet_file}")
+            df = pl.read_parquet(parquet_file)
 
-    def book_updates_and_trades(self, pair):
-        Bs = self.updates_files(pair)
-        Ts = self.trades_file(pair) 
-        return [(b, b.replace('update', 'trades')) for b in Bs if b.replace('update', 'trades') in Ts]
+            # should work, but doesn't seem to
+            df = df.set_sorted('timestamp')
+            # # # so we sort it manually...
+            df = df.sort('timestamp')
 
-    async def book_updates_trades_and_snapshots_raw(self, pair, file_generator=None, open_fc=None):
-        file_generator = file_generator or self.raw_files()
-        open_fc = open_fc or open
-        fns_pair = filter(lambda fn: pair in fn, file_generator)
-        fns_pair_time = itertools.groupby(fns_pair, lambda fn: fn.split('/')[-1][:19])
-        for js_group in tqdm(fns_pair_time, leave=False):
-            ts, gr = js_group
-            files = list(gr)
-            if len(files) == 3:
-                snapshot_file, trades_file, updates_file = [json.load(open_fc(fn)) for fn in files]
-                yield updates_file, trades_file, snapshot_file
+            # filter on product_ids and channels
+            if product_ids:
+                df = df.filter(pl.col('product_id').is_in(product_ids))
+            if channel_names:
+                df = df.filter(pl.col('channel').is_in(channel_names))
 
-    async def book_updates_trades_and_snapshots_zip(self, pair):
-        zs_gen = self.zipped()
-        for z in tqdm(zs_gen):
-            print('zip:', z)
-            with zipfile.ZipFile(z) as myzip:
-                fns = sorted(zipfile.ZipFile(z).namelist())
-                async for fff in self.book_updates_trades_and_snapshots_raw(pair, fns, open_fc=myzip.open):
-                    yield fff
+            grouped = df.group_by_dynamic(
+                "timestamp", every=self.config.every, label='right'
+            )
+            # grouped.explain(streaming=True)
+            with tqdm(grouped, leave=False, desc="grouped") as windows:
+                for (t_win,), df_s in windows:
+                    windows.set_description(
+                        f"replay: {t_win!s:25.22}, num trades: {len(df_s.filter(pl.col('channel') == 'market_trades')):>3}"
+                    )
+                    if t_win.time() < self.config.skip_until_time:
+                        continue
+                    await self.on_message(t_win, df_s)
+            logger.info(f"Finished {parquet_file}")
+        await self.on_message(t_win, EndReplay())
 
-    def training_files(self, pair, side_bips, side_width):
-        BTs = sorted(glob.glob(f'{self.data_folder}/sidepix{side_width:03}/{self.date_regexp}*{pair}*ps.npy'))
-        for fn_ps in BTs:
-            fn_bs = fn_ps.replace('ps.npy', 'bs.npy')
-            fn_ts = fn_ps.replace('ps.npy', f'time2level-bip{side_bips:02}.npy')
-            yield (fn_bs, fn_ps, fn_ts)
+    async def unsubscribe_all_async(self) -> None:
+        self.feed_task.cancel()
+        pass
 
-    def training_samples(self, pair):
-        for (fn_bs, fn_ps, fn_ts) in self.training_file(pair):
-            arr_books = np.load(fn_bs)
-            arr_prices = np.load(fn_ps)
-            arr_time2level = np.load(fn_ts)
-            yield arr_books, arr_prices, arr_time2level
 
-    @staticmethod
-    def tradesframe(file):
-        ts = pd.DataFrame(self.loadjson(file))
-        if ts.empty:
-            return ts
-        ts = ts.drop(['M', 's', 'e', 'a'], axis=1).astype(np.float64)
-        ts['t'] = 1 + ts['E'] // 1000
-        ts['delay'] = ts['E'] - ts['T']
-        ts['num'] = ts['l'] - ts['f'] + 1
-        ts['up'] = 1 - 2*ts['m']
-        ts.drop(['E', 'T', 'f', 'l', 'm'], axis=1, inplace=True)
-        ts.set_index(['t'], inplace=True)
-        return ts
+async def iter_sec(config: ReplayConfig):
+    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
 
-    @staticmethod
-    def sample(of_file):
-        return self.loadjson(of_file)[0]
-
-    async def replayL2_async(self, pair, shapper):
-        yield pair
-        file_updates_tqdm = self.file_generator(pair)
-        async for js_updates, list_trades, snapshot in file_updates_tqdm:
-            #file_updates_tqdm.set_description(fupdate.replace(self.data_folder, ''))
-            await shapper.on_trades_bunch(list_trades)
-            js_updates_tqdm = tqdm(js_updates, leave=False)
-
-            lastUpdateId = snapshot['lastUpdateId']
-            await shapper.on_snaphsot_async(snapshot)
-
-            for book_upd in js_updates_tqdm:
-                if book_upd['e'] != 'depthUpdate':
-                    print("not update:", book_upd['e'])
-                    continue
-                firstID = book_upd['U']
-                finalID = book_upd['u']
-                if finalID < lastUpdateId:
-                    continue
-                eventTime = book_upd['E']
-                ts = 1 + eventTime // 1000
-
-                px = await shapper.on_depth_msg_async(book_upd)
-
-                t_avail = shapper.secondAvail(book_upd)
-                oneSec = await shapper.make_frames_async(t_avail)
-                BBO = oneSec['bids'].index[0], oneSec['asks'].index[0]
-
-                js_updates_tqdm.set_description(f"ts={datetime.datetime.utcfromtimestamp(ts)}, tr={len(oneSec['trades']):02}, BBO:{BBO}")#", px={px:16.12f}")
-
-                yield oneSec
-
-    @staticmethod
-    async def multireplayL2_async(replayers):
-        pairs = [await replayer.__anext__() for replayer in replayers]
-        gens = {pairs[i]: replayers[i] for i in range(len(pairs))}
-        nexs = {pair: await gens[pair].__anext__() for pair in pairs}
-        def next_sec(pair): return nexs[pair]['time']
-        tall = max([next_sec(p) for p in pairs])
-        curs = {pair: nexs[pair] for pair in pairs}
-        print('tall', tall)
-        while True:
-            for pair in pairs:
-                while next_sec(pair) < tall:
-                    curs[pair] = nexs[pair]
-                    try:
-                        nexs[pair] = await gens[pair].__anext__()
-                    except StopAsyncIteration:
-                        return # break
-            yield curs
-            next_overall_sec = min([next_sec(pair) for pair in pairs])
-            jump = next_overall_sec - tall
-            if jump > 60:
-                print(f"\njumping {datetime.timedelta(seconds=jump)} seconds to have an update from one of the symbols")
-                tall += jump
-            else:
-                tall += 1
+    async with CoinbaseFeed(
+        config=config,
+        replayer=ParquetReplayer(config=config),
+    ) as feed:
+        async for onesec in feed.one_second_iterator():
+            yield onesec
 
 
 async def main():
-    #markets = ['ETHBTC']
-    #file_replayer = Replayer('../data/crypto')
-    #s = file_replayer.zipped()
-    #print(s)
-    #return
-    markets = ['ETHBTC']
-    file_replayer = Replayer('../crypto-trading/data/L2')
-    
-    replay = file_replayer.replayL2_async('ETHBTC', await BookShapper.create())
-    async for d in replay:
-        pass
-        break
+    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
+    import pyinstrument
 
-    replayers = [file_replayer.replayL2_async(pair, await BookShapper.create()) for pair in markets]
-    multi_replay = file_replayer.multireplayL2_async(replayers)
-    async for d in multi_replay:
-        pass
+    config = ReplayConfig(
+        markets=['BTC-USD', 'ETH-USD', 'ETH-BTC'],
+        date_regexp='2024-09',
+        max_samples=250,
+        every='100ms',
+        # skip_until_time="05:30",
+    )
+    with pyinstrument.Profiler() as profiler:
+        async with CoinbaseFeed(
+            config=config,
+            replayer=ParquetReplayer(config=config),
+        ) as feed:
+            async for onesec in feed.one_second_iterator():
+                print(f"{onesec}")
+    profiler.open_in_browser(timeline=False)
+
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    asyncio.run(main())

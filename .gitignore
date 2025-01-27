@@ -5,3 +5,6 @@ dist
 .vscode
 .ipynb_checkpoints
 /data/
+*.log
+/.coverage
+/cov.xml

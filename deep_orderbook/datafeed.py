@@ -1,9 +1,8 @@
-import tensorflow as tf
 import numpy as np
 import functools
 import random
 
-from deep_orderbook import replayer, shapper
+from deep_orderbook import replayer, shaper
 
 MAX_DAYS_FOR_NOW = 2
 
@@ -58,7 +57,7 @@ class DataFeed(replayer.Replayer):
             try:
                 arr_time2level = np.load(fn_ts)
             except FileNotFoundError:
-                arr_time2level = shapper.BookShapper.build_time_level_trade(arr_books, arr_prices, side_bips=self.side_bips, side_width=self.side_width)
+                arr_time2level = shaper.BookShaper.build_time_level_trade(arr_books, arr_prices, side_bips=self.side_bips, side_width=self.side_width)
                 np.save(fn_ts, arr_time2level)
             self.last_loaded_file = fn_bs.split('/')[-1][:10]
             if rangefrom == 0: # count training files only
