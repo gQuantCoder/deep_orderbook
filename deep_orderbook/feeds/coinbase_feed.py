@@ -292,13 +292,13 @@ class CoinbaseFeed(BaseFeed):
             self.queue.put_nowait(message)
 
         # if we passed to the next (or several) seconds, we send to the queue
-        number_of_seconds_past_last_message = (
-            (int(message.timestamp.timestamp()) - int(self.feed_time.timestamp()))
+        number_of_time_steps_past_last_message = (
+            (int(message.timestamp.timestamp()*self.config.freq) - int(self.feed_time.timestamp()*self.config.freq))
             if self.feed_time
             else None
         )
-        while number_of_seconds_past_last_message:
-            number_of_seconds_past_last_message -= 1
+        while number_of_time_steps_past_last_message:
+            number_of_time_steps_past_last_message -= 1
             onesec = self.on_one_second_end()
             if not self.queue_one_sec.full():
                 self.queue_one_sec.put_nowait(onesec)

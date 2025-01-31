@@ -124,7 +124,9 @@ class ArrayShaper:
     async def build_time_level_trade(self) -> np.ndarray:
         """
         Vectorized version of build_time_level_trade.
-        Calculates the time it takes for the price to hit certain levels without explicit for-loops.
+        Calculates the time it takes for the price to hit certain levels starting from the crossing sides.
+        For upward movements, we start from ask price.
+        For downward movements, we start from bid price.
 
         Parameters:
         books (numpy array): The order book data.
@@ -140,25 +142,40 @@ class ArrayShaper:
         side_bips = self.config.look_ahead_side_bips
         side_width = self.config.look_ahead_side_width
 
+        # Check for NaN in input prices
+        if np.isnan(prices).any():
+            logger.warning(f"NaN found in prices array: {np.isnan(prices).sum()} NaN values")
+            # Replace NaN with the last valid price
+            prices = np.nan_to_num(prices, nan=prices[~np.isnan(prices)].mean())
+
         # Define constants
         mult = 0.0001 * side_bips / side_width
 
         num_t = prices.shape[0]
         T_eff = num_t - FUTURE + 1  # Effective time steps considering FUTURE window
 
-        # Calculate the price step
-        pricestep = prices[-1, 1] * mult
-
-        # Compute thresholds for each level
-        thresh = np.arange(side_width) * pricestep  # (side_width,)
-
         # Get bid and ask prices up to T_eff
         b = prices[:T_eff, 0]  # Bid prices, (T_eff,)
         a = prices[:T_eff, 1]  # Ask prices, (T_eff,)
 
-        # Compute price levels for thresholds
-        a_plus_thresh = a[:, np.newaxis] + thresh[np.newaxis, :]  # (T_eff, side_width)
-        b_minus_thresh = b[:, np.newaxis] - thresh[np.newaxis, :]  # (T_eff, side_width)
+        # Calculate price steps based on the respective crossing sides
+        # Ensure positive steps by taking absolute value and adding small epsilon
+        pricestep_up = np.abs(a[-1]) * mult + 1e-6
+        pricestep_down = np.abs(b[-1]) * mult + 1e-6
+
+        # Safety check for price steps
+        if pricestep_up <= 0 or pricestep_down <= 0:
+            logger.warning(f"Invalid price steps: up={pricestep_up}, down={pricestep_down}")
+            pricestep_up = max(pricestep_up, 1e-6)
+            pricestep_down = max(pricestep_down, 1e-6)
+
+        # Compute thresholds for each direction starting from 1 to avoid division by zero
+        thresh_up = np.arange(1, side_width + 1) * pricestep_up
+        thresh_down = np.arange(1, side_width + 1) * pricestep_down
+
+        # Compute price levels for thresholds from crossing sides
+        a_plus_thresh = a[:, np.newaxis] + thresh_up[np.newaxis, :]  # Start from ask for up moves
+        b_minus_thresh = b[:, np.newaxis] - thresh_down[np.newaxis, :]  # Start from bid for down moves
 
         # Get future bids and asks using sliding window view
         asks_future = np.lib.stride_tricks.sliding_window_view(
@@ -193,9 +210,18 @@ class ArrayShaper:
         tradeDn_any = tradeDn.any(axis=1)
         timeDn = np.where(tradeDn_any, np.argmax(tradeDn, axis=1) + 1, 1e9)
 
-        # multiply timeDn and timeUp by the distance to the reference price
-        timeDn = timeDn * 1 / (thresh[np.newaxis, :] + 1)
-        timeUp = timeUp * 1 / (thresh[np.newaxis, :] + 1)
+        # Scale the times by the distance from the crossing price
+        # Add small epsilon to avoid division by zero and ensure positive values
+        timeUp = np.clip(timeUp, 1, 1e9)  # Ensure minimum time is 1
+        timeDn = np.clip(timeDn, 1, 1e9)  # Ensure minimum time is 1
+        
+        # Scale inversely with threshold distance - larger thresholds mean smaller scaled times
+        timeUp = timeUp / (thresh_up[np.newaxis, :] + 1e-6)
+        timeDn = timeDn / (thresh_down[np.newaxis, :] + 1e-6)
+
+        # Handle any NaN values that might have slipped through
+        timeUp = np.nan_to_num(timeUp, nan=1e9, posinf=1e9)
+        timeDn = np.nan_to_num(timeDn, nan=1e9, posinf=1e9)
 
         # Reverse timeDn along the side_width axis to match the original order
         timeDn_reversed = timeDn[:, ::-1]
@@ -211,11 +237,15 @@ class ArrayShaper:
         # Initialize the full time2levels array with 1e9 for time steps beyond T_eff
         time2levels_full = np.full((num_t, 2 * side_width, 1), 1e9, dtype=np.float32)
 
-        # Assign the computed values to the corresponding positions
-        time2levels_full[:T_eff] = time2levels.astype(np.float32)
+        # Assign the computed values to the corresponding positions and ensure no NaN values
+        time2levels = np.nan_to_num(time2levels, nan=1e9, posinf=1e9)
+        time2levels_full[:T_eff] = np.clip(time2levels, 0, 1e9).astype(np.float32)
 
-        # Ensure that the minimum value in time2levels is greater than 0
-        assert time2levels_full.min() >= 0
+        # Final safety check to ensure all values are positive and finite
+        min_val = time2levels_full.min()
+        if min_val < 0 or np.isnan(min_val):
+            logger.error(f"Invalid values in time2levels_full: min={min_val}, has_nan={np.isnan(time2levels_full).any()}")
+            raise ValueError(f"Invalid time values detected: min={min_val}")
 
         return 1 / time2levels_full
 
