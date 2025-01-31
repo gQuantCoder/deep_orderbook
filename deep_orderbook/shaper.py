@@ -13,7 +13,7 @@ class ArrayShaper:
     def __init__(self, config: ShaperConfig) -> None:
         self.config = config
         self.prev_price: float = None  # type: ignore[assignment]
-        self.emaNew = 1 / 32
+        self.emaNew = 1 / 16
         self.emaPrice: float = None  # type: ignore[assignment]
 
         self._cut_scales = pl.arange(0, self.config.num_side_lvl, eager=True)  # ** 2
@@ -124,9 +124,9 @@ class ArrayShaper:
     async def build_time_level_trade(self) -> np.ndarray:
         """
         Vectorized version of build_time_level_trade.
-        Calculates the time it takes for the price to hit certain levels starting from the crossing sides.
-        For upward movements, we start from ask price.
-        For downward movements, we start from bid price.
+        Calculates the time it takes for the opposite side to cross the levels:
+        - For upward movements: Time until bid crosses above ask-based levels
+        - For downward movements: Time until ask crosses below bid-based levels
 
         Parameters:
         books (numpy array): The order book data.
@@ -174,8 +174,8 @@ class ArrayShaper:
         thresh_down = np.arange(1, side_width + 1) * pricestep_down
 
         # Compute price levels for thresholds from crossing sides
-        a_plus_thresh = a[:, np.newaxis] + thresh_up[np.newaxis, :]  # Start from ask for up moves
-        b_minus_thresh = b[:, np.newaxis] - thresh_down[np.newaxis, :]  # Start from bid for down moves
+        a_plus_thresh = a[:, np.newaxis] + thresh_up[np.newaxis, :]  # Levels above ask
+        b_minus_thresh = b[:, np.newaxis] - thresh_down[np.newaxis, :]  # Levels below bid
 
         # Get future bids and asks using sliding window view
         asks_future = np.lib.stride_tricks.sliding_window_view(
@@ -196,8 +196,10 @@ class ArrayShaper:
         b_minus_thresh = b_minus_thresh[:, np.newaxis, :]  # (T_eff, 1, side_width)
 
         # Compute tradeUp and tradeDn conditions
-        tradeUp = asks_future >= a_plus_thresh  # (T_eff, FUTURE, side_width)
-        tradeDn = bids_future <= b_minus_thresh  # (T_eff, FUTURE, side_width)
+        # For up moves: bid must cross above ask-based levels
+        # For down moves: ask must cross below bid-based levels
+        tradeUp = bids_future >= a_plus_thresh  # Bid crossing up through ask-based levels
+        tradeDn = asks_future <= b_minus_thresh  # Ask crossing down through bid-based levels
 
         # Exclude the current time step
         tradeUp[:, 0, :] = False
@@ -247,7 +249,7 @@ class ArrayShaper:
             logger.error(f"Invalid values in time2levels_full: min={min_val}, has_nan={np.isnan(time2levels_full).any()}")
             raise ValueError(f"Invalid time values detected: min={min_val}")
 
-        return 1 / time2levels_full
+        return 5 / time2levels_full
 
 
 async def iter_shapes_t2l(

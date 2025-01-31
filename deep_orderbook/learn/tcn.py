@@ -44,13 +44,33 @@ class ResidualBlock(nn.Module):
 
 
 class TCNModel(nn.Module):
-    """Temporal Convolutional Network with Residual Blocks."""
+    """Temporal Convolutional Network with Residual Blocks.
+    
+    A neural network that processes 2D temporal data using dilated convolutions
+    and residual connections. The network progressively increases the receptive field
+    through exponentially increasing dilations.
+    
+    Args:
+        input_channels (int): Number of input channels in the data
+        output_channels (int): Number of output channels to produce
+        num_levels (int, optional): Number of residual blocks, each with increasing dilation. Defaults to 4.
+    
+    Architecture:
+        1. Multiple ResidualBlocks with increasing dilation rates
+        2. Each block maintains 8 channels internally
+        3. Final 1x1 convolution to map to desired output channels
+        4. Adaptive pooling to ensure consistent price dimension output
+    """
 
     def __init__(self, input_channels, output_channels, num_levels = 4):
         super().__init__()
-        levels = [input_channels] + [16] * num_levels
-        dilations = [(2**i, 1) for i in range(num_levels)]  # Exponential dilation
+        # Each level processes 8 channels internally
+        levels = [input_channels] + [8] * num_levels
+        # Dilation increases exponentially in time dimension only (2^i, 1)
+        dilations = [(2**i, 1) for i in range(num_levels)]
         kernel_size = (3, 3)
+        
+        # Create stack of residual blocks
         self.layers = nn.ModuleList()
         for i in range(num_levels):
             self.layers.append(
@@ -61,15 +81,25 @@ class TCNModel(nn.Module):
                     dilation=dilations[i],
                 )
             )
+        # Final 1x1 convolution to map to desired output channels
         self.final_conv = nn.Conv2d(
             in_channels=levels[-1], out_channels=output_channels, kernel_size=1
         )
 
     def forward(self, x):
+        """Forward pass through the network.
+        
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch, channels, time, price]
+            
+        Returns:
+            torch.Tensor: Output tensor with shape [batch, output_channels, time, 32]
+                         where the price dimension is always 32
+        """
         out = x
         for layer in self.layers:
             out = layer(out)
         out = self.final_conv(out)
-        # Adjust PriceDimension to match target (e.g., 32)
+        # Ensure price dimension is exactly 32 using adaptive pooling
         out = F.adaptive_avg_pool2d(out, (out.shape[2], 32))
         return out
