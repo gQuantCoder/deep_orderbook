@@ -8,6 +8,10 @@ This project aims to go beyond these limitations by transforming financial data 
 
 (Work in progress on my free time)
 
+## example of output
+
+![books](https://raw.githubusercontent.com/gQuantCoder/deep_orderbook/master/images/01.png?raw=true "Orderbooks and alpha")
+
 ## installation
 
 edit ` credentials/coinbase.txt `
@@ -29,6 +33,3 @@ Open a jupyterlab notebook and execute: `live.ipynb` or `replay.ipynb`
 machine learning example: `learn.ipynb`
 
 
-## example of output
-
-![books](https://raw.githubusercontent.com/gQuantCoder/deep_orderbook/master/images/01.png?raw=true "Orderbooks and alpha")
