@@ -54,6 +54,7 @@ class TCNModel(nn.Module):
         input_channels (int): Number of input channels in the data
         output_channels (int): Number of output channels to produce
         num_levels (int, optional): Number of residual blocks, each with increasing dilation. Defaults to 4.
+        num_side_lvl (int, optional): Number of price levels per side. Total output levels will be 2*num_side_lvl. Defaults to 4.
     
     Architecture:
         1. Multiple ResidualBlocks with increasing dilation rates
@@ -62,13 +63,16 @@ class TCNModel(nn.Module):
         4. Adaptive pooling to ensure consistent price dimension output
     """
 
-    def __init__(self, input_channels, output_channels, num_levels = 4):
+    def __init__(self, input_channels, output_channels, num_levels = 4, num_side_lvl = 4):
         super().__init__()
         # Each level processes 8 channels internally
         levels = [input_channels] + [8] * num_levels
         # Dilation increases exponentially in time dimension only (2^i, 1)
         dilations = [(2**i, 1) for i in range(num_levels)]
         kernel_size = (3, 3)
+        
+        # Store the number of side levels for output sizing
+        self.num_side_lvl = num_side_lvl
         
         # Create stack of residual blocks
         self.layers = nn.ModuleList()
@@ -93,13 +97,13 @@ class TCNModel(nn.Module):
             x (torch.Tensor): Input tensor of shape [batch, channels, time, price]
             
         Returns:
-            torch.Tensor: Output tensor with shape [batch, output_channels, time, 32]
-                         where the price dimension is always 32
+            torch.Tensor: Output tensor with shape [batch, output_channels, time, 2*num_side_lvl]
+                         where the price dimension matches the shaper config
         """
         out = x
         for layer in self.layers:
             out = layer(out)
         out = self.final_conv(out)
-        # Ensure price dimension is exactly 32 using adaptive pooling
-        out = F.adaptive_avg_pool2d(out, (out.shape[2], 32))
+        # Ensure price dimension matches the shaper config using adaptive pooling
+        out = F.adaptive_avg_pool2d(out, (out.shape[2], 2 * self.num_side_lvl))
         return out

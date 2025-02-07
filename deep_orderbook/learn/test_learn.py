@@ -29,7 +29,12 @@ async def train_and_predict(
     output_channels = 1  # ValueDimension of time_levels
 
     # Initialize model, optimizer, and loss function
-    model = TCNModel(input_channels, output_channels, num_levels=config.num_levels)
+    model = TCNModel(
+        input_channels,
+        output_channels,
+        num_levels=config.num_levels,
+        num_side_lvl=shaper_config.num_side_lvl
+    )
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.MSELoss()
 
