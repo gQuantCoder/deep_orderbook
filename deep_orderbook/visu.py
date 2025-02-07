@@ -14,6 +14,7 @@ class Visualizer:
         self._initialize_traces()
         display(self.fig_widget)
         self.losses = []
+        self._max_points = 1000  # Limit the number of points to store
 
     def _create_figure(self):
         """Creates and returns a Plotly figure widget with subplots."""
@@ -111,36 +112,49 @@ class Visualizer:
         pred_t2l=None,
     ):
         """Updates the figure widget with new data."""
-        with self.fig_widget.batch_update():
-            books_z_data, level_reach_z_data, bidask = self.for_image_display(
-                books_z_data, level_reach_z_data, bidask
-            )
-            # Update bid and ask price traces
-            if bidask is not None:
-                times = np.arange(bidask.shape[0])
-                self.fig_widget.data[0].x = times
-                self.fig_widget.data[0].y = bidask[:, 0]
-                self.fig_widget.data[1].x = times
-                self.fig_widget.data[1].y = bidask[:, 1]
+        try:
+            with self.fig_widget.batch_update():
+                books_z_data, level_reach_z_data, bidask = self.for_image_display(
+                    books_z_data, level_reach_z_data, bidask
+                )
+                # Update bid and ask price traces with limited history
+                if bidask is not None:
+                    times = np.arange(min(bidask.shape[0], self._max_points))
+                    bid_data = bidask[-self._max_points:, 0] if bidask.shape[0] > self._max_points else bidask[:, 0]
+                    ask_data = bidask[-self._max_points:, 1] if bidask.shape[0] > self._max_points else bidask[:, 1]
+                    
+                    self.fig_widget.data[0].x = times
+                    self.fig_widget.data[0].y = bid_data
+                    self.fig_widget.data[1].x = times
+                    self.fig_widget.data[1].y = ask_data
 
-            # Update heatmaps
-            if books_z_data is not None:
-                self.fig_widget.data[2].z = np.clip(books_z_data, -1, 1)
-            if level_reach_z_data is not None:
-                self.fig_widget.data[3].z = np.clip(level_reach_z_data, -1, 1)
+                # Update heatmaps
+                if books_z_data is not None:
+                    self.fig_widget.data[2].z = np.clip(books_z_data, -1, 1)
+                if level_reach_z_data is not None:
+                    self.fig_widget.data[3].z = np.clip(level_reach_z_data, -1, 1)
 
-            # Update prediction heatmap
-            if pred_t2l is not None:
-                self.fig_widget.data[4].z = np.clip(pred_t2l, -1, 1)
+                # Update prediction heatmap
+                if pred_t2l is not None:
+                    self.fig_widget.data[4].z = np.clip(pred_t2l, -1, 1)
 
-            if self.losses:
-                self.fig_widget.data[5].x = np.arange(len(self.losses))
-                self.fig_widget.data[5].y = self.losses
+                if self.losses:
+                    loss_times = np.arange(len(self.losses))
+                    self.fig_widget.data[5].x = loss_times
+                    self.fig_widget.data[5].y = self.losses
+        except Exception as e:
+            print(f"Error updating plot: {e}")
+        finally:
+            # Force garbage collection after update
+            import gc
+            gc.collect()
 
     def add_loss(self, loss_value):
         """Adds a loss value to the loss history."""
-        self.losses.append(loss_value)
-        self.losses = self.losses[-256:]  # Keep only the last 512 values
+        self.losses.append(float(loss_value))  # Convert to float to ensure no reference holding
+        # Keep only recent history
+        if len(self.losses) > self._max_points:
+            self.losses = self.losses[-self._max_points:]
 
     @staticmethod
     def for_image_display(
