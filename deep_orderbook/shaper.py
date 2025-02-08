@@ -1,10 +1,13 @@
-from typing import AsyncGenerator
+from typing import AsyncGenerator, cast
 import numpy as np
 import asyncio
 import polars as pl
 
 from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.utils import logger
+from deep_orderbook.cache_manager import ArrayCache
+from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
+from deep_orderbook.replayer import ParquetReplayer
 
 import deep_orderbook.marketdata as md
 
@@ -255,28 +258,99 @@ class ArrayShaper:
 async def iter_shapes_t2l(
     replay_config: ReplayConfig,
     shaper_config: ShaperConfig,
-    live=False,
+    live: bool = False,
+    use_cache: bool = True
 ) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray], None]:
-    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
-    from deep_orderbook.replayer import ParquetReplayer
+    """Iterator that yields shaped arrays from market data, using cache when possible.
+    
+    Args:
+        replay_config: Configuration for replay
+        shaper_config: Configuration for shaping the data
+        live: Whether this is live data (no caching for live data)
+        use_cache: Whether to use the cache system
+    """
+    cache = ArrayCache()
 
+    if use_cache and not live:
+        # Try to load from cache - just check the first file
+        parquet_files = replay_config.file_list()
+        if parquet_files:
+            cached_data = cache.load_cached(parquet_files[0], shaper_config)
+            if cached_data is not None:
+                logger.info(f"Using cached data")
+                books_array, time_levels, prices_array = cached_data
+                total_length = len(books_array)
+                logger.info(f"Loaded cached array with {total_length} timesteps")
+                
+                # Simple strided iteration over the time axis
+                for start_idx in range(0, total_length - shaper_config.rolling_window_size + 1, shaper_config.window_stride):
+                    end_idx = start_idx + shaper_config.rolling_window_size
+                    window_books = books_array[start_idx:end_idx]
+                    window_times = time_levels[start_idx:end_idx]
+                    window_prices = prices_array[start_idx:end_idx]
+                    
+                    # Skip windows with NaN values unless only_full_arrays is False
+                    if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
+                        yield window_books, window_times, window_prices
+                return
+
+    # If we get here, either cache is disabled, or we're in live mode, or no cache was found
+    # Process the data from parquet files
     shaper = ArrayShaper(config=shaper_config)
     async with CoinbaseFeed(
         config=replay_config,
-        replayer=ParquetReplayer(config=replay_config) if not live else None,
+        replayer=cast(ParquetReplayer, ParquetReplayer(config=replay_config)) if not live else None,
     ) as feed:
+        # For caching, we need to collect all data
+        all_books = []
+        all_times = []
+        all_prices = []
+        window_counter = 0  # Counter to track when to yield windows
+        
         async for onesec in feed.one_second_iterator():
             new_books = onesec.symbols[replay_config.markets[0]]
             if new_books.no_bbo():
-                logger.warning('Empty books')
                 continue
+            
             books_array = await shaper.make_arr3d(new_books)
             time_levels = await shaper.build_time_level_trade()
-            if shaper_config.only_full_arrays:
-                # print(np.isnan(shaper.prices_array).sum())
-                if np.isnan(shaper.prices_array).any():
-                    continue
-            yield books_array, time_levels, shaper.prices_array
+            
+            # Store the latest timestep for both caching and streaming
+            all_books.append(books_array[-1])
+            all_times.append(time_levels[-1])
+            all_prices.append(shaper.prices_array[-1])
+            window_counter += 1
+            
+            # Stream windows as they become available
+            if len(all_books) >= shaper_config.rolling_window_size and window_counter >= shaper_config.window_stride:
+                window_counter = 0  # Reset counter
+                window_books = np.stack(all_books[-shaper_config.rolling_window_size:])
+                window_times = np.stack(all_times[-shaper_config.rolling_window_size:])
+                window_prices = np.stack(all_prices[-shaper_config.rolling_window_size:])
+                
+                if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
+                    yield window_books, window_times, window_prices
+
+        # After streaming is done, cache the full arrays if we have enough data
+        if len(all_books) > shaper_config.rolling_window_size and use_cache and not live:
+            try:
+                full_books_array = np.stack(all_books)
+                full_time_levels = np.stack(all_times)
+                full_prices_array = np.stack(all_prices)
+                
+                # Cache the full arrays if we have valid data
+                if not shaper_config.only_full_arrays or not np.isnan(full_prices_array).any():
+                    if parquet_files:
+                        cache.save_to_cache(
+                            parquet_files[0],
+                            shaper_config,
+                            full_books_array,
+                            full_time_levels,
+                            full_prices_array
+                        )
+                        logger.info(f"Successfully cached {len(full_books_array)} timesteps")
+            except Exception as e:
+                logger.error(f"Failed to cache data: {e}")
 
 
 async def main():
