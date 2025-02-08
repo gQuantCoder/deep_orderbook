@@ -8,3 +8,5 @@ dist
 *.log
 /.coverage
 /cov.xml
+preprocessed_data
+cache

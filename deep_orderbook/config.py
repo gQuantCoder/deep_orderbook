@@ -1,7 +1,7 @@
 import datetime
 from pathlib import Path
 import random
-from typing import Self
+from typing import Self, Optional
 from pydantic import BaseModel
 
 
@@ -45,6 +45,7 @@ class ShaperConfig(BaseConfig):
     zoom_frac: float = 0.004
     num_side_lvl: int = 32
     rolling_window_size: int = 256
+    window_stride: int = 32  # How many steps to slide the window by (default: 32 for 1/8th overlap)
 
     only_full_arrays: bool = False
 
@@ -68,7 +69,14 @@ class TrainConfig(BaseConfig):
     criterion: str = "MSELoss"  # "MSELoss" or "L1Loss"
 
 
+class CacheConfig(BaseConfig):
+    enabled: bool = True
+    cache_dir: Path = Path("cache")
+    max_age_days: Optional[int] = 7  # Auto-clear cache files older than this
+
+
 class Fullconfig(BaseConfig):
     replay: ReplayConfig = ReplayConfig()
     shaper: ShaperConfig = ShaperConfig()
     train: TrainConfig = TrainConfig()
+    cache: CacheConfig = CacheConfig()
