@@ -43,9 +43,9 @@ class ReplayConfig(FeedConfig):
 
 class ShaperConfig(BaseConfig):
     zoom_frac: float = 0.004
-    num_side_lvl: int = 32
+    num_side_lvl: int = 4
     rolling_window_size: int = 256
-    window_stride: int = 32  # How many steps to slide the window by (default: 32 for 1/8th overlap)
+    window_stride: int = 1  # How many steps to slide the window by (default: 32 for 1/8th overlap)
 
     only_full_arrays: bool = False
 
@@ -53,7 +53,7 @@ class ShaperConfig(BaseConfig):
 
     look_ahead: int = 8
     look_ahead_side_bips: int = 8
-    look_ahead_side_width: int = 16
+    look_ahead_side_width: int = 4
 
 
 class TrainConfig(BaseConfig):

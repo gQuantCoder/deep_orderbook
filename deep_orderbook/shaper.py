@@ -126,19 +126,9 @@ class ArrayShaper:
 
     async def build_time_level_trade(self) -> np.ndarray:
         """
-        Vectorized version of build_time_level_trade.
-        Calculates the time it takes for the opposite side to cross the levels:
-        - For upward movements: Time until bid crosses above ask-based levels
-        - For downward movements: Time until ask crosses below bid-based levels
-
-        Parameters:
-        books (numpy array): The order book data.
-        prices (numpy array): The price data with shape (T, 2) where T is the number of time steps.
-        side_bips (int): The number of basis points to consider on each side of the price.
-        side_width (int): The width of the price band to consider.
-
-        Returns:
-        numpy array: A matrix of time it takes for the price to hit each level.
+        Vectorized version that uses all available data points.
+        For the last FUTURE points, it will compute times based on available future data,
+        naturally resulting in longer predicted crossing times for those points.
         """
         books, prices = self.total_array, self.prices_array
         FUTURE = self.config.look_ahead
@@ -155,11 +145,9 @@ class ArrayShaper:
         mult = 0.0001 * side_bips / side_width
 
         num_t = prices.shape[0]
-        T_eff = num_t - FUTURE + 1  # Effective time steps considering FUTURE window
-
-        # Get bid and ask prices up to T_eff
-        b = prices[:T_eff, 0]  # Bid prices, (T_eff,)
-        a = prices[:T_eff, 1]  # Ask prices, (T_eff,)
+        # Remove T_eff limitation - use all time points
+        b = prices[:, 0]  # All bid prices
+        a = prices[:, 1]  # All ask prices
 
         # Calculate price steps based on the respective crossing sides
         # Ensure positive steps by taking absolute value and adding small epsilon
@@ -180,17 +168,16 @@ class ArrayShaper:
         a_plus_thresh = a[:, np.newaxis] + thresh_up[np.newaxis, :]  # Levels above ask
         b_minus_thresh = b[:, np.newaxis] - thresh_down[np.newaxis, :]  # Levels below bid
 
-        # Get future bids and asks using sliding window view
+        # Create sliding windows for all points
         asks_future = np.lib.stride_tricks.sliding_window_view(
-            prices[:, 1], window_shape=FUTURE
-        )
+            np.pad(prices[:, 1], (0, FUTURE-1), mode='edge'),  # Pad with last value
+            window_shape=FUTURE
+        )[:num_t]  # Keep only original length
+        
         bids_future = np.lib.stride_tricks.sliding_window_view(
-            prices[:, 0], window_shape=FUTURE
-        )
-
-        # Limit asks_future and bids_future to T_eff
-        asks_future = asks_future[:T_eff]  # (T_eff, FUTURE)
-        bids_future = bids_future[:T_eff]  # (T_eff, FUTURE)
+            np.pad(prices[:, 0], (0, FUTURE-1), mode='edge'),  # Pad with last value
+            window_shape=FUTURE
+        )[:num_t]  # Keep only original length
 
         # Expand dimensions for broadcasting
         asks_future = asks_future[:, :, np.newaxis]  # (T_eff, FUTURE, 1)
@@ -239,12 +226,9 @@ class ArrayShaper:
         # Add a new axis to match the expected output shape
         time2levels = time2levels[:, :, np.newaxis]  # (T_eff, 2 * side_width, 1)
 
-        # Initialize the full time2levels array with 1e9 for time steps beyond T_eff
+        # The final array is now the full length
         time2levels_full = np.full((num_t, 2 * side_width, 1), 1e9, dtype=np.float32)
-
-        # Assign the computed values to the corresponding positions and ensure no NaN values
-        time2levels = np.nan_to_num(time2levels, nan=1e9, posinf=1e9)
-        time2levels_full[:T_eff] = np.clip(time2levels, 0, 1e9).astype(np.float32)
+        time2levels_full[:] = np.clip(time2levels, 0, 1e9).astype(np.float32)
 
         # Final safety check to ensure all values are positive and finite
         min_val = time2levels_full.min()
@@ -258,106 +242,35 @@ class ArrayShaper:
 async def iter_shapes_t2l(
     replay_config: ReplayConfig,
     shaper_config: ShaperConfig,
-    live: bool = False,
-    use_cache: bool = True
+    live=False,
 ) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray], None]:
-    """Iterator that yields shaped arrays from market data, using cache when possible.
-    
-    Args:
-        replay_config: Configuration for replay
-        shaper_config: Configuration for shaping the data
-        live: Whether this is live data (no caching for live data)
-        use_cache: Whether to use the cache system
-    """
-    cache = ArrayCache()
+    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
+    from deep_orderbook.replayer import ParquetReplayer
 
-    if use_cache and not live:
-        # Try to load from cache - just check the first file
-        parquet_files = replay_config.file_list()
-        if parquet_files:
-            cached_data = cache.load_cached(parquet_files[0], shaper_config)
-            if cached_data is not None:
-                logger.info(f"Using cached data")
-                books_array, time_levels, prices_array = cached_data
-                total_length = len(books_array)
-                logger.info(f"Loaded cached array with {total_length} timesteps")
-                
-                # Simple strided iteration over the time axis
-                for start_idx in range(0, total_length - shaper_config.rolling_window_size + 1, shaper_config.window_stride):
-                    end_idx = start_idx + shaper_config.rolling_window_size
-                    window_books = books_array[start_idx:end_idx]
-                    window_times = time_levels[start_idx:end_idx]
-                    window_prices = prices_array[start_idx:end_idx]
-                    
-                    # Skip windows with NaN values unless only_full_arrays is False
-                    if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
-                        yield window_books, window_times, window_prices
-                return
-
-    # If we get here, either cache is disabled, or we're in live mode, or no cache was found
-    # Process the data from parquet files
     shaper = ArrayShaper(config=shaper_config)
     async with CoinbaseFeed(
         config=replay_config,
-        replayer=cast(ParquetReplayer, ParquetReplayer(config=replay_config)) if not live else None,
+        replayer=ParquetReplayer(config=replay_config) if not live else None,
     ) as feed:
-        # For caching, we need to collect all data
-        all_books = []
-        all_times = []
-        all_prices = []
-        window_counter = 0  # Counter to track when to yield windows
-        
         async for onesec in feed.one_second_iterator():
             new_books = onesec.symbols[replay_config.markets[0]]
             if new_books.no_bbo():
+                logger.warning('Empty books')
                 continue
-            
             books_array = await shaper.make_arr3d(new_books)
             time_levels = await shaper.build_time_level_trade()
-            
-            # Store the latest timestep for both caching and streaming
-            all_books.append(books_array[-1])
-            all_times.append(time_levels[-1])
-            all_prices.append(shaper.prices_array[-1])
-            window_counter += 1
-            
-            # Stream windows as they become available
-            if len(all_books) >= shaper_config.rolling_window_size and window_counter >= shaper_config.window_stride:
-                window_counter = 0  # Reset counter
-                window_books = np.stack(all_books[-shaper_config.rolling_window_size:])
-                window_times = np.stack(all_times[-shaper_config.rolling_window_size:])
-                window_prices = np.stack(all_prices[-shaper_config.rolling_window_size:])
-                
-                if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
-                    yield window_books, window_times, window_prices
-
-        # After streaming is done, cache the full arrays if we have enough data
-        if len(all_books) > shaper_config.rolling_window_size and use_cache and not live:
-            try:
-                full_books_array = np.stack(all_books)
-                full_time_levels = np.stack(all_times)
-                full_prices_array = np.stack(all_prices)
-                
-                # Cache the full arrays if we have valid data
-                if not shaper_config.only_full_arrays or not np.isnan(full_prices_array).any():
-                    if parquet_files:
-                        cache.save_to_cache(
-                            parquet_files[0],
-                            shaper_config,
-                            full_books_array,
-                            full_time_levels,
-                            full_prices_array
-                        )
-                        logger.info(f"Successfully cached {len(full_books_array)} timesteps")
-            except Exception as e:
-                logger.error(f"Failed to cache data: {e}")
+            if shaper_config.only_full_arrays:
+                # print(np.isnan(shaper.prices_array).sum())
+                if np.isnan(shaper.prices_array).any():
+                    continue
+            yield books_array, time_levels, shaper.prices_array
 
 
 async def main():
     import pyinstrument
 
-    replay_config = ReplayConfig(date_regexp='2024-08-04', max_samples=250)
-    shaper_config = ShaperConfig()
+    replay_config = ReplayConfig(date_regexp='2024-08-04', max_samples=300)
+    shaper_config = ShaperConfig(stride=1)
 
     profiler = pyinstrument.Profiler()
     with profiler:
