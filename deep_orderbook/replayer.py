@@ -24,6 +24,8 @@ class ParquetReplayer:
         self.directory = Path(directory) if directory else config.data_dir
         self.date_regexp = date_regexp or config.date_regexp
         self.on_message = None
+        self.current_file = None  # Track current file being processed
+        self.parquet_files = []
 
     async def open_async(self) -> None:
         self.parquet_files = self.config.file_list()
@@ -34,6 +36,11 @@ class ParquetReplayer:
             raise FileNotFoundError(
                 f"No parquet files found in {self.directory} matching {self.date_regexp}"
             )
+        
+    def skip_n_files(self, n: int) -> None:
+        self.parquet_files = self.parquet_files[n:]
+        if self.parquet_files:
+            self.current_file = self.parquet_files[0]
 
     async def close_async(self) -> None:
         pass
@@ -60,6 +67,7 @@ class ParquetReplayer:
             if not self.on_message:
                 raise ValueError("on_message handler not set for ParquetReplayer.")
 
+            self.current_file = parquet_file  # Update current file
             logger.info(f"Reading {parquet_file}")
             df = pl.read_parquet(parquet_file)
 

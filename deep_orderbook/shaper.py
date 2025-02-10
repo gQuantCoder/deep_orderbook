@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, cast
+from typing import AsyncGenerator, cast, Iterator
 import numpy as np
 import asyncio
 import polars as pl
@@ -6,7 +6,7 @@ import polars as pl
 from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.utils import logger
 from deep_orderbook.cache_manager import ArrayCache
-from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
+from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed, CoinbaseMessage
 from deep_orderbook.replayer import ParquetReplayer
 
 import deep_orderbook.marketdata as md
@@ -242,34 +242,113 @@ class ArrayShaper:
 async def iter_shapes_t2l(
     replay_config: ReplayConfig,
     shaper_config: ShaperConfig,
-    live=False,
+    live: bool = False,
+    use_cache: bool = True
 ) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray], None]:
-    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
-    from deep_orderbook.replayer import ParquetReplayer
-
+    """Iterator that yields shaped arrays from market data, using cache when possible.
+    
+    When using cache:
+    1. Tries to load each file from cache in sequence
+    2. If a file is cached:
+       - Yields its data
+       - Moves to next file
+    3. If a file is not cached:
+       - Switches to live processing
+       - Processes and caches that file and all subsequent files
+    """
+    cache = ArrayCache()
     shaper = ArrayShaper(config=shaper_config)
+    collector = cache.create_collector()
+    replayer = ParquetReplayer(config=replay_config) if not live else None
+
+    if use_cache and not live and replayer is not None:
+        parquet_files = replay_config.file_list()
+        current_file_idx = 0
+        
+        while current_file_idx < len(parquet_files):
+            current_file = parquet_files[current_file_idx]
+            cached_data = cache.load_cached(current_file, shaper_config)
+            
+            if cached_data is not None:
+                # Use cached data for this file
+                logger.info(f"Using cached data from {current_file}")
+                books_array, time_levels, prices_array = cached_data
+                total_length = len(books_array)
+                
+                for end_idx in range(0, total_length, shaper_config.window_stride):
+                    start_idx = 1 + max(0, end_idx - shaper_config.rolling_window_size)
+                    window_books = books_array[start_idx:end_idx]
+                    window_times = time_levels[start_idx:end_idx]
+                    window_prices = prices_array[start_idx:end_idx]
+                    
+                    if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
+                        yield window_books, window_times, window_prices
+                
+                current_file_idx += 1
+            else:
+                # Cache miss - switch to live processing from this file onwards
+                logger.info(f"Cache miss for {current_file}, switching to live processing")
+                break
+    
     async with CoinbaseFeed(
         config=replay_config,
-        replayer=ParquetReplayer(config=replay_config) if not live else None,
+        replayer=cast(Iterator[CoinbaseMessage], replayer) if replayer is not None else None,
     ) as feed:
+        if replayer is not None:
+            replayer.skip_n_files(current_file_idx)
         async for onesec in feed.one_second_iterator():
+            # Check if we've moved to a new file
+            if not live and replayer is not None and replayer.current_file != collector.current_file:
+                # Cache previous file's data if we have any
+                if use_cache:
+                    await collector.cache_arrays(shaper_config, shaper)
+                
+                # Reset collector for new file
+                collector.reset(replayer.current_file)
+            
             new_books = onesec.symbols[replay_config.markets[0]]
             if new_books.no_bbo():
-                logger.warning('Empty books')
                 continue
+            
             books_array = await shaper.make_arr3d(new_books)
-            time_levels = await shaper.build_time_level_trade()
-            if shaper_config.only_full_arrays:
-                # print(np.isnan(shaper.prices_array).sum())
-                if np.isnan(shaper.prices_array).any():
-                    continue
-            yield books_array, time_levels, shaper.prices_array
+            
+            # Add arrays and check if we should yield
+            if collector.add_arrays(books_array[-1], shaper.prices_array[-1], shaper_config.window_stride):
+                # Get current window size based on only_full_arrays
+                if shaper_config.only_full_arrays:
+                    # Only yield if we have a full window
+                    if not collector.has_full_window(shaper_config.rolling_window_size):
+                        continue
+                    window_size = shaper_config.rolling_window_size
+                else:
+                    # Yield whatever we have, up to rolling_window_size
+                    window_size = min(len(collector.all_books), shaper_config.rolling_window_size)
+                
+                # Get window arrays
+                window_books, window_prices = collector.get_window(window_size)
+                
+                # Compute time_levels for just this window
+                # Note: these time_levels will be incomplete/inaccurate for the last samples
+                # but we need to yield something during live processing
+                shaper.prices_array = window_prices
+                window_times = await shaper.build_time_level_trade()
+                
+                # Skip windows with NaN values if only_full_arrays is True
+                if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
+                    yield window_books, window_times, window_prices
+
+        # Cache the last file's data if we have any
+        if use_cache and not live and replayer is not None:
+            await collector.cache_arrays(shaper_config, shaper)
 
 
 async def main():
     import pyinstrument
 
-    replay_config = ReplayConfig(date_regexp='2024-08-04', max_samples=300)
+    replay_config = ReplayConfig(
+        date_regexp='2024-08-06',
+        # max_samples=300,
+    )
     shaper_config = ShaperConfig(stride=1)
 
     profiler = pyinstrument.Profiler()
