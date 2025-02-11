@@ -7,6 +7,11 @@ from deep_orderbook.learn.data_loader import DataLoaderWorker
 from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
 from deep_orderbook.utils import logger
 import time
+import os
+import sys
+
+# Use fork method which doesn't create new Python interpreters
+multiprocessing.set_start_method('fork', force=True)
 
 
 class Trainer:

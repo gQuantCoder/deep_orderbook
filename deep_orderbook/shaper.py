@@ -137,7 +137,9 @@ class ArrayShaper:
 
         # Check for NaN in input prices
         if np.isnan(prices).any():
-            logger.warning(f"NaN found in prices array: {np.isnan(prices).sum()} NaN values")
+            logger.warning(
+                f"NaN found in prices array: {np.isnan(prices).sum()} NaN values"
+            )
             # Replace NaN with the last valid price
             prices = np.nan_to_num(prices, nan=prices[~np.isnan(prices)].mean())
 
@@ -156,7 +158,9 @@ class ArrayShaper:
 
         # Safety check for price steps
         if pricestep_up <= 0 or pricestep_down <= 0:
-            logger.warning(f"Invalid price steps: up={pricestep_up}, down={pricestep_down}")
+            logger.warning(
+                f"Invalid price steps: up={pricestep_up}, down={pricestep_down}"
+            )
             pricestep_up = max(pricestep_up, 1e-6)
             pricestep_down = max(pricestep_down, 1e-6)
 
@@ -166,18 +170,24 @@ class ArrayShaper:
 
         # Compute price levels for thresholds from crossing sides
         a_plus_thresh = a[:, np.newaxis] + thresh_up[np.newaxis, :]  # Levels above ask
-        b_minus_thresh = b[:, np.newaxis] - thresh_down[np.newaxis, :]  # Levels below bid
+        b_minus_thresh = (
+            b[:, np.newaxis] - thresh_down[np.newaxis, :]
+        )  # Levels below bid
 
         # Create sliding windows for all points
         asks_future = np.lib.stride_tricks.sliding_window_view(
-            np.pad(prices[:, 1], (0, FUTURE-1), mode='edge'),  # Pad with last value
-            window_shape=FUTURE
-        )[:num_t]  # Keep only original length
-        
+            np.pad(prices[:, 1], (0, FUTURE - 1), mode='edge'),  # Pad with last value
+            window_shape=FUTURE,
+        )[
+            :num_t
+        ]  # Keep only original length
+
         bids_future = np.lib.stride_tricks.sliding_window_view(
-            np.pad(prices[:, 0], (0, FUTURE-1), mode='edge'),  # Pad with last value
-            window_shape=FUTURE
-        )[:num_t]  # Keep only original length
+            np.pad(prices[:, 0], (0, FUTURE - 1), mode='edge'),  # Pad with last value
+            window_shape=FUTURE,
+        )[
+            :num_t
+        ]  # Keep only original length
 
         # Expand dimensions for broadcasting
         asks_future = asks_future[:, :, np.newaxis]  # (T_eff, FUTURE, 1)
@@ -188,8 +198,12 @@ class ArrayShaper:
         # Compute tradeUp and tradeDn conditions
         # For up moves: bid must cross above ask-based levels
         # For down moves: ask must cross below bid-based levels
-        tradeUp = bids_future >= a_plus_thresh  # Bid crossing up through ask-based levels
-        tradeDn = asks_future <= b_minus_thresh  # Ask crossing down through bid-based levels
+        tradeUp = (
+            bids_future >= a_plus_thresh
+        )  # Bid crossing up through ask-based levels
+        tradeDn = (
+            asks_future <= b_minus_thresh
+        )  # Ask crossing down through bid-based levels
 
         # Exclude the current time step
         tradeUp[:, 0, :] = False
@@ -206,7 +220,7 @@ class ArrayShaper:
         # Add small epsilon to avoid division by zero and ensure positive values
         timeUp = np.clip(timeUp, 1, 1e9)  # Ensure minimum time is 1
         timeDn = np.clip(timeDn, 1, 1e9)  # Ensure minimum time is 1
-        
+
         # Scale inversely with threshold distance - larger thresholds mean smaller scaled times
         timeUp = timeUp / (thresh_up[np.newaxis, :] + 1e-6)
         timeDn = timeDn / (thresh_down[np.newaxis, :] + 1e-6)
@@ -233,7 +247,9 @@ class ArrayShaper:
         # Final safety check to ensure all values are positive and finite
         min_val = time2levels_full.min()
         if min_val < 0 or np.isnan(min_val):
-            logger.error(f"Invalid values in time2levels_full: min={min_val}, has_nan={np.isnan(time2levels_full).any()}")
+            logger.error(
+                f"Invalid values in time2levels_full: min={min_val}, has_nan={np.isnan(time2levels_full).any()}"
+            )
             raise ValueError(f"Invalid time values detected: min={min_val}")
 
         return 5 / time2levels_full
@@ -243,10 +259,10 @@ async def iter_shapes_t2l(
     replay_config: ReplayConfig,
     shaper_config: ShaperConfig,
     live: bool = False,
-    use_cache: bool = True
+    use_cache: bool = True,
 ) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray], None]:
     """Iterator that yields shaped arrays from market data, using cache when possible.
-    
+
     When using cache:
     1. Tries to load each file from cache in sequence
     2. If a file is cached:
@@ -264,56 +280,69 @@ async def iter_shapes_t2l(
     if use_cache and not live and replayer is not None:
         parquet_files = replay_config.file_list()
         current_file_idx = 0
-        
+
         while current_file_idx < len(parquet_files):
             current_file = parquet_files[current_file_idx]
             cached_data = cache.load_cached(current_file, shaper_config)
-            
+
             if cached_data is not None:
                 # Use cached data for this file
                 logger.info(f"Using cached data from {current_file}")
                 books_array, time_levels, prices_array = cached_data
                 total_length = len(books_array)
-                
+
                 for end_idx in range(0, total_length, shaper_config.window_stride):
-                    start_idx = 1 + max(0, end_idx - shaper_config.rolling_window_size)
-                    window_books = books_array[start_idx:end_idx]
-                    window_times = time_levels[start_idx:end_idx]
-                    window_prices = prices_array[start_idx:end_idx]
-                    
-                    if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
+                    start_idx = max(0, end_idx - shaper_config.rolling_window_size)
+                    window_books = books_array[start_idx:end_idx+1]
+                    window_times = time_levels[start_idx:end_idx+1]
+                    window_prices = prices_array[start_idx:end_idx+1]
+
+                    if not shaper_config.only_full_arrays or (
+                        not np.isnan(window_prices).any()
+                        and len(window_books) >= shaper_config.rolling_window_size
+                    ):
                         yield window_books, window_times, window_prices
-                
+
                 current_file_idx += 1
             else:
                 # Cache miss - switch to live processing from this file onwards
-                logger.info(f"Cache miss for {current_file}, switching to live processing")
+                logger.info(
+                    f"Cache miss for {current_file}, switching to live processing"
+                )
                 break
-    
+
     async with CoinbaseFeed(
         config=replay_config,
-        replayer=cast(Iterator[CoinbaseMessage], replayer) if replayer is not None else None,
+        replayer=(
+            cast(Iterator[CoinbaseMessage], replayer) if replayer is not None else None
+        ),
     ) as feed:
         if replayer is not None:
             replayer.skip_n_files(current_file_idx)
         async for onesec in feed.one_second_iterator():
             # Check if we've moved to a new file
-            if not live and replayer is not None and replayer.current_file != collector.current_file:
+            if (
+                not live
+                and replayer is not None
+                and replayer.current_file != collector.current_file
+            ):
                 # Cache previous file's data if we have any
                 if use_cache:
                     await collector.cache_arrays(shaper_config, shaper)
-                
+
                 # Reset collector for new file
                 collector.reset(replayer.current_file)
-            
+
             new_books = onesec.symbols[replay_config.markets[0]]
             if new_books.no_bbo():
                 continue
-            
+
             books_array = await shaper.make_arr3d(new_books)
-            
+
             # Add arrays and check if we should yield
-            if collector.add_arrays(books_array[-1], shaper.prices_array[-1], shaper_config.window_stride):
+            if collector.add_arrays(
+                books_array[-1], shaper.prices_array[-1], shaper_config.window_stride
+            ):
                 # Get current window size based on only_full_arrays
                 if shaper_config.only_full_arrays:
                     # Only yield if we have a full window
@@ -322,19 +351,24 @@ async def iter_shapes_t2l(
                     window_size = shaper_config.rolling_window_size
                 else:
                     # Yield whatever we have, up to rolling_window_size
-                    window_size = min(len(collector.all_books), shaper_config.rolling_window_size)
-                
+                    window_size = min(
+                        len(collector.all_books), shaper_config.rolling_window_size
+                    )
+
                 # Get window arrays
                 window_books, window_prices = collector.get_window(window_size)
-                
+
                 # Compute time_levels for just this window
                 # Note: these time_levels will be incomplete/inaccurate for the last samples
                 # but we need to yield something during live processing
                 shaper.prices_array = window_prices
                 window_times = await shaper.build_time_level_trade()
-                
+
                 # Skip windows with NaN values if only_full_arrays is True
-                if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
+                if (
+                    not shaper_config.only_full_arrays
+                    or not np.isnan(window_prices).any()
+                ):
                     yield window_books, window_times, window_prices
 
         # Cache the last file's data if we have any

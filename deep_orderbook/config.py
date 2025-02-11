@@ -30,7 +30,9 @@ class ReplayConfig(FeedConfig):
     def file_list(self) -> list[Path]:
         if self.one_path:
             return [self.one_path]
-        return sorted(self.data_dir.glob(f"{self.date_regexp}*.parquet"))
+        filename_regexp = f"{self.date_regexp}.parquet"
+        print(f"Searching for {filename_regexp} in {self.data_dir}")
+        return sorted(self.data_dir.glob(filename_regexp))
     
     def num_files(self) -> int:
         return len(self.file_list())
@@ -43,7 +45,7 @@ class ReplayConfig(FeedConfig):
 
 class ShaperConfig(BaseConfig):
     zoom_frac: float = 0.004
-    num_side_lvl: int = 4
+    num_side_lvl: int = 8
     rolling_window_size: int = 256
     window_stride: int = 1  # How many steps to slide the window by (default: 32 for 1/8th overlap)
 

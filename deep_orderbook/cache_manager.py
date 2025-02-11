@@ -74,7 +74,7 @@ class ArrayCache:
         relevant_params = {
             'zoom_frac': shaper_config.zoom_frac,
             'num_side_lvl': shaper_config.num_side_lvl,
-            'rolling_window_size': shaper_config.rolling_window_size,
+            'rolling_window_size': 256, # fix. should not have been there but affected the hashes
             'look_ahead': shaper_config.look_ahead,
             'look_ahead_side_bips': shaper_config.look_ahead_side_bips,
             'look_ahead_side_width': shaper_config.look_ahead_side_width,
@@ -86,6 +86,7 @@ class ArrayCache:
         """Generate cache file path based on input file and config"""
         config_hash = self._get_config_hash(shaper_config)
         cache_name = f"{data_file.stem}_{config_hash}.npz"
+        logger.info(f"Getting cache path for {data_file}: {cache_name}")  
         return self.cache_dir / cache_name
 
     def load_cached(
@@ -93,6 +94,7 @@ class ArrayCache:
     ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
         """Load cached arrays if they exist"""
         cache_path = self._get_cache_path(data_file, shaper_config)
+        # logger.info(f"Loading cached arrays from {cache_path}")
         if not cache_path.exists():
             return None
 
@@ -101,6 +103,7 @@ class ArrayCache:
                 books_array = data['books_array']
                 time_levels = data['time_levels']
                 prices_array = data['prices_array']
+            logger.debug(f"Loaded cached arrays of length {len(books_array)} from {cache_path}")
             return books_array, time_levels, prices_array
         except Exception as e:
             print(f"Error loading cache: {e}")
@@ -175,11 +178,11 @@ class ArrayCache:
 async def cache_manager_main():
     from deep_orderbook.config import ReplayConfig, ShaperConfig
     from deep_orderbook.shaper import iter_shapes_t2l
-
+    from tqdm.auto import tqdm
     replay_conf = ReplayConfig(
         markets=["ETH-USD"],  # , "BTC-USD", "ETH-BTC"],
         data_dir='/media/photoDS216/crypto/',
-        date_regexp='2024-10',
+        date_regexp='2024-10-2*',
         max_samples=-1,
         every="1000ms",
     )
@@ -193,10 +196,11 @@ async def cache_manager_main():
         rolling_window_size=256,
     )
 
-    async for books_array, t2l_array, pxar in iter_shapes_t2l(
+    print(f"Configs: \n{shaper_config}\n{replay_conf}")
+    async for books_array, t2l_array, pxar in tqdm(iter_shapes_t2l(
         replay_config=replay_conf,
         shaper_config=shaper_config,
-    ):
+    )):
         pass
 
 

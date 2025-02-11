@@ -33,7 +33,8 @@ async def train_and_predict(
         input_channels,
         output_channels,
         num_levels=config.num_levels,
-        num_side_lvl=shaper_config.num_side_lvl
+        num_side_lvl=shaper_config.num_side_lvl,
+        target_side_width=shaper_config.look_ahead_side_width,
     )
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.MSELoss()
@@ -75,15 +76,49 @@ async def train_and_predict(
 # Main function to run the script
 async def main():
     from tqdm.auto import tqdm
+    import logging
+    logger.setLevel('DEBUG')
+    # change logging file to train.log
+    logger.addHandler(logging.FileHandler('train.log'))
+    # clear the log file
+    with open('train.log', 'w') as f:
+        f.truncate()
 
-    train_config = TrainConfig()
-    replay_config = ReplayConfig(date_regexp='2024-09')
-    shaper_config = ShaperConfig()
-    test_config = replay_config
-    bar = tqdm(
-        train_and_predict(train_config, replay_config, shaper_config, test_config)
+    train_config = TrainConfig(
+        num_workers=1,
+        batch_size=16,
+        data_queue_size=512,
+        num_levels=8,
+        learning_rate=0.0001,
+        epochs=10,
     )
-    async for books_array, time_levels, pxar, prediction, loss in bar:
+    replay_config = ReplayConfig(
+        markets=["ETH-USD"],  # , "BTC-USD", "ETH-BTC"],
+        date_regexp='2024-11-0*',  # 1-06T',
+        data_dir='/media/photoDS216/crypto/',
+        every="1000ms",
+    )
+    shaper_config = ShaperConfig(
+        only_full_arrays=True,
+        zoom_frac=0.002,
+        num_side_lvl=8,
+        look_ahead=32,
+        look_ahead_side_bips=10,
+        look_ahead_side_width=4,
+        rolling_window_size=1024,
+        window_stride=8,
+    )
+    test_config = replay_config.but(date_regexp='2024-11-0*')
+
+    # Define your asynchronous function to update the figure
+
+    bar = tqdm(train_and_predict(
+        config=train_config,
+        replay_config=replay_config,
+        shaper_config=shaper_config,
+        test_config=test_config,
+    ))
+    async for books_arr, t2l, pxar, prediction, loss in bar:
         bar.set_description(f'{loss=:.4f}')
 
 
