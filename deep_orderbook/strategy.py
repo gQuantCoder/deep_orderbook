@@ -1,20 +1,30 @@
 import numpy as np
-from typing import Tuple
+from typing import Tuple, List
 import asyncio
 
 
 class Strategy:
-    def __init__(self, side_width: int = 4, threshold: float = 0.5):
+    def __init__(
+        self,
+        side_width: int = 4,
+        threshold: float = 0.5,
+        reentry_cooldown_steps: int = 20,  # Number of steps to wait before re-entering after exit
+    ):
         """Initialize the strategy.
 
         Args:
             side_width: Number of price levels on each side
             threshold: Threshold for the level_proximity prediction to trigger a position.
                       Higher threshold means requiring stronger prediction of imminent crossing.
+            reentry_cooldown_steps: Number of steps to wait after closing before re-entering
         """
         self.side_width = side_width
         self.threshold = threshold
+        self.reentry_cooldown_steps = reentry_cooldown_steps
         self.position = 0  # Current position: 0 = flat, 1 = long
+        self.steps_since_exit = 0  # Steps since last exit
+        self.recent_up_proximities: List[float] = []  # Recent up proximity signals
+        self.recent_down_proximities: List[float] = []  # Recent down proximity signals
 
     def should_get_long(self, level_proximity: np.ndarray) -> bool:
         """Decide whether to enter a long position based on level proximity predictions.
@@ -26,6 +36,10 @@ class Strategy:
         Returns:
             bool: True if should enter long position
         """
+        # Don't enter if we haven't waited long enough since last exit
+        if self.steps_since_exit < self.reentry_cooldown_steps:
+            return False
+
         # Get the predictions for upward price movements (second half of array)
         up_predictions = level_proximity[self.side_width:, 0]
         # Get the predictions for downward price movements (first half of array)
@@ -38,7 +52,10 @@ class Strategy:
         # Enter long if:
         # 1. Up moves are predicted to be more proximate than down moves
         # 2. Up move proximity is stronger than our threshold
-        return avg_up_proximity > avg_down_proximity and avg_up_proximity > self.threshold
+        # 3. The difference in proximities is significant enough
+        proximity_diff = avg_up_proximity - avg_down_proximity
+        return (proximity_diff > 0.1  # Require meaningful difference
+                and avg_up_proximity > self.threshold)
 
     def should_get_flat(self, level_proximity: np.ndarray) -> bool:
         """Decide whether to exit to flat based on level proximity predictions.
@@ -62,7 +79,10 @@ class Strategy:
         # Exit long if:
         # 1. Down moves are predicted to be more proximate than up moves
         # 2. Down move proximity is stronger than our threshold
-        return avg_down_proximity > avg_up_proximity and avg_down_proximity > self.threshold
+        # 3. The difference in proximities is significant enough
+        proximity_diff = avg_down_proximity - avg_up_proximity
+        return (proximity_diff > 0.1  # Require meaningful difference
+                and avg_down_proximity > self.threshold)
 
     def compute_pnl(
         self, prices: np.ndarray, level_proximity_pred: np.ndarray
@@ -83,22 +103,22 @@ class Strategy:
         positions = np.zeros(T)
         entry_price = 0.0
         self.position = 0
+        self.steps_since_exit = self.reentry_cooldown_steps  # Start ready to trade
 
         for t in range(T):
             # Store current position
             positions[t] = self.position
 
-            # Get mid price
-            mid_price = (prices[t, 0] + prices[t, 1]) / 2
-
-            # Update PnL if we have a position
+            # Update PnL
             if t > 0:
-                if self.position == 1:  # If long
-                    pnl[t] = pnl[t - 1] + (
-                        mid_price - prices[t - 1, 1]
-                    )  # Use ask price for entry
-                else:
-                    pnl[t] = pnl[t - 1]
+                if self.position == 0:
+                    # When flat, PnL doesn't change
+                    pnl[t] = pnl[t-1]
+                else:  # If long
+                    # PnL tracks the cumulative changes based on where we could exit (bid price)
+                    pnl[t] = pnl[t-1]  # Start from previous PnL
+                    if self.position == 1:  # If long
+                        pnl[t] = pnl[t-1] + (prices[t, 0] - prices[t-1, 0])  # Track changes in bid price
 
             # Get current level proximity predictions
             curr_lp = level_proximity_pred[t]
@@ -107,10 +127,16 @@ class Strategy:
             if self.position == 0 and self.should_get_long(curr_lp):
                 self.position = 1
                 entry_price = prices[t, 1]  # Enter at ask
+                # Add entry cost to PnL
+                pnl[t] += (prices[t, 0] - entry_price)  # Immediate mark to market at bid
             elif self.position == 1 and self.should_get_flat(curr_lp):
                 self.position = 0
-                # Add exit PnL
-                pnl[t] += prices[t, 0] - entry_price  # Exit at bid
+                # No need to add exit PnL since we've been marking to bid all along
+                self.steps_since_exit = 0  # Reset cooldown counter
+            
+            # Update cooldown counter if we're flat
+            if self.position == 0:
+                self.steps_since_exit += 1
 
         return pnl, positions
 

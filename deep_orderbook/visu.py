@@ -62,13 +62,13 @@ class Visualizer:
                 side="right",
             ),
             yaxis7=dict(
-                title="Ground Truth PnL",
+                title="Omniscient PnL",
                 titlefont=dict(color="green"),
                 tickfont=dict(color="green"),
                 domain=[0.0, 0.16],
             ),
             yaxis8=dict(
-                title="Predicted PnL",
+                title="Prediction PnL",
                 titlefont=dict(color="red"),
                 tickfont=dict(color="red"),
                 anchor="x6",
@@ -147,24 +147,24 @@ class Visualizer:
             yaxis="y6",
         )
 
-        # Line trace for Ground Truth PnL (left y-axis)
+        # Line trace for Omniscient PnL (left y-axis)
         self.gt_pnl_trace = go.Scatter(
             x=[],
             y=[],
             mode="lines",
             line=dict(color="green", width=2),
-            name="Ground Truth PnL",
+            name="Omniscient PnL",
             showlegend=True,
             yaxis="y7",
         )
 
-        # Line trace for Predicted PnL (right y-axis)
+        # Line trace for Prediction PnL (right y-axis)
         self.pred_pnl_trace = go.Scatter(
             x=[],
             y=[],
             mode="lines",
             line=dict(color="red", width=2),
-            name="Predicted PnL",
+            name="Prediction PnL",
             showlegend=True,
             yaxis="y8",
         )
