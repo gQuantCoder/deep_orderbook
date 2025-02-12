@@ -97,6 +97,32 @@ class Visualizer:
             line=dict(color="red"),
             showlegend=False,
         )
+        # Position entry markers (triangles up)
+        self.entry_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="markers",
+            marker=dict(
+                symbol="triangle-up",
+                size=12,
+                color="blue",
+            ),
+            name="Position Entry",
+            showlegend=True,
+        )
+        # Position exit markers (triangles down)
+        self.exit_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="markers",
+            marker=dict(
+                symbol="triangle-down",
+                size=12,
+                color="red",
+            ),
+            name="Position Exit",
+            showlegend=True,
+        )
 
         # Heatmap for Books
         self.im_trace = go.Heatmap(
@@ -169,15 +195,94 @@ class Visualizer:
             yaxis="y8",
         )
 
+        # Line traces for up/down proximity signals
+        self.up_proximity_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="lines",
+            line=dict(color="green", width=2),
+            name="Up Proximity",
+            showlegend=True,
+            yaxis="y4",  # Same y-axis as prediction heatmap
+        )
+        self.down_proximity_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="lines",
+            line=dict(color="red", width=2),
+            name="Down Proximity",
+            showlegend=True,
+            yaxis="y4",  # Same y-axis as prediction heatmap
+        )
+
+        # Ground truth position entry markers (triangles up)
+        self.gt_entry_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="markers",
+            marker=dict(
+                symbol="triangle-up",
+                size=12,
+                color="green",
+            ),
+            name="Omniscient Entry",
+            showlegend=True,
+        )
+        # Ground truth position exit markers (triangles down)
+        self.gt_exit_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="markers",
+            marker=dict(
+                symbol="triangle-down",
+                size=12,
+                color="darkgreen",
+            ),
+            name="Omniscient Exit",
+            showlegend=True,
+        )
+        # Predicted position entry markers (triangles up)
+        self.pred_entry_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="markers",
+            marker=dict(
+                symbol="triangle-up",
+                size=12,
+                color="red",
+            ),
+            name="Prediction Entry",
+            showlegend=True,
+        )
+        # Predicted position exit markers (triangles down)
+        self.pred_exit_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="markers",
+            marker=dict(
+                symbol="triangle-down",
+                size=12,
+                color="darkred",
+            ),
+            name="Prediction Exit",
+            showlegend=True,
+        )
+
         # Add all traces to the figure widget
         self.fig_widget.add_trace(self.bid_trace, row=1, col=1)
         self.fig_widget.add_trace(self.ask_trace, row=1, col=1)
+        self.fig_widget.add_trace(self.gt_entry_trace, row=1, col=1)
+        self.fig_widget.add_trace(self.gt_exit_trace, row=1, col=1)
+        self.fig_widget.add_trace(self.pred_entry_trace, row=1, col=1)
+        self.fig_widget.add_trace(self.pred_exit_trace, row=1, col=1)
         self.fig_widget.add_trace(self.im_trace, row=2, col=1)
         self.fig_widget.add_trace(self.t2l_trace, row=3, col=1)
         self.fig_widget.add_trace(self.pred_trace, row=4, col=1)
+        self.fig_widget.add_trace(self.up_proximity_trace, row=4, col=1)
+        self.fig_widget.add_trace(self.down_proximity_trace, row=4, col=1)
         self.fig_widget.add_trace(self.loss_trace, row=5, col=1)
         self.fig_widget.add_trace(self.test_loss_trace, row=5, col=1)
-        self.fig_widget.add_trace(self.gt_pnl_trace, row=6, col=1)  # PnL traces in row 6
+        self.fig_widget.add_trace(self.gt_pnl_trace, row=6, col=1)
         self.fig_widget.add_trace(self.pred_pnl_trace, row=6, col=1)
 
     def update(
@@ -188,13 +293,23 @@ class Visualizer:
         pred_t2l=None,
         gt_pnl: np.ndarray | None = None,
         pred_pnl: np.ndarray | None = None,
+        positions: np.ndarray | None = None,  # Ground truth positions
+        pred_positions: np.ndarray | None = None,  # Predicted positions
+        up_proximity: np.ndarray | None = None,  # Ground truth up proximity
+        down_proximity: np.ndarray | None = None,  # Ground truth down proximity
+        pred_up_proximity: np.ndarray | None = None,  # Predicted up proximity
+        pred_down_proximity: np.ndarray | None = None,  # Predicted down proximity
     ):
         """Updates the figure widget with new data."""
         try:
             with self.fig_widget.batch_update():
-                books_z_data, level_reach_z_data, bidask = self.for_image_display(
+                # Transform and clip all image data
+                books_z_data, level_reach_display, bidask = self.for_image_display(
                     books_z_data, level_reach_z_data, bidask
                 )
+                # Transform prediction data in the same way
+                _, pred_t2l_display, _ = self.for_image_display(None, pred_t2l, None) if pred_t2l is not None else (None, None, None)
+
                 # Update bid and ask price traces with limited history
                 if bidask is not None:
                     times = np.arange(min(bidask.shape[0], self._max_points))
@@ -206,39 +321,84 @@ class Visualizer:
                     self.fig_widget.data[1].x = times
                     self.fig_widget.data[1].y = ask_data
 
+                    # Get mid prices for marker placement
+                    mid_prices = (bid_data + ask_data) / 2
+
+                    # Update ground truth position markers
+                    if positions is not None:
+                        pos_data = positions[-self._max_points:] if len(positions) > self._max_points else positions
+                        entry_indices = np.where((pos_data[1:] == 1) & (pos_data[:-1] == 0))[0] + 1
+                        exit_indices = np.where((pos_data[1:] == 0) & (pos_data[:-1] == 1))[0] + 1
+                        
+                        # Update ground truth entry markers
+                        self.fig_widget.data[2].x = times[entry_indices]
+                        self.fig_widget.data[2].y = mid_prices[entry_indices]
+                        
+                        # Update ground truth exit markers
+                        self.fig_widget.data[3].x = times[exit_indices]
+                        self.fig_widget.data[3].y = mid_prices[exit_indices]
+
+                    # Update predicted position markers
+                    if pred_positions is not None:
+                        pred_pos_data = pred_positions[-self._max_points:] if len(pred_positions) > self._max_points else pred_positions
+                        pred_entry_indices = np.where((pred_pos_data[1:] == 1) & (pred_pos_data[:-1] == 0))[0] + 1
+                        pred_exit_indices = np.where((pred_pos_data[1:] == 0) & (pred_pos_data[:-1] == 1))[0] + 1
+                        
+                        # Update predicted entry markers
+                        self.fig_widget.data[4].x = times[pred_entry_indices]
+                        self.fig_widget.data[4].y = mid_prices[pred_entry_indices]
+                        
+                        # Update predicted exit markers
+                        self.fig_widget.data[5].x = times[pred_exit_indices]
+                        self.fig_widget.data[5].y = mid_prices[pred_exit_indices]
+
                 # Update heatmaps
                 if books_z_data is not None:
-                    self.fig_widget.data[2].z = np.clip(books_z_data, -1, 1)
-                if level_reach_z_data is not None:
-                    self.fig_widget.data[3].z = np.clip(level_reach_z_data, -1, 1)
+                    self.fig_widget.data[6].z = books_z_data
+                if level_reach_display is not None:
+                    self.fig_widget.data[7].z = level_reach_display
+                if pred_t2l_display is not None:
+                    self.fig_widget.data[8].z = pred_t2l_display
+                    
+                    # Update ground truth proximity traces if available
+                    if up_proximity is not None and down_proximity is not None:
+                        times = np.arange(len(up_proximity))
+                        self.fig_widget.data[9].x = times
+                        self.fig_widget.data[9].y = up_proximity
+                        self.fig_widget.data[10].x = times
+                        self.fig_widget.data[10].y = down_proximity
 
-                # Update prediction heatmap
-                if pred_t2l is not None:
-                    self.fig_widget.data[4].z = np.clip(pred_t2l, -1, 1)
+                    # Update predicted proximity traces if available
+                    if pred_up_proximity is not None and pred_down_proximity is not None:
+                        times = np.arange(len(pred_up_proximity))
+                        self.fig_widget.data[9].x = times
+                        self.fig_widget.data[9].y = pred_up_proximity
+                        self.fig_widget.data[10].x = times
+                        self.fig_widget.data[10].y = pred_down_proximity
 
                 # Update loss traces
                 if self.losses:
                     loss_times = np.arange(len(self.losses))
-                    self.fig_widget.data[5].x = loss_times
-                    self.fig_widget.data[5].y = self.losses
+                    self.fig_widget.data[11].x = loss_times
+                    self.fig_widget.data[11].y = self.losses
 
                 if self.test_losses:
                     test_loss_times = np.arange(len(self.test_losses))
-                    self.fig_widget.data[6].x = test_loss_times
-                    self.fig_widget.data[6].y = self.test_losses
+                    self.fig_widget.data[12].x = test_loss_times
+                    self.fig_widget.data[12].y = self.test_losses
 
                 # Update PnL traces
                 if gt_pnl is not None:
                     pnl_times = np.arange(len(gt_pnl))
-                    self.fig_widget.data[7].x = pnl_times
-                    self.fig_widget.data[7].y = gt_pnl
-                    self.fig_widget.data[7].yaxis = "y7"
+                    self.fig_widget.data[13].x = pnl_times
+                    self.fig_widget.data[13].y = gt_pnl
+                    self.fig_widget.data[13].yaxis = "y7"
 
                 if pred_pnl is not None:
                     pred_pnl_times = np.arange(len(pred_pnl))
-                    self.fig_widget.data[8].x = pred_pnl_times
-                    self.fig_widget.data[8].y = pred_pnl
-                    self.fig_widget.data[8].yaxis = "y8"
+                    self.fig_widget.data[14].x = pred_pnl_times
+                    self.fig_widget.data[14].y = pred_pnl
+                    self.fig_widget.data[14].yaxis = "y8"
 
         except Exception as e:
             print(f"Error updating plot: {e}")
@@ -278,8 +438,10 @@ class Visualizer:
             im_data[:, :, 0] *= -0.5
             im_data[:, :, 1:3] *= 1e6
             im_data = im_data.mean(axis=2).T
+            im_data = np.clip(im_data, -1, 1)
         if t2l_array is not None:
             t2l_data = t2l_array[:, :, 0].T
+            t2l_data = np.clip(t2l_data, -1, 1)
 
         return im_data, t2l_data, prices_array
 

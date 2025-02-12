@@ -6,19 +6,16 @@ import asyncio
 class Strategy:
     def __init__(
         self,
-        side_width: int = 4,
         threshold: float = 0.5,
         reentry_cooldown_steps: int = 20,  # Number of steps to wait before re-entering after exit
     ):
         """Initialize the strategy.
 
         Args:
-            side_width: Number of price levels on each side
             threshold: Threshold for the level_proximity prediction to trigger a position.
                       Higher threshold means requiring stronger prediction of imminent crossing.
             reentry_cooldown_steps: Number of steps to wait after closing before re-entering
         """
-        self.side_width = side_width
         self.threshold = threshold
         self.reentry_cooldown_steps = reentry_cooldown_steps
         self.position = 0  # Current position: 0 = flat, 1 = long
@@ -41,21 +38,25 @@ class Strategy:
             return False
 
         # Get the predictions for upward price movements (second half of array)
-        up_predictions = level_proximity[self.side_width:, 0]
+        up_predictions = level_proximity[self.side_width :, 0]
         # Get the predictions for downward price movements (first half of array)
-        down_predictions = level_proximity[:self.side_width, 0]
+        down_predictions = level_proximity[: self.side_width, 0]
 
-        # Calculate average predicted proximity for up and down moves
-        avg_up_proximity = np.mean(up_predictions)
-        avg_down_proximity = np.mean(down_predictions)
+        # Use max values instead of means to be more conservative
+        up_proximity = np.mean(up_predictions)
+        down_proximity = np.mean(down_predictions)
+        # print(level_proximity)
+        # print(f"{up_proximity=}, {down_proximity=}")
 
         # Enter long if:
-        # 1. Up moves are predicted to be more proximate than down moves
-        # 2. Up move proximity is stronger than our threshold
-        # 3. The difference in proximities is significant enough
-        proximity_diff = avg_up_proximity - avg_down_proximity
-        return (proximity_diff > 0.1  # Require meaningful difference
-                and avg_up_proximity > self.threshold)
+        # 1. Up moves are predicted to be significantly more proximate than down moves
+        # 2. Up move proximity is strong in absolute terms
+        # 3. Down moves are not too threatening
+        return (
+            up_proximity > self.threshold  # Strong absolute signal
+            # and up_proximity > 2.0 * down_proximity  # Much stronger than down signals
+            # and down_proximity < 0.5
+        )  # No strong contrary signals
 
     def should_get_flat(self, level_proximity: np.ndarray) -> bool:
         """Decide whether to exit to flat based on level proximity predictions.
@@ -68,25 +69,44 @@ class Strategy:
             bool: True if should exit to flat
         """
         # Get the predictions for upward price movements (second half of array)
-        up_predictions = level_proximity[self.side_width:, 0]
+        up_predictions = level_proximity[self.side_width :, 0]
         # Get the predictions for downward price movements (first half of array)
-        down_predictions = level_proximity[:self.side_width, 0]
+        down_predictions = level_proximity[: self.side_width, 0]
 
-        # Calculate average predicted proximity for up and down moves
-        avg_up_proximity = np.mean(up_predictions)
-        avg_down_proximity = np.mean(down_predictions)
+        # Use max values instead of means
+        up_proximity = np.mean(up_predictions)
+        down_proximity = np.mean(down_predictions)
 
         # Exit long if:
-        # 1. Down moves are predicted to be more proximate than up moves
-        # 2. Down move proximity is stronger than our threshold
-        # 3. The difference in proximities is significant enough
-        proximity_diff = avg_down_proximity - avg_up_proximity
-        return (proximity_diff > 0.1  # Require meaningful difference
-                and avg_down_proximity > self.threshold)
+        # 1. Down moves are predicted to be stronger than up moves
+        # 2. Up signal has weakened significantly
+        # 3. Or down signal is strong in absolute terms
+        return not self.should_get_long(level_proximity) and (
+            # down_proximity > up_proximity  # Down stronger than up
+            # up_proximity < self.threshold * 0.5  # Up signal weakened
+            down_proximity > self.threshold
+        )  # Strong down signal
+
+    def compute_proximities(self, level_proximity: np.ndarray) -> tuple[float, float]:
+        """Compute up and down proximities from level proximity predictions.
+        
+        Args:
+            level_proximity: Array of shape (2*side_width, 1) containing predicted level proximities.
+            
+        Returns:
+            Tuple[float, float]: (up_proximity, down_proximity)
+        """
+        up_predictions = level_proximity[self.side_width:, 0]
+        down_predictions = level_proximity[:self.side_width, 0]
+        
+        up_proximity = np.mean(up_predictions)
+        down_proximity = np.mean(down_predictions)
+        
+        return up_proximity, down_proximity
 
     def compute_pnl(
         self, prices: np.ndarray, level_proximity_pred: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Compute PnL based on price movements and level proximity predictions.
 
         Args:
@@ -94,51 +114,53 @@ class Strategy:
             level_proximity_pred: Array of shape (T, 2*side_width, 1) containing predicted level proximities.
 
         Returns:
-            Tuple[np.ndarray, np.ndarray]: (pnl_array, position_array)
+            Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: (pnl_array, position_array, up_proximities, down_proximities)
             - pnl_array: Array of shape (T,) containing cumulative PnL at each timestep
             - position_array: Array of shape (T,) containing position at each timestep
+            - up_proximities: Array of shape (T,) containing up proximity signals
+            - down_proximities: Array of shape (T,) containing down proximity signals
         """
         T = len(prices)
         pnl = np.zeros(T)
         positions = np.zeros(T)
+        up_proximities = np.zeros(T)
+        down_proximities = np.zeros(T)
         entry_price = 0.0
         self.position = 0
         self.steps_since_exit = self.reentry_cooldown_steps  # Start ready to trade
+        self.side_width = level_proximity_pred.shape[0] // 2
 
         for t in range(T):
             # Store current position
             positions[t] = self.position
 
-            # Update PnL
-            if t > 0:
-                if self.position == 0:
-                    # When flat, PnL doesn't change
-                    pnl[t] = pnl[t-1]
-                else:  # If long
-                    # PnL tracks the cumulative changes based on where we could exit (bid price)
-                    pnl[t] = pnl[t-1]  # Start from previous PnL
-                    if self.position == 1:  # If long
-                        pnl[t] = pnl[t-1] + (prices[t, 0] - prices[t-1, 0])  # Track changes in bid price
-
-            # Get current level proximity predictions
+            # Get current level proximity predictions and compute proximities
             curr_lp = level_proximity_pred[t]
+            up_proximities[t], down_proximities[t] = self.compute_proximities(curr_lp)
+
+            # First copy previous PnL
+            if t > 0:
+                pnl[t] = pnl[t - 1]
 
             # Update position based on predictions
             if self.position == 0 and self.should_get_long(curr_lp):
                 self.position = 1
                 entry_price = prices[t, 1]  # Enter at ask
-                # Add entry cost to PnL
-                pnl[t] += (prices[t, 0] - entry_price)  # Immediate mark to market at bid
+                # Add entry cost to PnL (mark to market at bid)
+                pnl[t] += prices[t, 0] - entry_price
             elif self.position == 1 and self.should_get_flat(curr_lp):
                 self.position = 0
-                # No need to add exit PnL since we've been marking to bid all along
                 self.steps_since_exit = 0  # Reset cooldown counter
-            
+
+            # If we're in a position, track the changes in bid price
+            elif self.position == 1 and t > 0:  # If long and not first timestep
+                pnl[t] += prices[t, 0] - prices[t - 1, 0]  # Track changes in bid price
+
             # Update cooldown counter if we're flat
             if self.position == 0:
                 self.steps_since_exit += 1
 
-        return pnl, positions
+        return pnl, positions, up_proximities, down_proximities
 
 
 async def main():
@@ -168,7 +190,7 @@ async def main():
         replay_config=replay_conf,
         shaper_config=shaper_config,
     ):
-        pnl, positions = strategy.compute_pnl(pxar, t2l_array)
+        pnl, positions, up_proximities, down_proximities = strategy.compute_pnl(pxar, t2l_array)
         # print(t2l_array)
         print(positions)
         print(pnl)

@@ -103,6 +103,8 @@ async def train_and_predict(
 async def main():
     from tqdm.auto import tqdm
     from deep_orderbook.utils import make_handlers
+    from deep_orderbook.visu import Visualizer
+    from deep_orderbook.strategy import Strategy
     # logger.setLevel('DEBUG')
     # change logging file to train.log
     line_handler, noline_handler = make_handlers('train.log')
@@ -148,8 +150,28 @@ async def main():
         test_config=test_config,
         resume_from_checkpoint=True,  # Automatically try to load latest checkpoint
     ))
-    async for books_arr, t2l, pxar, prediction, train_loss, test_loss in bar:
+    vis = Visualizer()
+    strategy = Strategy(threshold=0.3)
+    async for books_arr, t2l, pxar, pred_t2l, train_loss, test_loss in bar:
         bar.set_description(f'{train_loss=:.4f}, {test_loss=:.4f}')
+        print(f"t2l shape: {t2l.shape}")
+        print(f"pred_t2l shape: {pred_t2l.shape}")
+        print(f"pxar shape: {pxar.shape}")
+        # Transpose prediction if needed to match t2l shape
+        if pred_t2l.shape != t2l.shape:
+            print(f"error")
+            break
+        gt_pnl, pos, gt_up_prox, gt_down_prox = strategy.compute_pnl(pxar, t2l)
+        pred_pnl, pred_pos, pred_up_prox, pred_down_prox = strategy.compute_pnl(pxar, pred_t2l)
+
+        vis.add_loss(train_loss, test_loss)
+        vis.update(
+            books_z_data=books_arr, level_reach_z_data=t2l, bidask=pxar, 
+            pred_t2l=pred_t2l, gt_pnl=gt_pnl, pred_pnl=pred_pnl, 
+            positions=pos, pred_positions=pred_pos,
+            up_proximity=gt_up_prox, down_proximity=gt_down_prox,
+            pred_up_proximity=pred_up_prox, pred_down_proximity=pred_down_prox
+        )
 
 
 if __name__ == '__main__':

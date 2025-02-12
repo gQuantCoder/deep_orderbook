@@ -224,9 +224,8 @@ class Trainer:
 
         # Forward pass
         output = self.model(books_tensor)
-
-        # Compute training loss
         train_loss = self.criterion(output, time_levels_tensor)
+        reshaped_output = output.permute(0, 2, 3, 1)
 
         # Backward pass and optimization
         self.optimizer.zero_grad()
@@ -253,7 +252,7 @@ class Trainer:
         return (
             train_loss.item(),
             test_loss,
-            output[0].detach().cpu().numpy() if prediction is None else prediction
+            reshaped_output.cpu().numpy() if prediction is None else prediction
         )
 
     def compute_test_loss(self, books_array: np.ndarray, time_levels: np.ndarray) -> tuple[float, np.ndarray]:
@@ -284,8 +283,8 @@ class Trainer:
             test_prediction = self.model(test_input)
             test_loss = self.criterion(test_prediction, test_target).item()
             
-            # Get prediction in numpy format
-            prediction = test_prediction[0].cpu().numpy()
+            # Get prediction in numpy format and reshape to match time_levels
+            prediction = test_prediction[0].permute(1, 2, 0).cpu().numpy()  # Reshape to (time, features, channels)
             
         return test_loss, prediction
 
