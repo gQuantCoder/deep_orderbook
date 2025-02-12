@@ -14,6 +14,7 @@ class Visualizer:
         self._initialize_traces()
         display(self.fig_widget)
         self.losses = []
+        self.test_losses = []  # New list for test losses
         self._max_points = 1000  # Limit the number of points to store
 
     def _create_figure(self):
@@ -26,7 +27,7 @@ class Visualizer:
                 "Books",
                 "Level Proximity",
                 "Prediction",
-                "Loss",
+                "Training Loss vs Test Loss",  # Updated title
             ),
             vertical_spacing=0.05,
             row_heights=[0.2] * 5,
@@ -37,6 +38,27 @@ class Visualizer:
             width=1200,
             margin=dict(t=50, b=50, l=50, r=50),
             showlegend=True,
+            legend=dict(
+                orientation="h",  # horizontal legend
+                yanchor="bottom",
+                y=1.02,  # position above the plot
+                xanchor="center",
+                x=0.5,  # center horizontally
+            ),
+            # Add a secondary y-axis for test loss
+            yaxis5=dict(
+                title="Training Loss",
+                titlefont=dict(color="blue"),
+                tickfont=dict(color="blue"),
+            ),
+            yaxis6=dict(
+                title="Test Loss",
+                titlefont=dict(color="red"),
+                tickfont=dict(color="red"),
+                anchor="x5",  # Anchor to the same x-axis as training loss
+                overlaying="y5",  # Overlay on the training loss y-axis
+                side="right",  # Place this axis on the right side
+            ),
         )
 
         fig_widget = go.FigureWidget(fig)
@@ -87,13 +109,26 @@ class Visualizer:
             showscale=False,
         )
 
-        # Line trace for Loss
+        # Line trace for Training Loss (left y-axis)
         self.loss_trace = go.Scatter(
             x=[],
             y=[],
             mode="lines",
-            line=dict(color="blue"),
-            showlegend=False,
+            line=dict(color="blue", width=2),
+            name="Training Loss",
+            showlegend=True,
+            yaxis="y5",  # Use the default y-axis
+        )
+
+        # Line trace for Test Loss (right y-axis)
+        self.test_loss_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="lines",
+            line=dict(color="red", width=2),
+            name="Test Loss",
+            showlegend=True,
+            yaxis="y6",  # Use the secondary y-axis
         )
 
         # Add traces to the figure widget
@@ -103,6 +138,7 @@ class Visualizer:
         self.fig_widget.add_trace(self.t2l_trace, row=3, col=1)
         self.fig_widget.add_trace(self.pred_trace, row=4, col=1)
         self.fig_widget.add_trace(self.loss_trace, row=5, col=1)
+        self.fig_widget.add_trace(self.test_loss_trace, row=5, col=1)
 
     def update(
         self,
@@ -138,10 +174,17 @@ class Visualizer:
                 if pred_t2l is not None:
                     self.fig_widget.data[4].z = np.clip(pred_t2l, -1, 1)
 
+                # Update loss traces
                 if self.losses:
                     loss_times = np.arange(len(self.losses))
                     self.fig_widget.data[5].x = loss_times
                     self.fig_widget.data[5].y = self.losses
+
+                if self.test_losses:
+                    test_loss_times = np.arange(len(self.test_losses))
+                    self.fig_widget.data[6].x = test_loss_times
+                    self.fig_widget.data[6].y = self.test_losses
+
         except Exception as e:
             print(f"Error updating plot: {e}")
         finally:
@@ -149,12 +192,23 @@ class Visualizer:
             import gc
             gc.collect()
 
-    def add_loss(self, loss_value):
-        """Adds a loss value to the loss history."""
-        self.losses.append(float(loss_value))  # Convert to float to ensure no reference holding
+    def add_loss(self, train_loss: float | None, test_loss: float):
+        """Adds loss values to the loss history.
+        
+        Args:
+            train_loss: Training loss value, can be None if only test loss is available
+            test_loss: Test loss value
+        """
+        if train_loss is not None:
+            self.losses.append(float(train_loss))  # Convert to float to ensure no reference holding
+            # Keep only recent history
+            if len(self.losses) > self._max_points:
+                self.losses = self.losses[-self._max_points:]
+        
+        self.test_losses.append(float(test_loss))
         # Keep only recent history
-        if len(self.losses) > self._max_points:
-            self.losses = self.losses[-self._max_points:]
+        if len(self.test_losses) > self._max_points:
+            self.test_losses = self.test_losses[-self._max_points:]
 
     @staticmethod
     def for_image_display(

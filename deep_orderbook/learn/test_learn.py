@@ -55,7 +55,7 @@ async def train_and_predict(
     logger.info("[Training] Data loading workers started")
 
     # Lists to store losses and predictions for plotting
-    losses = []
+    losses: list[float] = []
     samples_processed = 0
 
     # Iterate over data
@@ -71,20 +71,18 @@ async def train_and_predict(
         ):
             logger.debug(f"[Training] Queue size before train step: {trainer.data_queue.qsize()}")
             try:
-                loss, prediction = trainer.train_step()
-                if loss is None:
+                # Get training loss, test loss and prediction using the test data
+                train_loss, test_loss, prediction = trainer.train_step(test_data=(books_array, time_levels, pxar))
+                if train_loss is None:
                     logger.warning("[Training] train_step returned None, queue might be empty")
                     continue
-                    
-                losses.append(loss)
-                prediction = trainer.predict(books_array)
                 
                 samples_processed += 1
                 epoch_samples += 1
                 if epoch_samples % 10 == 0:
-                    logger.info(f"[Training] Processed {epoch_samples} samples in current epoch {config.epochs - epoch_left}, total: {samples_processed}, loss: {loss:.4f}")
+                    logger.info(f"[Training] Processed {epoch_samples} samples in current epoch {config.epochs - epoch_left}, total: {samples_processed}, train_loss: {train_loss:.4f}, test_loss: {test_loss:.4f}")
 
-                yield books_array, time_levels, pxar, prediction, loss
+                yield books_array, time_levels, pxar, prediction, train_loss, test_loss
             except Exception as e:
                 logger.error(f"[Training] Exception in training: {e}")
                 continue
@@ -138,8 +136,8 @@ async def main():
         shaper_config=shaper_config,
         test_config=test_config,
     ))
-    async for books_arr, t2l, pxar, prediction, loss in bar:
-        bar.set_description(f'{loss=:.4f}')
+    async for books_arr, t2l, pxar, prediction, train_loss, test_loss in bar:
+        bar.set_description(f'{train_loss=:.4f}, {test_loss=:.4f}')
 
 
 if __name__ == '__main__':

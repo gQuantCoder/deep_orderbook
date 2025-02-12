@@ -46,8 +46,15 @@ class Trainer:
             worker = data_loader_worker.start()
             self.workers.append(data_loader_worker)
 
-    def train_step(self):
-        """Performs a training step using a batch of data from the queue."""
+    def train_step(self, test_data=None):
+        """Performs a training step using a batch of data from the queue and optionally computes test loss.
+        
+        Args:
+            test_data: Optional tuple of (books_array, time_levels, pxar) for computing test loss
+            
+        Returns:
+            Tuple of (train_loss, test_loss, prediction) where test_loss is None if no test_data provided
+        """
         books_array_list = []
         time_levels_list = []
         pxar_list = []
@@ -61,7 +68,7 @@ class Trainer:
             except Exception as e:
                 if len(books_array_list) == 0:
                     logger.warning(f"Data queue is empty. Waiting for data... {e}")
-                    return None
+                    return None, None, None
                 else:
                     logger.warning(
                         "Not enough samples for a full batch. Proceeding with available samples."
@@ -72,6 +79,7 @@ class Trainer:
             self.shaper_config.rolling_window_size - self.shaper_config.look_ahead
         )
 
+        # Training step
         self.model.train()
 
         # Stack samples into batches
@@ -100,21 +108,67 @@ class Trainer:
         # Forward pass
         output = self.model(books_tensor)
 
-        # Compute loss
-        loss = self.criterion(output, time_levels_tensor)
+        # Compute training loss
+        train_loss = self.criterion(output, time_levels_tensor)
 
         # Backward pass and optimization
         self.optimizer.zero_grad()
-        loss.backward()
+        train_loss.backward()
         self.optimizer.step()
 
-        # Return loss value
+        # Compute test loss if test data provided
+        test_loss = None
+        prediction = None
+        if test_data is not None:
+            test_books_array, test_time_levels, _ = test_data
+            test_loss, prediction = self.compute_test_loss(test_books_array, test_time_levels)
+
+        # Return losses and prediction
         return (
-            loss.item(),
-            output[0].detach().cpu().numpy(),
+            train_loss.item(),
+            test_loss,
+            output[0].detach().cpu().numpy() if prediction is None else prediction
         )
 
+    def compute_test_loss(self, books_array: np.ndarray, time_levels: np.ndarray) -> tuple[float, np.ndarray]:
+        """Computes test loss and predictions on test data.
+        
+        Args:
+            books_array: Input test data
+            time_levels: Target test data
+            
+        Returns:
+            Tuple of (test_loss, prediction)
+        """
+        self.model.eval()
+        with torch.no_grad():
+            # Prepare test data
+            test_input = torch.from_numpy(books_array).float().to(self.device)
+            test_target = torch.from_numpy(time_levels).float().to(self.device)
+            
+            # Add batch dimension and rearrange if needed
+            if test_input.dim() == 3:
+                test_input = test_input.unsqueeze(0)
+                test_input = test_input.permute(0, 3, 1, 2)
+            if test_target.dim() == 3:
+                test_target = test_target.unsqueeze(0)
+                test_target = test_target.permute(0, 3, 1, 2)
+            
+            # Forward pass
+            test_prediction = self.model(test_input)
+            test_loss = self.criterion(test_prediction, test_target).item()
+            
+            # Get prediction in numpy format
+            prediction = test_prediction[0].cpu().numpy()
+            
+        return test_loss, prediction
+
     def predict(self, books_array: np.ndarray) -> np.ndarray:
+        """Makes a prediction on the input data.
+        
+        This method is kept for backward compatibility and simple inference.
+        For training with test loss computation, use train_step with test_data.
+        """
         self.model.eval()
         with torch.no_grad():
             books_tensor = torch.tensor(
@@ -191,9 +245,9 @@ def main():
     for step in range(num_training_steps):
         result = trainer.train_step()
         if result is not None:
-            loss, prediction = result
+            train_loss, test_loss, prediction = result
             logger.warning(
-                f"Training step {step + 1}/{num_training_steps}, queue: {trainer.data_queue.qsize()}, Loss: {loss}"
+                f"Training step {step + 1}/{num_training_steps}, queue: {trainer.data_queue.qsize()}, Train Loss: {train_loss}, Test Loss: {test_loss}"
             )
         else:
             time.sleep(1)
