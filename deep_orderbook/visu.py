@@ -20,21 +20,22 @@ class Visualizer:
     def _create_figure(self):
         """Creates and returns a Plotly figure widget with subplots."""
         fig = make_subplots(
-            rows=5,
+            rows=6,  # Added one more row for PnL
             cols=1,
             subplot_titles=(
                 "Bid and Ask Price Levels",
                 "Books",
                 "Level Proximity",
                 "Prediction",
-                "Training Loss vs Test Loss",  # Updated title
+                "Training Loss vs Test Loss",
+                "Omniscient PnL vs Prediction PnL",
             ),
             vertical_spacing=0.05,
-            row_heights=[0.2] * 5,
+            row_heights=[0.16] * 6,  # Adjusted heights for 6 subplots
         )
 
         fig.update_layout(
-            height=800,
+            height=1000,  # Increased height to accommodate new subplot
             width=1200,
             margin=dict(t=50, b=50, l=50, r=50),
             showlegend=True,
@@ -50,14 +51,29 @@ class Visualizer:
                 title="Training Loss",
                 titlefont=dict(color="blue"),
                 tickfont=dict(color="blue"),
+                domain=[0.175, 0.3],
             ),
             yaxis6=dict(
                 title="Test Loss",
                 titlefont=dict(color="red"),
                 tickfont=dict(color="red"),
-                anchor="x5",  # Anchor to the same x-axis as training loss
-                overlaying="y5",  # Overlay on the training loss y-axis
-                side="right",  # Place this axis on the right side
+                anchor="x5",
+                overlaying="y5",
+                side="right",
+            ),
+            yaxis7=dict(
+                title="Ground Truth PnL",
+                titlefont=dict(color="green"),
+                tickfont=dict(color="green"),
+                domain=[0.0, 0.16],
+            ),
+            yaxis8=dict(
+                title="Predicted PnL",
+                titlefont=dict(color="red"),
+                tickfont=dict(color="red"),
+                anchor="x6",
+                overlaying="y7",
+                side="right",
             ),
         )
 
@@ -117,7 +133,7 @@ class Visualizer:
             line=dict(color="blue", width=2),
             name="Training Loss",
             showlegend=True,
-            yaxis="y5",  # Use the default y-axis
+            yaxis="y5",
         )
 
         # Line trace for Test Loss (right y-axis)
@@ -128,10 +144,32 @@ class Visualizer:
             line=dict(color="red", width=2),
             name="Test Loss",
             showlegend=True,
-            yaxis="y6",  # Use the secondary y-axis
+            yaxis="y6",
         )
 
-        # Add traces to the figure widget
+        # Line trace for Ground Truth PnL (left y-axis)
+        self.gt_pnl_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="lines",
+            line=dict(color="green", width=2),
+            name="Ground Truth PnL",
+            showlegend=True,
+            yaxis="y7",
+        )
+
+        # Line trace for Predicted PnL (right y-axis)
+        self.pred_pnl_trace = go.Scatter(
+            x=[],
+            y=[],
+            mode="lines",
+            line=dict(color="red", width=2),
+            name="Predicted PnL",
+            showlegend=True,
+            yaxis="y8",
+        )
+
+        # Add all traces to the figure widget
         self.fig_widget.add_trace(self.bid_trace, row=1, col=1)
         self.fig_widget.add_trace(self.ask_trace, row=1, col=1)
         self.fig_widget.add_trace(self.im_trace, row=2, col=1)
@@ -139,6 +177,8 @@ class Visualizer:
         self.fig_widget.add_trace(self.pred_trace, row=4, col=1)
         self.fig_widget.add_trace(self.loss_trace, row=5, col=1)
         self.fig_widget.add_trace(self.test_loss_trace, row=5, col=1)
+        self.fig_widget.add_trace(self.gt_pnl_trace, row=6, col=1)  # PnL traces in row 6
+        self.fig_widget.add_trace(self.pred_pnl_trace, row=6, col=1)
 
     def update(
         self,
@@ -146,6 +186,8 @@ class Visualizer:
         level_reach_z_data: np.ndarray | None,
         bidask: np.ndarray | None,
         pred_t2l=None,
+        gt_pnl: np.ndarray | None = None,
+        pred_pnl: np.ndarray | None = None,
     ):
         """Updates the figure widget with new data."""
         try:
@@ -184,6 +226,19 @@ class Visualizer:
                     test_loss_times = np.arange(len(self.test_losses))
                     self.fig_widget.data[6].x = test_loss_times
                     self.fig_widget.data[6].y = self.test_losses
+
+                # Update PnL traces
+                if gt_pnl is not None:
+                    pnl_times = np.arange(len(gt_pnl))
+                    self.fig_widget.data[7].x = pnl_times
+                    self.fig_widget.data[7].y = gt_pnl
+                    self.fig_widget.data[7].yaxis = "y7"
+
+                if pred_pnl is not None:
+                    pred_pnl_times = np.arange(len(pred_pnl))
+                    self.fig_widget.data[8].x = pred_pnl_times
+                    self.fig_widget.data[8].y = pred_pnl
+                    self.fig_widget.data[8].yaxis = "y8"
 
         except Exception as e:
             print(f"Error updating plot: {e}")
