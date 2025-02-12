@@ -2,6 +2,7 @@ from typing import AsyncGenerator, cast, Iterator
 import numpy as np
 import asyncio
 import polars as pl
+import random
 
 from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.utils import logger
@@ -72,10 +73,10 @@ class ArrayShaper:
         applies cumulative sums, reindexes the data, and applies the arcsinh transformation.
         """
         # print(one_sec.avg_price())
-        price_range = self.prev_price * self.config.zoom_frac
+        price_side_view = self.prev_price * self.config.view_bips * 0.0001
 
-        bid_edges: pl.Series = self.prev_price - self._cut_scales * price_range
-        ask_edges: pl.Series = self.prev_price + self._cut_scales * price_range
+        bid_edges: pl.Series = self.prev_price - self._cut_scales * price_side_view
+        ask_edges: pl.Series = self.prev_price + self._cut_scales * price_side_view
         all_edges = bid_edges[1:].reverse().append(ask_edges).to_list()
 
         dfa = one_sec.asks.with_columns((-pl.col('size')).alias('size'))
@@ -259,7 +260,6 @@ async def iter_shapes_t2l(
     replay_config: ReplayConfig,
     shaper_config: ShaperConfig,
     live: bool = False,
-    use_cache: bool = True,
 ) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray], None]:
     """Iterator that yields shaped arrays from market data, using cache when possible.
 
@@ -277,13 +277,13 @@ async def iter_shapes_t2l(
     collector = cache.create_collector()
     replayer = ParquetReplayer(config=replay_config) if not live else None
 
-    if use_cache and not live and replayer is not None:
+    current_file_idx = 0
+    if shaper_config.use_cache and not live and replayer is not None:
         parquet_files = replay_config.file_list()
-        current_file_idx = 0
 
         while current_file_idx < len(parquet_files):
             current_file = parquet_files[current_file_idx]
-            cached_data = cache.load_cached(current_file, shaper_config)
+            cached_data = cache.load_cached(current_file, shaper_config, replay_config)
 
             if cached_data is not None:
                 # Use cached data for this file
@@ -291,11 +291,14 @@ async def iter_shapes_t2l(
                 books_array, time_levels, prices_array = cached_data
                 total_length = len(books_array)
 
-                for end_idx in range(0, total_length, shaper_config.window_stride):
+                end_indexes = list(range(1, 1 + total_length, shaper_config.window_stride))
+                if replay_config.randomize:
+                    end_indexes = random.sample(end_indexes, len(end_indexes))
+                for end_idx in end_indexes:
                     start_idx = max(0, end_idx - shaper_config.rolling_window_size)
-                    window_books = books_array[start_idx:end_idx+1]
-                    window_times = time_levels[start_idx:end_idx+1]
-                    window_prices = prices_array[start_idx:end_idx+1]
+                    window_books = books_array[start_idx:end_idx]
+                    window_times = time_levels[start_idx:end_idx]
+                    window_prices = prices_array[start_idx:end_idx]
 
                     if not shaper_config.only_full_arrays or (
                         not np.isnan(window_prices).any()
@@ -310,6 +313,9 @@ async def iter_shapes_t2l(
                     f"Cache miss for {current_file}, switching to live processing"
                 )
                 break
+        else:
+            logger.info("All files processed")
+            return
 
     async with CoinbaseFeed(
         config=replay_config,
@@ -327,8 +333,8 @@ async def iter_shapes_t2l(
                 and replayer.current_file != collector.current_file
             ):
                 # Cache previous file's data if we have any
-                if use_cache:
-                    await collector.cache_arrays(shaper_config, shaper)
+                if shaper_config.save_cache:
+                    await collector.cache_arrays(shaper_config, shaper, replay_config)
 
                 # Reset collector for new file
                 collector.reset(replayer.current_file)
@@ -372,8 +378,8 @@ async def iter_shapes_t2l(
                     yield window_books, window_times, window_prices
 
         # Cache the last file's data if we have any
-        if use_cache and not live and replayer is not None:
-            await collector.cache_arrays(shaper_config, shaper)
+        if shaper_config.save_cache and not live and replayer is not None:
+            await collector.cache_arrays(shaper_config, shaper, replay_config)
 
 
 async def main():

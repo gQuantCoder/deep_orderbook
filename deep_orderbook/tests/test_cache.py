@@ -27,9 +27,9 @@ def array_cache(test_cache_dir):
 
 def test_config_hash_consistency(array_cache):
     """Test that same configs produce same hashes and different configs produce different hashes"""
-    config1 = ShaperConfig(zoom_frac=0.004, num_side_lvl=32)
-    config2 = ShaperConfig(zoom_frac=0.004, num_side_lvl=32)
-    config3 = ShaperConfig(zoom_frac=0.005, num_side_lvl=32)
+    config1 = ShaperConfig(view_bips=40, num_side_lvl=32)
+    config2 = ShaperConfig(view_bips=40, num_side_lvl=32)
+    config3 = ShaperConfig(view_bips=50, num_side_lvl=32)
 
     hash1 = array_cache._get_config_hash(config1)
     hash2 = array_cache._get_config_hash(config2)
@@ -106,7 +106,8 @@ async def test_iter_shapes_with_cache():
     )
     shaper_config = ShaperConfig(
         rolling_window_size=32,  # Smaller window for testing
-        num_side_lvl=16  # Fewer levels for testing
+        num_side_lvl=16,  # Fewer levels for testing
+        use_cache=True,
     )
     
     # First run - should create cache
@@ -114,7 +115,6 @@ async def test_iter_shapes_with_cache():
     async for books_array, time_levels, pxar in iter_shapes_t2l(
         replay_config=replay_config,
         shaper_config=shaper_config,
-        use_cache=True
     ):
         first_run_data.append((books_array.copy(), time_levels.copy(), pxar.copy()))
         if len(first_run_data) >= 5:  # Limit data for testing
@@ -125,7 +125,6 @@ async def test_iter_shapes_with_cache():
     async for books_array, time_levels, pxar in iter_shapes_t2l(
         replay_config=replay_config,
         shaper_config=shaper_config,
-        use_cache=True
     ):
         second_run_data.append((books_array.copy(), time_levels.copy(), pxar.copy()))
         if len(second_run_data) >= 5:  # Limit data for testing

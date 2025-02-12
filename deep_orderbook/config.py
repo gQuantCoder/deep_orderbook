@@ -25,13 +25,14 @@ class ReplayConfig(FeedConfig):
     date_regexp: str = "2024-09"
     one_path: Path | None = None
     skip_until_time: datetime.time = datetime.time(0, 0)
-    every: str = "1s"
+    every: str = "1000ms"
+    randomize: bool = False
 
     def file_list(self) -> list[Path]:
         if self.one_path:
             return [self.one_path]
         filename_regexp = f"{self.date_regexp}.parquet"
-        print(f"Searching for {filename_regexp} in {self.data_dir}")
+        # print(f"Searching for {filename_regexp} in {self.data_dir}")
         return sorted(self.data_dir.glob(filename_regexp))
     
     def num_files(self) -> int:
@@ -44,7 +45,7 @@ class ReplayConfig(FeedConfig):
 
 
 class ShaperConfig(BaseConfig):
-    zoom_frac: float = 0.004
+    view_bips: int = 20
     num_side_lvl: int = 8
     rolling_window_size: int = 256
     window_stride: int = 1  # How many steps to slide the window by (default: 32 for 1/8th overlap)
@@ -53,10 +54,12 @@ class ShaperConfig(BaseConfig):
 
     for_image_display: bool = False
 
-    look_ahead: int = 8
-    look_ahead_side_bips: int = 8
+    look_ahead: int = 32
+    look_ahead_side_bips: int = 10
     look_ahead_side_width: int = 4
 
+    use_cache: bool = True
+    save_cache: bool = True
 
 class TrainConfig(BaseConfig):
     device: str = "cuda"  # "cpu" or "cuda"

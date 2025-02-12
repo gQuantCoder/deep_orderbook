@@ -1,18 +1,14 @@
 # trainer.py
 
-import multiprocessing
 import torch
 import numpy as np
+from queue import Queue
 from deep_orderbook.learn.data_loader import DataLoaderWorker
 from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
 from deep_orderbook.utils import logger
 import time
 import os
 import sys
-
-# Use fork method which doesn't create new Python interpreters
-multiprocessing.set_start_method('fork', force=True)
-
 
 class Trainer:
     """Trainer class to handle training and prediction."""
@@ -32,13 +28,11 @@ class Trainer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f'{self.device=}')
         self.model = model.to(self.device)
-        self.data_queue: multiprocessing.Queue = multiprocessing.Queue(
-            maxsize=train_config.data_queue_size
-        )
+        self.data_queue = Queue(maxsize=train_config.data_queue_size)
         self.train_config = train_config
         self.replay_config = replay_config
         self.shaper_config = shaper_config
-        self.workers: list[multiprocessing.Process] = []
+        self.workers = []
 
     def start_data_loading(self):
         """Starts data loading workers."""
@@ -49,8 +43,8 @@ class Trainer:
                 replay_config=self.replay_config,
                 shaper_config=self.shaper_config,
             )
-            process = data_loader_worker.start()
-            self.workers.append(process)
+            worker = data_loader_worker.start()
+            self.workers.append(data_loader_worker)
 
     def train_step(self):
         """Performs a training step using a batch of data from the queue."""
@@ -140,6 +134,12 @@ class Trainer:
         self.model.load_state_dict(torch.load(filepath, map_location=self.device))
         self.model.to(self.device)
         self.model.eval()
+
+    def cleanup(self):
+        """Stop all workers and cleanup resources."""
+        for worker in self.workers:
+            worker.stop()
+        self.workers = []
 
 
 def main():

@@ -22,7 +22,7 @@ async def train_and_predict(
 ):
     from deep_orderbook.shaper import iter_shapes_t2l
 
-    logger.warning(f"replay_config: {replay_config.num_files()=}")
+    logger.warning(f"[Training] Starting training with {replay_config.num_files()=}")
 
     # Model parameters
     input_channels = 3  # FeatureDimension of books_array
@@ -39,6 +39,8 @@ async def train_and_predict(
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.MSELoss()
 
+    logger.info("[Training] Model initialized, starting trainer setup")
+
     # Create the trainer
     trainer = Trainer(
         model,
@@ -50,36 +52,53 @@ async def train_and_predict(
     )
     # Start data loading workers
     trainer.start_data_loading()
+    logger.info("[Training] Data loading workers started")
 
     # Lists to store losses and predictions for plotting
     losses = []
+    samples_processed = 0
 
     # Iterate over data
     epoch_left = config.epochs
     while epoch_left > 0:
         epoch_left -= 1
+        logger.info(f"[Training] Starting epoch {config.epochs - epoch_left}/{config.epochs}")
+        epoch_samples = 0
+        
         async for books_array, time_levels, pxar in iter_shapes_t2l(
             replay_config=test_config,
             shaper_config=shaper_config.but(only_full_arrays=False),
         ):
-            logger.debug(f"Queue size: {trainer.data_queue.qsize()}")
+            logger.debug(f"[Training] Queue size before train step: {trainer.data_queue.qsize()}")
             try:
                 loss, prediction = trainer.train_step()
+                if loss is None:
+                    logger.warning("[Training] train_step returned None, queue might be empty")
+                    continue
+                    
                 losses.append(loss)
                 prediction = trainer.predict(books_array)
+                
+                samples_processed += 1
+                epoch_samples += 1
+                if epoch_samples % 10 == 0:
+                    logger.info(f"[Training] Processed {epoch_samples} samples in current epoch {config.epochs - epoch_left}, total: {samples_processed}, loss: {loss:.4f}")
 
                 yield books_array, time_levels, pxar, prediction, loss
             except Exception as e:
-                print(f"Exception in training: {e}")
-
+                logger.error(f"[Training] Exception in training: {e}")
+                continue
+        
+        logger.info(f"[Training] Completed epoch {config.epochs - epoch_left} with {epoch_samples} samples")
 
 # Main function to run the script
 async def main():
     from tqdm.auto import tqdm
-    import logging
-    logger.setLevel('DEBUG')
+    from deep_orderbook.utils import make_handlers
+    # logger.setLevel('DEBUG')
     # change logging file to train.log
-    logger.addHandler(logging.FileHandler('train.log'))
+    line_handler, noline_handler = make_handlers('train.log')
+    logger.addHandler(line_handler)
     # clear the log file
     with open('train.log', 'w') as f:
         f.truncate()
@@ -94,21 +113,22 @@ async def main():
     )
     replay_config = ReplayConfig(
         markets=["ETH-USD"],  # , "BTC-USD", "ETH-BTC"],
-        date_regexp='2024-11-0*',  # 1-06T',
+        date_regexp='2024-11-06T0*',  # 1-06T',
         data_dir='/media/photoDS216/crypto/',
         every="1000ms",
     )
     shaper_config = ShaperConfig(
         only_full_arrays=True,
-        zoom_frac=0.002,
+        view_bips=20,
         num_side_lvl=8,
         look_ahead=32,
         look_ahead_side_bips=10,
         look_ahead_side_width=4,
         rolling_window_size=1024,
         window_stride=8,
+        # use_cache=False,
     )
-    test_config = replay_config.but(date_regexp='2024-11-0*')
+    test_config = replay_config.but(date_regexp='2024-11-06T0*')
 
     # Define your asynchronous function to update the figure
 

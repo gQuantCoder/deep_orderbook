@@ -119,7 +119,7 @@ async def main():
 
     config = ReplayConfig(
         markets=['BTC-USD', 'ETH-USD', 'ETH-BTC'],
-        date_regexp='2024-09',
+        date_regexp='2024-09*',
         max_samples=250,
         every='100ms',
         # skip_until_time="05:30",

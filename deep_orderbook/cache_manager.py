@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import asyncio
 from typing import Optional, Tuple, List
-from deep_orderbook.config import ShaperConfig
+from deep_orderbook.config import ShaperConfig, ReplayConfig
 from deep_orderbook.utils import logger
 
 
@@ -39,12 +39,13 @@ class ArrayCollector:
         """Check if we have enough samples for a full window."""
         return len(self.all_books) >= size
 
-    async def cache_arrays(self, shaper_config: ShaperConfig, shaper) -> None:
+    async def cache_arrays(self, shaper_config: ShaperConfig, shaper, replay_config: ReplayConfig) -> None:
         """Cache the collected arrays if we have any."""
         if self.current_file and len(self.all_books) > 0:
             await self.cache.cache_complete_arrays(
                 self.current_file,
                 shaper_config,
+                replay_config,
                 self.all_books,
                 self.all_prices,
                 shaper,
@@ -69,31 +70,49 @@ class ArrayCache:
         """Create a new array collector."""
         return ArrayCollector(self, data_file)
 
-    def _get_config_hash(self, shaper_config: ShaperConfig) -> str:
+    def _get_config_hash(self, shaper_config: ShaperConfig, replay_config: ReplayConfig) -> str:
         """Create a unique hash for the shaper config parameters that affect array generation"""
         relevant_params = {
-            'zoom_frac': shaper_config.zoom_frac,
+            'view_bips': shaper_config.view_bips,
             'num_side_lvl': shaper_config.num_side_lvl,
-            'rolling_window_size': 256, # fix. should not have been there but affected the hashes
             'look_ahead': shaper_config.look_ahead,
             'look_ahead_side_bips': shaper_config.look_ahead_side_bips,
             'look_ahead_side_width': shaper_config.look_ahead_side_width,
+            'every': replay_config.every,
         }
         config_str = json.dumps(relevant_params, sort_keys=True)
+        return f'{replay_config.every}_vb{shaper_config.view_bips:02d}_lv{shaper_config.num_side_lvl:02d}_la{shaper_config.look_ahead:03d}_lasb{shaper_config.look_ahead_side_bips:02d}_lalv{shaper_config.look_ahead_side_width:02d}'
         return hashlib.md5(config_str.encode()).hexdigest()[:12]
 
-    def _get_cache_path(self, data_file: Path, shaper_config: ShaperConfig) -> Path:
-        """Generate cache file path based on input file and config"""
-        config_hash = self._get_config_hash(shaper_config)
-        cache_name = f"{data_file.stem}_{config_hash}.npz"
-        logger.info(f"Getting cache path for {data_file}: {cache_name}")  
-        return self.cache_dir / cache_name
+    def _get_cache_path(self, data_file: Path, shaper_config: ShaperConfig, replay_config: ReplayConfig) -> Path:
+        """Generate cache file path based on input file and config.
+        
+        Creates a hierarchical structure: {cache_dir}/{config_hash}/{year}-{month}/{filename}.npz
+        """
+        config_hash = self._get_config_hash(shaper_config, replay_config)
+        
+        # Try to extract date from filename, assuming format contains year-month
+        try:
+            # Assuming filename contains a date pattern like YYYY-MM or similar
+            date_parts = [part for part in data_file.stem.split('_') if '-' in part][0].split('-')
+            year_month = f"{date_parts[0]}-{date_parts[1]}"
+        except (IndexError, ValueError):
+            # If we can't extract date, use 'unknown' as the directory
+            year_month = "unknown"
+        
+        # Create the hierarchical directory structure
+        cache_subdir = self.cache_dir / config_hash / year_month
+        cache_subdir.mkdir(parents=True, exist_ok=True)
+        
+        cache_name = f"{data_file.stem}.npz"
+        logger.info(f"Getting cache path for {data_file}: {cache_subdir}/{cache_name}")
+        return cache_subdir / cache_name
 
     def load_cached(
-        self, data_file: Path, shaper_config: ShaperConfig
+        self, data_file: Path, shaper_config: ShaperConfig, replay_config: ReplayConfig
     ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
         """Load cached arrays if they exist"""
-        cache_path = self._get_cache_path(data_file, shaper_config)
+        cache_path = self._get_cache_path(data_file, shaper_config, replay_config)
         # logger.info(f"Loading cached arrays from {cache_path}")
         if not cache_path.exists():
             return None
@@ -113,12 +132,13 @@ class ArrayCache:
         self,
         data_file: Path,
         shaper_config: ShaperConfig,
+        replay_config: ReplayConfig,
         books_array: np.ndarray,
         time_levels: np.ndarray,
         prices_array: np.ndarray,
     ) -> None:
         """Save processed arrays to cache"""
-        cache_path = self._get_cache_path(data_file, shaper_config)
+        cache_path = self._get_cache_path(data_file, shaper_config, replay_config)
         np.savez_compressed(
             cache_path,
             books_array=books_array,
@@ -130,6 +150,7 @@ class ArrayCache:
         self,
         data_file: Path,
         shaper_config: ShaperConfig,
+        replay_config: ReplayConfig,
         all_books: list[np.ndarray],
         all_prices: list[np.ndarray],
         shaper,
@@ -149,6 +170,7 @@ class ArrayCache:
             self.save_to_cache(
                 data_file,
                 shaper_config,
+                replay_config,
                 full_books_array,
                 full_time_levels,
                 full_prices_array,
@@ -161,6 +183,7 @@ class ArrayCache:
 
     def clear_cache(self, older_than_days: Optional[int] = None):
         """Clear old cache files"""
+        return
         if older_than_days is not None:
             import time
 
@@ -179,16 +202,17 @@ async def cache_manager_main():
     from deep_orderbook.config import ReplayConfig, ShaperConfig
     from deep_orderbook.shaper import iter_shapes_t2l
     from tqdm.auto import tqdm
+
     replay_conf = ReplayConfig(
         markets=["ETH-USD"],  # , "BTC-USD", "ETH-BTC"],
         data_dir='/media/photoDS216/crypto/',
-        date_regexp='2024-10-2*',
+        date_regexp='2024-11-06T0*',
         max_samples=-1,
         every="1000ms",
     )
     shaper_config = ShaperConfig(
         only_full_arrays=False,
-        zoom_frac=0.002,
+        view_bips=20,
         num_side_lvl=8,
         look_ahead=32,
         look_ahead_side_bips=10,
