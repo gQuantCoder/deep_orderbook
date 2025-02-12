@@ -30,7 +30,7 @@ class DataLoaderWorker:
         while True:
             try:
                 rand_replay_config = self.replay_config.but_random_file()
-                logger.warning(f"Loading data from {rand_replay_config.file_list()}")
+                logger.debug(f"Loading data from {rand_replay_config.file_list()}")
 
                 # Create a new event loop for this thread
                 loop = asyncio.new_event_loop()
@@ -57,10 +57,10 @@ class DataLoaderWorker:
                             pass
                         # Optional sleep interval
                         await asyncio.sleep(0.001)
-                    logger.info(f"load_data completed")
+                    logger.debug(f"load_data completed")
 
                 loop.run_until_complete(load_data())
-                logger.info(
+                logger.debug(
                     f"Data loading completed for {rand_replay_config.file_list()}"
                 )
             except Exception as e:

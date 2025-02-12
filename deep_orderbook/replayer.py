@@ -33,6 +33,7 @@ class ParquetReplayer:
             f"Found {len(self.parquet_files)} parquet files in {self.directory}"
         )
         if not self.parquet_files:
+            print(f"No parquet files found in {self.directory} matching {self.date_regexp}")
             raise FileNotFoundError(
                 f"No parquet files found in {self.directory} matching {self.date_regexp}"
             )

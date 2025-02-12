@@ -10,3 +10,4 @@ dist
 /cov.xml
 preprocessed_data
 cache
+checkpoints

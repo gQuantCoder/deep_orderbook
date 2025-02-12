@@ -9,6 +9,7 @@ from deep_orderbook.utils import logger
 import time
 import os
 import sys
+from pathlib import Path
 
 class Trainer:
     """Trainer class to handle training and prediction."""
@@ -28,11 +29,28 @@ class Trainer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f'{self.device=}')
         self.model = model.to(self.device)
-        self.data_queue = Queue(maxsize=train_config.data_queue_size)
+        self.data_queue: Queue = Queue(maxsize=train_config.data_queue_size)
         self.train_config = train_config
         self.replay_config = replay_config
         self.shaper_config = shaper_config
-        self.workers = []
+        self.workers: list[DataLoaderWorker] = []
+        
+        # Create checkpoint directory if it doesn't exist
+        self.train_config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        self.batches_since_last_checkpoint = 0
+        self.total_batches_processed = 0
+        self.total_samples_processed = 0
+        self.current_epoch = 0
+        self.last_checkpoint_time = time.time()
+
+    def should_save_checkpoint(self) -> bool:
+        """Determines if we should save a checkpoint based on batch count and time elapsed."""
+        # Always allow checkpoints at end of epoch
+        if self.batches_since_last_checkpoint >= self.train_config.save_checkpoint_batches:
+            minutes_elapsed = (time.time() - self.last_checkpoint_time) / 60
+            if minutes_elapsed >= self.train_config.save_checkpoint_mins:
+                return True
+        return False
 
     def start_data_loading(self):
         """Starts data loading workers."""
@@ -45,6 +63,105 @@ class Trainer:
             )
             worker = data_loader_worker.start()
             self.workers.append(data_loader_worker)
+
+    def save_checkpoint(self):
+        """Saves a checkpoint of the current training state."""
+        checkpoint = {
+            'epoch': self.current_epoch,
+            'total_batches_processed': self.total_batches_processed,
+            'total_samples_processed': self.total_samples_processed,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'train_config': self.train_config.model_dump(),
+            'replay_config': self.replay_config.model_dump(),
+            'shaper_config': self.shaper_config.model_dump(),
+        }
+        
+        # Create checkpoint filename with timestamp
+        checkpoint_path = self.train_config.checkpoint_dir / f'checkpoint_e{self.current_epoch}_b{self.total_batches_processed}.pt'
+        torch.save(checkpoint, checkpoint_path)
+        logger.info(f"Saved checkpoint to {checkpoint_path}")
+        
+        # Update checkpoint timing
+        self.last_checkpoint_time = time.time()
+        self.batches_since_last_checkpoint = 0
+        
+        # Remove old checkpoints if we have more than keep_last_n_checkpoints
+        checkpoints = sorted(self.train_config.checkpoint_dir.glob('checkpoint_*.pt'))
+        if len(checkpoints) > self.train_config.keep_last_n_checkpoints:
+            for checkpoint_to_remove in checkpoints[:-self.train_config.keep_last_n_checkpoints]:
+                checkpoint_to_remove.unlink()
+                logger.info(f"Removed old checkpoint: {checkpoint_to_remove}")
+
+    def load_checkpoint(self, checkpoint_path: str | Path):
+        """Loads a checkpoint and restores the training state.
+        
+        Args:
+            checkpoint_path: Path to the checkpoint file
+        """
+        logger.warning(f"=== Loading checkpoint from {checkpoint_path} ===")
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            
+            # Log the contents of the checkpoint
+            logger.info("Checkpoint contains:")
+            logger.info(f"  - Epoch: {checkpoint['epoch']}")
+            logger.info(f"  - Total samples: {checkpoint['total_samples_processed']}")
+            logger.info(f"  - Total batches: {checkpoint.get('total_batches_processed', 0)}")
+            
+            # Restore model and optimizer states
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            
+            # Restore training state
+            self.current_epoch = checkpoint['epoch']
+            self.total_batches_processed = checkpoint.get('total_batches_processed', 0)
+            self.total_samples_processed = checkpoint['total_samples_processed']
+            self.batches_since_last_checkpoint = 0
+            self.last_checkpoint_time = time.time()
+            
+            logger.warning(f"=== Successfully resumed training from:")
+            logger.warning(f"    - Epoch {self.current_epoch}")
+            logger.warning(f"    - Samples processed: {self.total_samples_processed}")
+            logger.warning(f"    - Batches processed: {self.total_batches_processed}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to load checkpoint: {str(e)}")
+            logger.error("Starting training from scratch")
+            return False
+
+    def find_latest_checkpoint(self) -> Path | None:
+        """Find the latest checkpoint in the checkpoint directory.
+        
+        Returns:
+            Path to the latest checkpoint or None if no checkpoints exist
+        """
+        if not self.train_config.checkpoint_dir.exists():
+            logger.warning(f"Checkpoint directory {self.train_config.checkpoint_dir} does not exist")
+            return None
+            
+        checkpoints = sorted(self.train_config.checkpoint_dir.glob('checkpoint_*.pt'))
+        if not checkpoints:
+            logger.warning("No checkpoints found")
+            return None
+            
+        latest = checkpoints[-1]
+        logger.warning(f"Found latest checkpoint: {latest}")
+        logger.warning(f"Checkpoint filename indicates: {latest.stem}")
+        return latest
+
+    def load_latest_checkpoint(self) -> bool:
+        """Automatically find and load the latest checkpoint.
+        
+        Returns:
+            bool: True if checkpoint was loaded successfully, False otherwise
+        """
+        latest = self.find_latest_checkpoint()
+        if latest is None:
+            return False
+            
+        return self.load_checkpoint(latest)
 
     def train_step(self, test_data=None):
         """Performs a training step using a batch of data from the queue and optionally computes test loss.
@@ -115,6 +232,15 @@ class Trainer:
         self.optimizer.zero_grad()
         train_loss.backward()
         self.optimizer.step()
+
+        # Update counters
+        self.total_samples_processed += len(books_array_list)
+        self.total_batches_processed += 1
+        self.batches_since_last_checkpoint += 1
+        
+        # Check if we should save a checkpoint
+        if self.should_save_checkpoint():
+            self.save_checkpoint()
 
         # Compute test loss if test data provided
         test_loss = None

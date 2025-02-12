@@ -72,6 +72,12 @@ class TrainConfig(BaseConfig):
 
     batch_size: int = 4
     criterion: str = "MSELoss"  # "MSELoss" or "L1Loss"
+    
+    # Checkpoint settings
+    checkpoint_dir: Path = Path("checkpoints")  # Directory to save checkpoints
+    save_checkpoint_batches: int = 100  # Save checkpoint every N batches
+    save_checkpoint_mins: float = 5.0  # Minimum time (minutes) between checkpoints
+    keep_last_n_checkpoints: int = 5  # Number of most recent checkpoints to keep
 
 
 class CacheConfig(BaseConfig):

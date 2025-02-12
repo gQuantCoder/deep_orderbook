@@ -6,6 +6,7 @@ import torch.optim as optim
 from typing import AsyncGenerator, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
 from deep_orderbook.learn.tcn import TCNModel
@@ -19,6 +20,7 @@ async def train_and_predict(
     replay_config: ReplayConfig,
     shaper_config: ShaperConfig,
     test_config: ReplayConfig,
+    resume_from_checkpoint: bool = True,
 ):
     from deep_orderbook.shaper import iter_shapes_t2l
 
@@ -50,19 +52,25 @@ async def train_and_predict(
         replay_config=replay_config,
         shaper_config=shaper_config.but(only_full_arrays=True),
     )
+
+    # Try to load latest checkpoint if requested
+    if resume_from_checkpoint:
+        trainer.load_latest_checkpoint()
+
     # Start data loading workers
     trainer.start_data_loading()
     logger.info("[Training] Data loading workers started")
 
     # Lists to store losses and predictions for plotting
     losses: list[float] = []
-    samples_processed = 0
+    samples_processed = trainer.total_samples_processed
 
     # Iterate over data
-    epoch_left = config.epochs
+    epoch_left = config.epochs - trainer.current_epoch
     while epoch_left > 0:
         epoch_left -= 1
-        logger.info(f"[Training] Starting epoch {config.epochs - epoch_left}/{config.epochs}")
+        trainer.current_epoch = config.epochs - epoch_left
+        logger.info(f"[Training] Starting epoch {trainer.current_epoch}/{config.epochs}")
         epoch_samples = 0
         
         async for books_array, time_levels, pxar in iter_shapes_t2l(
@@ -80,14 +88,16 @@ async def train_and_predict(
                 samples_processed += 1
                 epoch_samples += 1
                 if epoch_samples % 10 == 0:
-                    logger.info(f"[Training] Processed {epoch_samples} samples in current epoch {config.epochs - epoch_left}, total: {samples_processed}, train_loss: {train_loss:.4f}, test_loss: {test_loss:.4f}")
+                    logger.info(f"[Training] Processed {epoch_samples} samples in current epoch {trainer.current_epoch}, total: {samples_processed}, train_loss: {train_loss:.4f}, test_loss: {test_loss:.4f}")
 
                 yield books_array, time_levels, pxar, prediction, train_loss, test_loss
             except Exception as e:
                 logger.error(f"[Training] Exception in training: {e}")
                 continue
         
-        logger.info(f"[Training] Completed epoch {config.epochs - epoch_left} with {epoch_samples} samples")
+        logger.info(f"[Training] Completed epoch {trainer.current_epoch} with {epoch_samples} samples")
+        # Save checkpoint at the end of each epoch
+        trainer.save_checkpoint()
 
 # Main function to run the script
 async def main():
@@ -108,6 +118,8 @@ async def main():
         num_levels=8,
         learning_rate=0.0001,
         epochs=10,
+        save_checkpoint_mins=5.0,    # But wait at least N minutes between saves
+        checkpoint_dir=Path("checkpoints"),  # Directory to save checkpoints
     )
     replay_config = ReplayConfig(
         markets=["ETH-USD"],  # , "BTC-USD", "ETH-BTC"],
@@ -129,12 +141,12 @@ async def main():
     test_config = replay_config.but(date_regexp='2024-11-06T0*')
 
     # Define your asynchronous function to update the figure
-
     bar = tqdm(train_and_predict(
         config=train_config,
         replay_config=replay_config,
         shaper_config=shaper_config,
         test_config=test_config,
+        resume_from_checkpoint=True,  # Automatically try to load latest checkpoint
     ))
     async for books_arr, t2l, pxar, prediction, train_loss, test_loss in bar:
         bar.set_description(f'{train_loss=:.4f}, {test_loss=:.4f}')

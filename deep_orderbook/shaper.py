@@ -314,7 +314,7 @@ async def iter_shapes_t2l(
                 )
                 break
         else:
-            logger.info("All files processed")
+            logger.debug("All files processed")
             return
 
     async with CoinbaseFeed(
