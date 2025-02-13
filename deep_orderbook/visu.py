@@ -15,7 +15,8 @@ class Visualizer:
         display(self.fig_widget)
         self.losses = []
         self.test_losses = []  # New list for test losses
-        self._max_points = 1000  # Limit the number of points to store
+        self._max_points = 605  # Limit the number of points to store
+        self._loss_max_points = 128  # Limit the number of points to store
 
     def _create_figure(self):
         """Creates and returns a Plotly figure widget with subplots."""
@@ -46,6 +47,77 @@ class Visualizer:
                 xanchor="center",
                 x=0.5,  # center horizontally
             ),
+            # Configure all x-axes
+            xaxis=dict(
+                domain=[0, 1],
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='lightgrey',
+                zeroline=False,
+                fixedrange=True,
+                dtick=100,
+                showticklabels=True,
+                range=[0, 1000],
+            ),
+            xaxis2=dict(
+                domain=[0, 1],
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='lightgrey',
+                zeroline=False,
+                fixedrange=True,
+                # showticklabels=False,  # Hide labels for other subplots
+            ),
+            xaxis3=dict(
+                domain=[0, 1],
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='lightgrey',
+                zeroline=False,
+                fixedrange=True,
+                # showticklabels=False,
+            ),
+            xaxis4=dict(
+                domain=[0, 1],
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='lightgrey',
+                zeroline=False,
+                fixedrange=True,
+                showticklabels=False,
+            ),
+            xaxis5=dict(
+                domain=[0, 1],
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='lightgrey',
+                zeroline=False,
+                fixedrange=True,
+                # showticklabels=False,
+            ),
+            xaxis6=dict(
+                domain=[0, 1],
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='lightgrey',
+                zeroline=False,
+                fixedrange=True,
+                showticklabels=False,
+            ),
+            # Configure y-axes
+            yaxis=dict(
+                title="Price",
+                titlefont=dict(color="black"),
+                tickfont=dict(color="black"),
+                domain=[0.875, 1.0],
+                tickformat=".2f",
+                fixedrange=True,
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='lightgrey',
+                zeroline=False,
+                autorange=True,
+            ),
             # Add a secondary y-axis for test loss
             yaxis5=dict(
                 title="Training Loss",
@@ -66,6 +138,8 @@ class Visualizer:
                 titlefont=dict(color="green"),
                 tickfont=dict(color="green"),
                 domain=[0.0, 0.16],
+                tickformat="02d",
+                fixedrange=True,
             ),
             yaxis8=dict(
                 title="Prediction PnL",
@@ -74,6 +148,8 @@ class Visualizer:
                 anchor="x6",
                 overlaying="y7",
                 side="right",
+                tickformat="02d",
+                fixedrange=True,
             ),
         )
 
@@ -200,7 +276,7 @@ class Visualizer:
             x=[],
             y=[],
             mode="lines",
-            line=dict(color="green", width=2),
+            line=dict(color="red", width=2),
             name="Up Proximity",
             showlegend=True,
             yaxis="y4",  # Same y-axis as prediction heatmap
@@ -209,7 +285,7 @@ class Visualizer:
             x=[],
             y=[],
             mode="lines",
-            line=dict(color="red", width=2),
+            line=dict(color="green", width=2),
             name="Down Proximity",
             showlegend=True,
             yaxis="y4",  # Same y-axis as prediction heatmap
@@ -305,16 +381,19 @@ class Visualizer:
             with self.fig_widget.batch_update():
                 # Transform and clip all image data
                 books_z_data, level_reach_display, bidask = self.for_image_display(
-                    books_z_data, level_reach_z_data, bidask
+                    books_z_data, level_reach_z_data, bidask, max_points=self._max_points
                 )
                 # Transform prediction data in the same way
-                _, pred_t2l_display, _ = self.for_image_display(None, pred_t2l, None) if pred_t2l is not None else (None, None, None)
+                _, pred_t2l_display, _ = self.for_image_display(None, pred_t2l, None, max_points=self._max_points) if pred_t2l is not None else (None, None, None)
 
                 # Update bid and ask price traces with limited history
                 if bidask is not None:
                     times = np.arange(min(bidask.shape[0], self._max_points))
                     bid_data = bidask[-self._max_points:, 0] if bidask.shape[0] > self._max_points else bidask[:, 0]
                     ask_data = bidask[-self._max_points:, 1] if bidask.shape[0] > self._max_points else bidask[:, 1]
+                    
+                    # Update x-axis range to match the data
+                    self.fig_widget.layout.xaxis.range = [times[0], times[-1]]
                     
                     self.fig_widget.data[0].x = times
                     self.fig_widget.data[0].y = bid_data
@@ -362,42 +441,46 @@ class Visualizer:
                     
                     # Update ground truth proximity traces if available
                     if up_proximity is not None and down_proximity is not None:
-                        times = np.arange(len(up_proximity))
+                        times = np.arange(len(up_proximity))[:self._max_points]
+                        up_prox_data = up_proximity[-self._max_points:]
+                        down_prox_data = down_proximity[-self._max_points:]
                         self.fig_widget.data[9].x = times
-                        self.fig_widget.data[9].y = up_proximity
+                        self.fig_widget.data[9].y = np.clip(up_prox_data, 0, 1) * (pred_t2l.shape[1] - 1)
                         self.fig_widget.data[10].x = times
-                        self.fig_widget.data[10].y = down_proximity
+                        self.fig_widget.data[10].y = np.clip(down_prox_data, 0, 1) * (pred_t2l.shape[1] - 1)
 
                     # Update predicted proximity traces if available
                     if pred_up_proximity is not None and pred_down_proximity is not None:
-                        times = np.arange(len(pred_up_proximity))
+                        times = np.arange(len(pred_up_proximity))[:self._max_points]
+                        pred_up_prox_data = pred_up_proximity[-self._max_points:]
+                        pred_down_prox_data = pred_down_proximity[-self._max_points:]
                         self.fig_widget.data[9].x = times
-                        self.fig_widget.data[9].y = pred_up_proximity
+                        self.fig_widget.data[9].y = np.clip(pred_up_prox_data, 0, 1) * (pred_t2l.shape[1] - 1)
                         self.fig_widget.data[10].x = times
-                        self.fig_widget.data[10].y = pred_down_proximity
+                        self.fig_widget.data[10].y = np.clip(pred_down_prox_data, 0, 1) * (pred_t2l.shape[1] - 1)
 
                 # Update loss traces
                 if self.losses:
-                    loss_times = np.arange(len(self.losses))
+                    loss_times = np.arange(len(self.losses))[-self._loss_max_points:]
                     self.fig_widget.data[11].x = loss_times
-                    self.fig_widget.data[11].y = self.losses
+                    self.fig_widget.data[11].y = self.losses[-self._loss_max_points:]
 
                 if self.test_losses:
-                    test_loss_times = np.arange(len(self.test_losses))
+                    test_loss_times = np.arange(len(self.test_losses))[-self._loss_max_points:]
                     self.fig_widget.data[12].x = test_loss_times
-                    self.fig_widget.data[12].y = self.test_losses
+                    self.fig_widget.data[12].y = self.test_losses[-self._loss_max_points:]
 
                 # Update PnL traces
                 if gt_pnl is not None:
                     pnl_times = np.arange(len(gt_pnl))
                     self.fig_widget.data[13].x = pnl_times
-                    self.fig_widget.data[13].y = gt_pnl
+                    self.fig_widget.data[13].y = gt_pnl[-self._max_points:]
                     self.fig_widget.data[13].yaxis = "y7"
 
                 if pred_pnl is not None:
                     pred_pnl_times = np.arange(len(pred_pnl))
                     self.fig_widget.data[14].x = pred_pnl_times
-                    self.fig_widget.data[14].y = pred_pnl
+                    self.fig_widget.data[14].y = pred_pnl[-self._max_points:]
                     self.fig_widget.data[14].yaxis = "y8"
 
         except Exception as e:
@@ -430,16 +513,23 @@ class Visualizer:
         books_array: np.ndarray | None = None,
         t2l_array: np.ndarray | None = None,
         prices_array: np.ndarray | None = None,
+        max_points: int = 605,  # Default to _max_points value
     ) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
         im_data = None
         t2l_data = None
         if books_array is not None:
+            # Take last max_points if array is longer
+            if books_array.shape[0] > max_points:
+                books_array = books_array[-max_points:]
             im_data = books_array.copy()
             im_data[:, :, 0] *= -0.5
             im_data[:, :, 1:3] *= 1e6
             im_data = im_data.mean(axis=2).T
             im_data = np.clip(im_data, -1, 1)
         if t2l_array is not None:
+            # Take last max_points if array is longer
+            if t2l_array.shape[0] > max_points:
+                t2l_array = t2l_array[-max_points:]
             t2l_data = t2l_array[:, :, 0].T
             t2l_data = np.clip(t2l_data, -1, 1)
 

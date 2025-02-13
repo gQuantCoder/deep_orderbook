@@ -43,8 +43,8 @@ class Strategy:
         down_predictions = level_proximity[: self.side_width, 0]
 
         # Use max values instead of means to be more conservative
-        up_proximity = np.mean(up_predictions)
-        down_proximity = np.mean(down_predictions)
+        up_proximity = np.max(up_predictions)
+        down_proximity = np.max(down_predictions)
         # print(level_proximity)
         # print(f"{up_proximity=}, {down_proximity=}")
 
@@ -55,7 +55,7 @@ class Strategy:
         return (
             up_proximity > self.threshold  # Strong absolute signal
             # and up_proximity > 2.0 * down_proximity  # Much stronger than down signals
-            # and down_proximity < 0.5
+            and down_proximity < 0.5
         )  # No strong contrary signals
 
     def should_get_flat(self, level_proximity: np.ndarray) -> bool:
@@ -74,8 +74,8 @@ class Strategy:
         down_predictions = level_proximity[: self.side_width, 0]
 
         # Use max values instead of means
-        up_proximity = np.mean(up_predictions)
-        down_proximity = np.mean(down_predictions)
+        up_proximity = np.max(up_predictions)
+        down_proximity = np.max(down_predictions)
 
         # Exit long if:
         # 1. Down moves are predicted to be stronger than up moves
@@ -128,7 +128,7 @@ class Strategy:
         entry_price = 0.0
         self.position = 0
         self.steps_since_exit = self.reentry_cooldown_steps  # Start ready to trade
-        self.side_width = level_proximity_pred.shape[0] // 2
+        self.side_width = level_proximity_pred.shape[1] // 2
 
         for t in range(T):
             # Store current position

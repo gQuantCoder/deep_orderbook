@@ -206,7 +206,7 @@ async def cache_manager_main():
     replay_conf = ReplayConfig(
         markets=["ETH-USD"],  # , "BTC-USD", "ETH-BTC"],
         data_dir='/media/photoDS216/crypto/',
-        date_regexp='2024-11-06T0*',
+        date_regexp='2024-11*',
         max_samples=-1,
         every="1000ms",
     )
@@ -218,6 +218,24 @@ async def cache_manager_main():
         look_ahead_side_bips=10,
         look_ahead_side_width=4,
         rolling_window_size=256,
+    )
+
+    replay_conf = ReplayConfig(
+        markets=["ETH-USD"],#, "BTC-USD", "ETH-BTC"],
+        data_dir='/media/photoDS216/crypto/',
+        date_regexp='2024-12-*',
+        max_samples=-1,
+        every="100ms",
+    )
+    shaper_config = ShaperConfig(
+        only_full_arrays=False,
+        view_bips = 5,
+        num_side_lvl = 8,
+        look_ahead = 32,
+        look_ahead_side_bips = 5,
+        look_ahead_side_width = 4,
+        rolling_window_size = 1024,
+        window_stride = 8,
     )
 
     print(f"Configs: \n{shaper_config}\n{replay_conf}")

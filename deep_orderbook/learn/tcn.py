@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from deep_orderbook.utils import logger
 
 
 class ResidualBlock(nn.Module):
@@ -66,6 +67,19 @@ class TCNModel(nn.Module):
 
     def __init__(self, input_channels, output_channels, num_levels=4, num_side_lvl=4, target_side_width=4):
         super().__init__()
+        
+        # Calculate receptive field length
+        kernel_t = 3  # temporal kernel size
+        receptive_length = 1
+        for i in range(num_levels):
+            dilation = 2**i
+            receptive_length += (kernel_t - 1) * dilation
+            
+        logger.warning(f"TCN receptive length (timesteps): {receptive_length}")
+        
+        # Store for potential future use
+        self.receptive_length = receptive_length
+        
         # Each level processes 8 channels internally
         levels = [input_channels] + [8] * num_levels
         # Dilation increases exponentially in time dimension only (2^i, 1)
