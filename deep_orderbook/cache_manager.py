@@ -223,7 +223,7 @@ async def cache_manager_main():
     replay_conf = ReplayConfig(
         markets=["ETH-USD"],#, "BTC-USD", "ETH-BTC"],
         data_dir='/media/photoDS216/crypto/',
-        date_regexp='2024-12-*',
+        date_regexp='2025-01-*',
         max_samples=-1,
         every="100ms",
     )

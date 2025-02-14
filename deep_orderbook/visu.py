@@ -417,9 +417,6 @@ class Visualizer:
                     self.fig_widget.data[1].x = times
                     self.fig_widget.data[1].y = ask_data
 
-                    # Get mid prices for marker placement
-                    mid_prices = (bid_data + ask_data) / 2
-
                     # Update ground truth position markers
                     if positions is not None:
                         pos_data = (
@@ -434,13 +431,13 @@ class Visualizer:
                             np.where((pos_data[1:] == 0) & (pos_data[:-1] == 1))[0] + 1
                         )
 
-                        # Update ground truth entry markers
+                        # Update ground truth entry markers - place at ask price for buys
                         self.fig_widget.data[2].x = times[entry_indices]
-                        self.fig_widget.data[2].y = mid_prices[entry_indices]
+                        self.fig_widget.data[2].y = ask_data[entry_indices]
 
-                        # Update ground truth exit markers
+                        # Update ground truth exit markers - place at bid price for sells
                         self.fig_widget.data[3].x = times[exit_indices]
-                        self.fig_widget.data[3].y = mid_prices[exit_indices]
+                        self.fig_widget.data[3].y = bid_data[exit_indices]
 
                     # Update predicted position markers
                     if pred_positions is not None:
@@ -462,13 +459,13 @@ class Visualizer:
                             + 1
                         )
 
-                        # Update predicted entry markers
+                        # Update predicted entry markers - place at ask price for buys
                         self.fig_widget.data[4].x = times[pred_entry_indices]
-                        self.fig_widget.data[4].y = mid_prices[pred_entry_indices]
+                        self.fig_widget.data[4].y = ask_data[pred_entry_indices]
 
-                        # Update predicted exit markers
+                        # Update predicted exit markers - place at bid price for sells
                         self.fig_widget.data[5].x = times[pred_exit_indices]
-                        self.fig_widget.data[5].y = mid_prices[pred_exit_indices]
+                        self.fig_widget.data[5].y = bid_data[pred_exit_indices]
 
                 # Update heatmaps
                 if books_z_data is not None:

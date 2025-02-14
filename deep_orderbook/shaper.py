@@ -288,7 +288,7 @@ async def iter_shapes_t2l(
 
             if cached_data is not None:
                 # Use cached data for this file
-                logger.info(f"Using cached data from {current_file}")
+                logger.debug(f"Using cached data from {current_file}")
                 books_array, time_levels, prices_array = cached_data
                 total_length = len(books_array)
 

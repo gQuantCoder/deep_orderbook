@@ -88,7 +88,7 @@ async def train_and_predict(
                 samples_processed += 1
                 epoch_samples += 1
                 if epoch_samples % 10 == 0:
-                    logger.info(f"[Training] Processed {epoch_samples} samples in current epoch {trainer.current_epoch}, total: {samples_processed}, train_loss: {train_loss:.4f}, test_loss: {test_loss:.4f}")
+                    logger.debug(f"[Training] Processed {epoch_samples} samples in current epoch {trainer.current_epoch}, total: {samples_processed}, train_loss: {train_loss:.4f}, test_loss: {test_loss:.4f}")
 
                 yield books_array, time_levels, pxar, prediction, train_loss, test_loss
             except Exception as e:

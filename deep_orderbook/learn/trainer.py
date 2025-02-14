@@ -80,7 +80,10 @@ class Trainer:
         # Create checkpoint filename with timestamp
         checkpoint_path = self.train_config.checkpoint_dir / f'checkpoint_e{self.current_epoch}_b{self.total_batches_processed}.pt'
         torch.save(checkpoint, checkpoint_path)
-        logger.info(f"Saved checkpoint to {checkpoint_path}")
+        logger.warning(f"=== Saved checkpoint to {checkpoint_path} ===")
+        logger.warning(f"    - Epoch {self.current_epoch}")
+        logger.warning(f"    - Batches processed: {self.total_batches_processed}")
+        logger.warning(f"    - Samples processed: {self.total_samples_processed}")
         
         # Update checkpoint timing
         self.last_checkpoint_time = time.time()
@@ -91,7 +94,7 @@ class Trainer:
         if len(checkpoints) > self.train_config.keep_last_n_checkpoints:
             for checkpoint_to_remove in checkpoints[:-self.train_config.keep_last_n_checkpoints]:
                 checkpoint_to_remove.unlink()
-                logger.info(f"Removed old checkpoint: {checkpoint_to_remove}")
+                logger.warning(f"Removed old checkpoint: {checkpoint_to_remove}")
 
     def load_checkpoint(self, checkpoint_path: str | Path):
         """Loads a checkpoint and restores the training state.
@@ -101,7 +104,20 @@ class Trainer:
         """
         logger.warning(f"=== Loading checkpoint from {checkpoint_path} ===")
         try:
-            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            # Add PosixPath to safe globals for PyTorch 2.6+ compatibility
+            from pathlib import PosixPath
+            import torch.serialization
+            torch.serialization.add_safe_globals([PosixPath])
+            
+            # Try loading with weights_only=True first (safer)
+            try:
+                checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            except Exception as e:
+                if "WeightsUnpickler error" in str(e):
+                    logger.warning("Attempting to load checkpoint with weights_only=False (only do this for trusted checkpoints)")
+                    checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
+                else:
+                    raise e
             
             # Log the contents of the checkpoint
             logger.info("Checkpoint contains:")
