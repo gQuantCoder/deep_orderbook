@@ -107,7 +107,7 @@ class ArrayShaper:
 
         return df_book
 
-    async def make_arr3d(self, new_books: md.OneSecondEnds) -> np.ndarray:
+    async def make_arr3d(self, new_books: md.OneSecondEnds) -> tuple[np.ndarray, np.ndarray]:
         self.update_ema(new_books.avg_price())
         df_book = self.bin_books(new_books)
         # print(df_book.reverse()[self.num_side_lvl - 5 : self.num_side_lvl + 5])
@@ -117,13 +117,14 @@ class ArrayShaper:
 
         # add a new first axis to represent time
         image_col = df_3d_exp.to_numpy().reshape((1, -1, 3))
+        price_col = np.array([lev.price for lev in new_books.bbos()])
 
         self.total_array = np.roll(self.total_array, -1, axis=0)
         self.prices_array = np.roll(self.prices_array, -1, axis=0)
         self.total_array[-1] = image_col
-        self.prices_array[-1] = np.array([lev.price for lev in new_books.bbos()])
+        self.prices_array[-1] = price_col
 
-        return self.total_array
+        return image_col, price_col
 
     async def build_time_level_trade(self) -> np.ndarray:
         """
@@ -343,11 +344,11 @@ async def iter_shapes_t2l(
             if new_books.no_bbo():
                 continue
 
-            books_array = await shaper.make_arr3d(new_books)
+            image_col, price_col = await shaper.make_arr3d(new_books)
 
             # Add arrays and check if we should yield
             if collector.add_arrays(
-                books_array[-1], shaper.prices_array[-1], shaper_config.window_stride
+                image_col, price_col, shaper_config.window_stride
             ):
                 # Get current window size based on only_full_arrays
                 if shaper_config.only_full_arrays:

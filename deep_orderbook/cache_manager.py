@@ -20,7 +20,7 @@ class ArrayCollector:
 
     def add_arrays(self, books: np.ndarray, prices: np.ndarray, stride: int) -> bool:
         """Add arrays and return True when stride is reached."""
-        self.all_books.append(books)
+        self.all_books.append(books[0])
         self.all_prices.append(prices)
         self.window_counter += 1
 

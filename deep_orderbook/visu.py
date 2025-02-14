@@ -1,8 +1,8 @@
 # visu.py
 
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import plotly.graph_objects as go  # type: ignore
+from plotly.subplots import make_subplots  # type: ignore
 from IPython.display import display
 
 
@@ -381,20 +381,37 @@ class Visualizer:
             with self.fig_widget.batch_update():
                 # Transform and clip all image data
                 books_z_data, level_reach_display, bidask = self.for_image_display(
-                    books_z_data, level_reach_z_data, bidask, max_points=self._max_points
+                    books_z_data,
+                    level_reach_z_data,
+                    bidask,
+                    max_points=self._max_points,
                 )
                 # Transform prediction data in the same way
-                _, pred_t2l_display, _ = self.for_image_display(None, pred_t2l, None, max_points=self._max_points) if pred_t2l is not None else (None, None, None)
+                _, pred_t2l_display, _ = (
+                    self.for_image_display(
+                        None, pred_t2l, None, max_points=self._max_points
+                    )
+                    if pred_t2l is not None
+                    else (None, None, None)
+                )
 
                 # Update bid and ask price traces with limited history
                 if bidask is not None:
                     times = np.arange(min(bidask.shape[0], self._max_points))
-                    bid_data = bidask[-self._max_points:, 0] if bidask.shape[0] > self._max_points else bidask[:, 0]
-                    ask_data = bidask[-self._max_points:, 1] if bidask.shape[0] > self._max_points else bidask[:, 1]
-                    
+                    bid_data = (
+                        bidask[-self._max_points :, 0]
+                        if bidask.shape[0] > self._max_points
+                        else bidask[:, 0]
+                    )
+                    ask_data = (
+                        bidask[-self._max_points :, 1]
+                        if bidask.shape[0] > self._max_points
+                        else bidask[:, 1]
+                    )
+
                     # Update x-axis range to match the data
                     self.fig_widget.layout.xaxis.range = [times[0], times[-1]]
-                    
+
                     self.fig_widget.data[0].x = times
                     self.fig_widget.data[0].y = bid_data
                     self.fig_widget.data[1].x = times
@@ -405,28 +422,50 @@ class Visualizer:
 
                     # Update ground truth position markers
                     if positions is not None:
-                        pos_data = positions[-self._max_points:] if len(positions) > self._max_points else positions
-                        entry_indices = np.where((pos_data[1:] == 1) & (pos_data[:-1] == 0))[0] + 1
-                        exit_indices = np.where((pos_data[1:] == 0) & (pos_data[:-1] == 1))[0] + 1
-                        
+                        pos_data = (
+                            positions[-self._max_points :]
+                            if len(positions) > self._max_points
+                            else positions
+                        )
+                        entry_indices = (
+                            np.where((pos_data[1:] == 1) & (pos_data[:-1] == 0))[0] + 1
+                        )
+                        exit_indices = (
+                            np.where((pos_data[1:] == 0) & (pos_data[:-1] == 1))[0] + 1
+                        )
+
                         # Update ground truth entry markers
                         self.fig_widget.data[2].x = times[entry_indices]
                         self.fig_widget.data[2].y = mid_prices[entry_indices]
-                        
+
                         # Update ground truth exit markers
                         self.fig_widget.data[3].x = times[exit_indices]
                         self.fig_widget.data[3].y = mid_prices[exit_indices]
 
                     # Update predicted position markers
                     if pred_positions is not None:
-                        pred_pos_data = pred_positions[-self._max_points:] if len(pred_positions) > self._max_points else pred_positions
-                        pred_entry_indices = np.where((pred_pos_data[1:] == 1) & (pred_pos_data[:-1] == 0))[0] + 1
-                        pred_exit_indices = np.where((pred_pos_data[1:] == 0) & (pred_pos_data[:-1] == 1))[0] + 1
-                        
+                        pred_pos_data = (
+                            pred_positions[-self._max_points :]
+                            if len(pred_positions) > self._max_points
+                            else pred_positions
+                        )
+                        pred_entry_indices = (
+                            np.where(
+                                (pred_pos_data[1:] == 1) & (pred_pos_data[:-1] == 0)
+                            )[0]
+                            + 1
+                        )
+                        pred_exit_indices = (
+                            np.where(
+                                (pred_pos_data[1:] == 0) & (pred_pos_data[:-1] == 1)
+                            )[0]
+                            + 1
+                        )
+
                         # Update predicted entry markers
                         self.fig_widget.data[4].x = times[pred_entry_indices]
                         self.fig_widget.data[4].y = mid_prices[pred_entry_indices]
-                        
+
                         # Update predicted exit markers
                         self.fig_widget.data[5].x = times[pred_exit_indices]
                         self.fig_widget.data[5].y = mid_prices[pred_exit_indices]
@@ -438,49 +477,64 @@ class Visualizer:
                     self.fig_widget.data[7].z = level_reach_display
                 if pred_t2l_display is not None:
                     self.fig_widget.data[8].z = pred_t2l_display
-                    
+
                     # Update ground truth proximity traces if available
                     if up_proximity is not None and down_proximity is not None:
-                        times = np.arange(len(up_proximity))[:self._max_points]
-                        up_prox_data = up_proximity[-self._max_points:]
-                        down_prox_data = down_proximity[-self._max_points:]
+                        times = np.arange(len(up_proximity))[: self._max_points]
+                        up_prox_data = up_proximity[-self._max_points :]
+                        down_prox_data = down_proximity[-self._max_points :]
                         self.fig_widget.data[9].x = times
-                        self.fig_widget.data[9].y = np.clip(up_prox_data, 0, 1) * (pred_t2l.shape[1] - 1)
+                        self.fig_widget.data[9].y = np.clip(up_prox_data, 0, 1) * (
+                            pred_t2l.shape[1] - 1
+                        )
                         self.fig_widget.data[10].x = times
-                        self.fig_widget.data[10].y = np.clip(down_prox_data, 0, 1) * (pred_t2l.shape[1] - 1)
+                        self.fig_widget.data[10].y = np.clip(down_prox_data, 0, 1) * (
+                            pred_t2l.shape[1] - 1
+                        )
 
                     # Update predicted proximity traces if available
-                    if pred_up_proximity is not None and pred_down_proximity is not None:
-                        times = np.arange(len(pred_up_proximity))[:self._max_points]
-                        pred_up_prox_data = pred_up_proximity[-self._max_points:]
-                        pred_down_prox_data = pred_down_proximity[-self._max_points:]
+                    if (
+                        pred_up_proximity is not None
+                        and pred_down_proximity is not None
+                    ):
+                        times = np.arange(len(pred_up_proximity))[: self._max_points]
+                        pred_up_prox_data = pred_up_proximity[-self._max_points :]
+                        pred_down_prox_data = pred_down_proximity[-self._max_points :]
                         self.fig_widget.data[9].x = times
-                        self.fig_widget.data[9].y = np.clip(pred_up_prox_data, 0, 1) * (pred_t2l.shape[1] - 1)
+                        self.fig_widget.data[9].y = np.clip(pred_up_prox_data, 0, 1) * (
+                            pred_t2l.shape[1] - 1
+                        )
                         self.fig_widget.data[10].x = times
-                        self.fig_widget.data[10].y = np.clip(pred_down_prox_data, 0, 1) * (pred_t2l.shape[1] - 1)
+                        self.fig_widget.data[10].y = np.clip(
+                            pred_down_prox_data, 0, 1
+                        ) * (pred_t2l.shape[1] - 1)
 
                 # Update loss traces
                 if self.losses:
-                    loss_times = np.arange(len(self.losses))[-self._loss_max_points:]
+                    loss_times = np.arange(len(self.losses))[-self._loss_max_points :]
                     self.fig_widget.data[11].x = loss_times
-                    self.fig_widget.data[11].y = self.losses[-self._loss_max_points:]
+                    self.fig_widget.data[11].y = self.losses[-self._loss_max_points :]
 
                 if self.test_losses:
-                    test_loss_times = np.arange(len(self.test_losses))[-self._loss_max_points:]
+                    test_loss_times = np.arange(len(self.test_losses))[
+                        -self._loss_max_points :
+                    ]
                     self.fig_widget.data[12].x = test_loss_times
-                    self.fig_widget.data[12].y = self.test_losses[-self._loss_max_points:]
+                    self.fig_widget.data[12].y = self.test_losses[
+                        -self._loss_max_points :
+                    ]
 
                 # Update PnL traces
                 if gt_pnl is not None:
                     pnl_times = np.arange(len(gt_pnl))
                     self.fig_widget.data[13].x = pnl_times
-                    self.fig_widget.data[13].y = gt_pnl[-self._max_points:]
+                    self.fig_widget.data[13].y = gt_pnl[-self._max_points :]
                     self.fig_widget.data[13].yaxis = "y7"
 
                 if pred_pnl is not None:
                     pred_pnl_times = np.arange(len(pred_pnl))
                     self.fig_widget.data[14].x = pred_pnl_times
-                    self.fig_widget.data[14].y = pred_pnl[-self._max_points:]
+                    self.fig_widget.data[14].y = pred_pnl[-self._max_points :]
                     self.fig_widget.data[14].yaxis = "y8"
 
         except Exception as e:
@@ -488,25 +542,28 @@ class Visualizer:
         finally:
             # Force garbage collection after update
             import gc
+
             gc.collect()
 
     def add_loss(self, train_loss: float | None, test_loss: float):
         """Adds loss values to the loss history.
-        
+
         Args:
             train_loss: Training loss value, can be None if only test loss is available
             test_loss: Test loss value
         """
         if train_loss is not None:
-            self.losses.append(float(train_loss))  # Convert to float to ensure no reference holding
+            self.losses.append(
+                float(train_loss)
+            )  # Convert to float to ensure no reference holding
             # Keep only recent history
             if len(self.losses) > self._max_points:
-                self.losses = self.losses[-self._max_points:]
-        
+                self.losses = self.losses[-self._max_points :]
+
         self.test_losses.append(float(test_loss))
         # Keep only recent history
         if len(self.test_losses) > self._max_points:
-            self.test_losses = self.test_losses[-self._max_points:]
+            self.test_losses = self.test_losses[-self._max_points :]
 
     @staticmethod
     def for_image_display(
@@ -515,8 +572,8 @@ class Visualizer:
         prices_array: np.ndarray | None = None,
         max_points: int = 605,  # Default to _max_points value
     ) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
-        im_data = None
-        t2l_data = None
+        im_data: np.ndarray = np.ndarray(shape=(0, 0))
+        t2l_data: np.ndarray | np.ndarray(shape=(0, 0))
         if books_array is not None:
             # Take last max_points if array is longer
             if books_array.shape[0] > max_points:
@@ -538,9 +595,10 @@ class Visualizer:
 
 if __name__ == '__main__':
     vis = Visualizer()
+    rng = np.random.default_rng(456456)
     data_dict = {
-        "books_z_data": np.random.rand(10, 10, 3),
-        "level_reach_z_data": np.random.rand(10, 10, 1),
-        "bidask": np.random.rand(10, 2),
+        "books_z_data": rng.random((10, 10, 3)),
+        "level_reach_z_data": rng.random((10, 10, 1)),
+        "bidask": rng.random((10, 2)),
     }
     vis.update(**data_dict)
