@@ -72,7 +72,7 @@ lazy-loader==0.4
     # via scikit-image
 linkify-it-py==2.0.3
     # via panel
-markdown==3.7
+markdown==3.8.1
     # via panel
 markdown-it-py==3.0.0
     # via
