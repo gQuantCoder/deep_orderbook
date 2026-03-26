@@ -194,7 +194,7 @@ pyviz-comms==3.0.3
     #   panel
 pyyaml==6.0.2
     # via bokeh
-requests==2.32.3
+requests==2.33.0
     # via
     #   coinbase-advanced-py
     #   panel
