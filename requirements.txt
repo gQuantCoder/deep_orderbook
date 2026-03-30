@@ -172,7 +172,7 @@ pydantic-core==2.20.1
     # via pydantic
 pydantic-settings==2.4.0
     # via -r requirements.in
-pygments==2.18.0
+pygments==2.20.0
     # via
     #   ipython
     #   rich
