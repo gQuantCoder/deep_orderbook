@@ -53,10 +53,15 @@ Check out our short demo video:
    api_secret="-----BEGIN EC PRIVATE KEY-----\xxxxxxxxxxxxxxxxx...xxxxxxxxxxxxxxxxxxx\n-----END EC PRIVATE KEY-----\n"
    ```
 
-3. Install the package:
+3. Install with uv:
    ```bash
-   pip install -r requirements.txt
-   pip install -e .
+   uv sync
+   ```
+
+4. Run commands with uv-managed environment:
+   ```bash
+   uv run deepbook --version
+   uv run deepbook-record
    ```
 
 ## Usage

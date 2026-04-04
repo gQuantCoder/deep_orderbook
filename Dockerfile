@@ -1,11 +1,8 @@
-FROM python:3.12
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-COPY . deep_orderbook
-
+COPY . /deep_orderbook
 WORKDIR /deep_orderbook
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv sync --no-dev
 
-RUN pip install -e . 
-
-CMD [ "python", "-m", "deep_orderbook.consumers.recorder" ]
+CMD ["uv", "run", "deepbook-record"]
