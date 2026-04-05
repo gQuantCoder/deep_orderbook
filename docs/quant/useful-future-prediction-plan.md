@@ -1,101 +1,79 @@
-# Quant Plan — Make TTL predictions actually tradable
+# Quant Plan — Make TTL map predictions tradable
 
-This is a practical plan, not generic ML advice.
+This plan keeps the full image-to-image target.
 
-## 1) Trading objective first (replace pure regression vanity)
+## 1) Keep the field, don’t collapse to scalar labels
 
-Current loss is pointwise MSE/L1 on proximity. That does not guarantee profitable signals.
+Your edge is in path/timing structure encoded in the full up/down map.
 
-Add evaluation stack:
-- hit-rate@k for top-k predicted upward levels
-- precision/recall for "upside signal > threshold"
-- PnL with spread + fees + cooldown
-- turnover and max drawdown
+Do not replace with only "direction" or one "hit-first" scalar.
+Use those as diagnostics, not primary supervision.
 
-Only keep model/settings that improve net PnL under costs.
+## 2) Training objective (implemented)
 
-## 2) Fix target construction before model iteration
+Use `StructuredT2LLoss` with three pieces:
+1) Pointwise reconstruction (base MSE/L1)
+2) Up-vs-down dominance ranking penalty
+3) Near-vs-far monotonicity regularizer
 
-Priority P0:
-1. Time-local thresholds:
-   - use `a[t]` / `b[t]` per t for step size, not `a[-1]`/`b[-1]`.
-2. Tail masking:
-   - ignore last `look_ahead-1` timesteps in loss/metrics.
-3. Consistent train/eval slicing:
-   - enforce same valid-index mask everywhere.
+Optional:
+- `loss_focus_last_step=True` to prioritize the actionable final row (the current now at window end).
 
-```mermaid
-flowchart LR
-  A[Raw prices] --> B[Time-local thresholds per t]
-  B --> C[Future-crossing times]
-  C --> D[Mask invalid tail]
-  D --> E[Proximity target]
-  E --> F[Model loss + trading metrics]
-```
+Recommended starter config:
+- `criterion="StructuredT2L"`
+- `loss_pointwise_weight=1.0`
+- `loss_updown_rank_weight=0.25`
+- `loss_monotonic_weight=0.10`
+- `loss_rank_margin=0.05`
+- `loss_focus_last_step=True`
 
-## 3) Calibrate label difficulty dynamically
+## 3) Strategy should consume the full map
 
-Fixed bips is brittle across volatility regimes.
+Instead of one scalar, use map-derived features:
+- up_peak = max(up map)
+- down_peak = max(down map)
+- imbalance = up_peak - down_peak
+- near_vs_far slope per side
 
-Use regime-adaptive distance:
-- estimate short-horizon realized vol in bips
-- set threshold levels as quantiles (e.g., 40/60/80th percentile move)
-- keep expected positive rate in a target band (e.g., 15-35%)
+Then decide enter/wait/exit with spread + fee filters.
 
-That keeps right-side labels informative instead of mostly zeros.
+## 4) Evaluation stack (must be trading-aware)
 
-## 4) Add microstructure features that map to short-horizon moves
+Keep both classes of metrics:
 
-You already have strong raw book/trade tensors. Add explicit channels:
-- order flow imbalance (OFI)
-- queue imbalance at top N levels
-- spread and spread changes
-- trade sign imbalance over short windows
+A) Field quality:
+- map MSE/L1
+- up/down dominance accuracy
+- near/far ordering violations
 
-These are low-latency, economically grounded features.
+B) Trading quality:
+- net PnL after fees/slippage
+- turnover
+- drawdown
+- time-in-market
 
-## 5) Execution-aware signal design
+Only accept model changes that improve B), not only A).
 
-Do not trade raw proximity directly.
-
-Signal candidate:
-- `score = max(up_levels) - max(down_levels)`
-- enter long only when score > enter_th and spread <= spread_cap
-- exit when score < exit_th OR adverse down signal spikes
-
-Use hysteresis (`enter_th > exit_th`) and cooldown to reduce churn.
-
-## 6) Walk-forward validation (mandatory)
+## 5) Validation protocol
 
 ```mermaid
 flowchart TD
-  A[Day 1..N train] --> B[Day N+1 validate]
-  B --> C[Freeze params]
-  C --> D[Day N+2 paper-trade]
-  D --> E[Roll window forward]
+  A[Train on past days] --> B[Validate next day]
+  B --> C[Freeze thresholds]
+  C --> D[Paper-trade on following day]
+  D --> E[Roll forward]
 ```
 
-No random split. Use day-by-day walk-forward to avoid leakage.
+No random shuffles across time.
 
-## 7) Suggested immediate config sweep
+## 6) Immediate next experiments
 
-Start grid:
-- look_ahead: [32, 64]
-- look_ahead_side_bips: [4, 5, 7, 10]
-- look_ahead_side_width: [3, 4]
-- threshold in strategy: [0.15, 0.2, 0.25]
-
-Keep only configs that beat baseline after fees.
-
-## 8) Baselines to beat
-
-Before touching architecture, compare against:
-- OFI linear model
-- imbalance + spread logistic classifier
-- naive momentum over midprice
-
-If CNN/TCN cannot beat these in walk-forward net PnL, target/feature pipeline is still wrong.
+1) Compare MSELoss vs StructuredT2LLoss on same data slice.
+2) Sweep `loss_updown_rank_weight` in [0.1, 0.25, 0.5].
+3) Sweep `loss_monotonic_weight` in [0.0, 0.05, 0.1].
+4) Compare `loss_focus_last_step` true/false for live trade quality.
 
 ## Bottom line
 
-Your architecture direction is valid (stream -> CNN/TCN -> TTL). The blocker is target quality/calibration and execution-aware validation, not the idea of CNN itself.
+Your thesis stands: timing-to-level map is more useful than plain price-direction labels.
+The right upgrade is better structured field loss + execution-aware evaluation, not scalar simplification.

@@ -72,8 +72,15 @@ class TrainConfig(BaseConfig):
     num_levels: int = 4
 
     batch_size: int = 4
-    criterion: str = "MSELoss"  # "MSELoss" or "L1Loss"
-    
+    criterion: str = "MSELoss"  # "MSELoss" | "L1Loss" | "StructuredT2L"
+
+    # StructuredT2L loss weights
+    loss_pointwise_weight: float = 1.0
+    loss_updown_rank_weight: float = 0.25
+    loss_monotonic_weight: float = 0.10
+    loss_rank_margin: float = 0.05
+    loss_focus_last_step: bool = False
+
     # Checkpoint settings
     checkpoint_dir: Path = Path("checkpoints")  # Directory to save checkpoints
     save_checkpoint_batches: int = 100  # Save checkpoint every N batches

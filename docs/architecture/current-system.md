@@ -1,6 +1,6 @@
 # Deep OrderBook — Current Architecture (as implemented)
 
-This is the actual runtime architecture in code today (not aspirational docs).
+This is the runtime architecture in code today.
 
 ## 1) End-to-end map
 
@@ -14,7 +14,7 @@ flowchart LR
   E --> G[prices tensor T x 2]
   G --> H[build_time_level_trade]
   H --> I[target tensor T x 2W x 1 (5 / time_to_cross)]
-  F --> J[Trainer + TCNModel]
+  F --> J[Trainer + CNN/TCN]
   I --> J
   J --> K[predicted proximity tensor T x 2W x 1]
   K --> L[Strategy / PnL logic]
@@ -73,48 +73,47 @@ Code anchors:
 - deep_orderbook/shaper.py
 - deep_orderbook/cache_manager.py
 
-## 4) Model/training path (CNN/TCN)
+## 4) Model/training path (image-to-image style)
 
 ```mermaid
 flowchart TD
-  A[Input books: batch x 3 x time x price] --> B[ResidualBlock d=1]
-  B --> C[ResidualBlock d=2]
-  C --> D[ResidualBlock d=4]
-  D --> E[ResidualBlock d=8 ...]
-  E --> F[Price-axis reduction convs]
-  F --> G[1x1 conv -> output_channel=1]
-  G --> H[adaptive_avg_pool2d -> width=2*target_side_width]
-  H --> I[Prediction: batch x 1 x time x 2W]
+  A[Input books: batch x 3 x time x price] --> B[Temporal residual conv stack]
+  B --> C[Price-axis reduction convs]
+  C --> D[1x1 output conv]
+  D --> E[pred map: batch x 1 x time x 2W]
+  E --> F[StructuredT2L loss]
+  G[target map: batch x 1 x time x 2W] --> F
 ```
 
 Notes:
-- This is a temporal convolutional network implemented as Conv2d over (time, price).
-- Causality is approximated by left-padding on time axis in residual blocks.
+- This is Conv2d over (time, price), i.e. image-to-image style forecasting.
+- Target is a field, not a scalar class.
+- The right half of levels is upside; left half is downside.
 
-Code anchors:
-- deep_orderbook/learn/tcn.py
-- deep_orderbook/learn/trainer.py
+## 5) Target semantics
 
-## 5) Target semantics (what the model predicts)
+`build_time_level_trade()` computes crossing-time-derived proximity values.
 
-`build_time_level_trade()` computes future crossing times, then returns `5 / time_to_cross`.
+- First half of level axis: downward side (`timeDn` reversed)
+- Second half: upward side (`timeUp`)
+- Higher value = sooner expected crossing
 
-- First half of channel axis: downward side (`timeDn` reversed)
-- Second half: upward side (`timeUp`)  ← this is the “right side” in your image interpretation
+Interpretation aligned with intended usage:
+- each training/inference step is a "now"
+- map encodes what happens after that now across level directions
 
-So higher values mean nearer/sooner crossing.
+## 6) New loss/training improvements now in code
 
-## 6) Known runtime mismatches/blockers in current repo
+Added:
+- `deep_orderbook/learn/losses.py::StructuredT2LLoss`
+- trainer criterion factory now supports `criterion="StructuredT2L"`
+- optional focus on actionable final row via `loss_focus_last_step=True`
+
+This preserves the full map while improving directional and structural supervision.
+
+## 7) Known runtime blockers still present
 
 1) `deepbook record` works via `deep_orderbook.__main__`.
-2) `deepbook-record` entry script is miswired if mapped directly to async main.
-3) `replay` path currently hard-imports `pyinstrument` in `main()` and fails if missing.
-4) Several mutable defaults exist in models (`{}` / `[]`) in marketdata.py and can leak state across instances.
-
-## 7) What is live vs research code
-
-Live-ish path:
-- CoinbaseFeed + recorder + parquet replay + shaper + trainer/strategy loop.
-
-Research / exploratory path:
-- notebooks and `main()` demo blocks with hardcoded paths.
+2) `deepbook-record` direct async entry script wiring can still be fragile.
+3) `replay` demo main hard-imports `pyinstrument` and fails if missing.
+4) Several mutable defaults remain in marketdata models.
