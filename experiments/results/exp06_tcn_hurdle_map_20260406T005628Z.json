@@ -1,0 +1,69 @@
+{
+  "experiment": "exp06_tcn_hurdle_map",
+  "timestamp_utc": "2026-04-06 00:56:28Z",
+  "look_ahead": 64,
+  "windows": {
+    "total": 120,
+    "train": 90,
+    "test": 30
+  },
+  "mutation": {
+    "mutation_name": "side_margin_postfilter",
+    "gate_threshold": 0.66,
+    "pos_weight": 6.0,
+    "reg_weight_scale": 12.0,
+    "side_margin": 0.015,
+    "note": "Journal handoff mutation: increase side_margin 0.0100 -> 0.0150 only."
+  },
+  "results": {
+    "zero_baseline": {
+      "rmse": 0.01770420496977935,
+      "mae": 0.0023603322724343695,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.0,
+      "side_acc_on_signals": NaN
+    },
+    "single_stage_baseline": {
+      "rmse": 0.029783418821984573,
+      "mae": 0.005094232636132731,
+      "precision": 0.12728652751423147,
+      "recall": 0.9337416481069037,
+      "f1": 0.22403313071917957,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.21443684895833334,
+      "side_acc_on_signals": 0.5603603603603604
+    },
+    "hurdle_candidate": {
+      "rmse": 0.03051759844213825,
+      "mae": 0.007326711908333469,
+      "precision": 0.15873795950461958,
+      "recall": 0.8992204899777279,
+      "f1": 0.26984126984101464,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.16559244791666666,
+      "side_acc_on_signals": 0.41623785020011433
+    },
+    "delta_hurdle_vs_single_stage": {
+      "f1": 0.04580813912183507,
+      "precision": 0.03145143199038811,
+      "side_acc": -0.14412251016024608,
+      "rmse_delta": 0.0007341796201536764
+    },
+    "event_gate": {
+      "positive_rate_train": 0.38702256944444446,
+      "predicted_event_rate_test": 0.46705729166666665,
+      "predicted_event_rate_after_side_filter": 0.45546875,
+      "gate_threshold": 0.66,
+      "side_margin": 0.015,
+      "side_keep_rate_within_gated": 0.9751881795372177
+    },
+    "rows": {
+      "train": 23040,
+      "test": 7680,
+      "train_active_rows": 8917
+    }
+  }
+}

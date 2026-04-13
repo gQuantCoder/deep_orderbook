@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from deep_orderbook.config import FeedConfig, ShaperConfig
 from deep_orderbook.shaper import iter_shapes_t2l
 from deep_orderbook.visu import Visualizer

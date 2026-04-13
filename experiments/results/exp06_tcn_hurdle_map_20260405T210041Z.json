@@ -1,0 +1,65 @@
+{
+  "experiment": "exp06_tcn_hurdle_map",
+  "timestamp_utc": "2026-04-05 21:00:41Z",
+  "look_ahead": 64,
+  "windows": {
+    "total": 120,
+    "train": 90,
+    "test": 30
+  },
+  "mutation": {
+    "mutation_name": "classifier_pos_weight",
+    "gate_threshold": 0.62,
+    "pos_weight": 7.0,
+    "reg_weight_scale": 12.0,
+    "note": "After threshold tuning, adjust classifier positive weight to 7.0."
+  },
+  "results": {
+    "zero_baseline": {
+      "rmse": 0.01770420496977935,
+      "mae": 0.0023603322724343695,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.0,
+      "side_acc_on_signals": NaN
+    },
+    "single_stage_baseline": {
+      "rmse": 0.029261139910442557,
+      "mae": 0.004839671371475337,
+      "precision": 0.13474541751527494,
+      "recall": 0.9209354120267256,
+      "f1": 0.23509345462276068,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.19978841145833334,
+      "side_acc_on_signals": 0.5532246633593196
+    },
+    "hurdle_candidate": {
+      "rmse": 0.0314545552296298,
+      "mae": 0.008077404383997977,
+      "precision": 0.15455049944506102,
+      "recall": 0.9304008908685965,
+      "f1": 0.2650697969540704,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.1759765625,
+      "side_acc_on_signals": 0.4086449217714134
+    },
+    "delta_hurdle_vs_single_stage": {
+      "f1": 0.02997634233130972,
+      "precision": 0.019805081929786084,
+      "side_acc": -0.1445797415879062,
+      "rmse_delta": 0.0021934153191872467
+    },
+    "event_gate": {
+      "positive_rate_train": 0.38702256944444446,
+      "predicted_event_rate_test": 0.491015625,
+      "gate_threshold": 0.62
+    },
+    "rows": {
+      "train": 23040,
+      "test": 7680,
+      "train_active_rows": 8917
+    }
+  }
+}
