@@ -20,6 +20,21 @@ def choose_latest_parquet(directories: Iterable[Path]) -> Path:
     return latest
 
 
+def choose_walkforward_parquets(directory: Path, train_count: int = 3, test_count: int = 1) -> tuple[list[Path], list[Path]]:
+    files = sorted(directory.glob('*.parquet'))
+    needed = train_count + test_count
+    if len(files) < needed:
+        raise FileNotFoundError(f'Need at least {needed} parquet files in {directory}, found {len(files)}')
+    selected = files[-needed:]
+    train = selected[:train_count]
+    test = selected[train_count:]
+    return train, test
+
+
+def apply_prediction_cap(pred: np.ndarray, cap_value: float) -> np.ndarray:
+    return np.clip(np.asarray(pred, dtype=np.float32), 0.0, float(cap_value))
+
+
 def richness_gate(books_array, target_array) -> dict:
     books = np.asarray(books_array, dtype=np.float32)
     target = np.asarray(target_array, dtype=np.float32)

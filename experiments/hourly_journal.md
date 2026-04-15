@@ -219,6 +219,31 @@
 - la=64: best=hgb_d6_lr006_w | f1=0.2360, precision=0.1356, recall=0.9081, side_acc=0.6060649611957459, rmse=0.02901, zero_rmse=0.01770
 - Artifact: experiments/results/hourly/run_20260406T020150Z.json
 
+## 2026-04-14 11:42:51Z
+- Continuity: starting from exp16 strict holdout result where `l1_evt005_pw2` preserved geometry / RMSE but stayed too conservative to trade.
+- Hypothesis: conditioning train/test on violent recent windows may concentrate learnable market-reaction structure and improve event quality without RMSE blow-up.
+- Mutation applied: event-window filter on newest BTC files only (`07:00`, `08:00`, `09:00` train; `10:00` test), keeping top 35% windows by observable intrawindow move/range/vol/book-activity score.
+- Event-filter artifact: experiments/results/exp17_event_filtered_h64_tcn_20260414T114251Z.json
+- Window counts: train 51/144 selected, test 17/48 selected, older-file fallback not needed.
+- Best route: `l1_evt005_pw2` with precision=0.2957, f1=0.3285, rmse=1.14068 vs zero_rmse=1.14359, fixed pnl=-0.02344.
+- Visual verdict: not noise; partial timing alignment, but prediction still underfires / collapses vertically, matching near-flat PnL.
+- Decision: keep event-window conditioning in the palette, but reject current mapper+trigger stack as tradable because better event metrics did not convert to profits.
+- Next mutation: keep event-window conditioning fixed and mutate only trigger extraction (local-max / side-aware map trigger or threshold sweep) instead of changing the mapper again.
+
+## 2026-04-14 12:06:16Z
+- Continuity: used exp17 as the seed result and expanded to a 25-run event-filtered suite on the same honest recent BTC holdout.
+- Leakage check: event-window ranking still used only present-window observables (abs return/range/realized vol/book activity), not future target intensity or future pnl.
+- Mutation applied: 25-variant sweep over event loss, pos_weight, width, epochs, decay, active-pixel weighting, and trade-threshold calibration; train files fixed to `07:00,08:00,09:00`, test file fixed to `10:00`.
+- Data scale note: this was a screening run, not a huge training job. Script capped each file at `max_windows=48`; train windows `144 -> 51` after filtering, test windows `48 -> 17`; rolling window size `256`; approximate train timesteps `13056`, test timesteps `4352`.
+- Runtime note: experiment start `12:06:16Z`, first per-variant artifact about `12:07:03Z`, summary artifact about `12:08:02Z`, total wall-clock about `106s`.
+- Cache correction: the repo already had shaped-array cache in `shaper.py`/`cache_manager.py`; the slowness came from custom experiment scripts forcing cache off. Future scientists should not repeat that mistake.
+- Suite artifact: experiments/results/exp18_event_filtered_suite25_20260414T120616Z.json
+- Best route by route-score: `l1_evt005_pw2_h64` with precision=0.2861, f1=0.3734, rmse=1.14125 vs zero_rmse≈1.14359, fixed pnl=-0.02344.
+- Most interesting positive-pnl routes: `regonly_activew3` pnl=6.4375, `regonly_wd1e3` pnl=0.9375, `regonly_huber_thr010` pnl=0.9375.
+- Visual verdict on top route: better structural alignment than weaker runs, but still underfiring rather than harvesting enough opportunities.
+- Decision: the event-filtered regime looks learnable; mapper sweep is good enough for now; tradability blocker has shifted to trigger extraction / execution conversion.
+- Next mutation: freeze dataset + mapper family for one step and run trigger-only follow-ups (local-max / side-aware extraction and threshold sweeps around `l1_evt005_pw2_h64`, `regonly_wd1e3`, `regonly_huber_thr010`; confirm `regonly_activew3` across neighboring thresholds/regimes before trusting its pnl).
+
 ## 2026-04-06 02:04:07Z
 - Continuity: picked up from latest journal handoff (2026-04-06 00:58:46Z) and artifacts `experiments/results/hourly/run_20260406T020150Z.json` + `experiments/results/exp06_tcn_hurdle_map_20260406T020235Z.json`. Last best config remained `hgb_d6_lr006_w`; last failed hypothesis was that stronger gate threshold with capped side-margin would recover long-horizon side quality.
 - Executed unfinished next mutation first: `gate_threshold` raised to 0.70 with `pos_weight=6.0`, `side_margin=0.015`, `reg_weight_scale=12.0` fixed.

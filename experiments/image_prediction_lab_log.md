@@ -547,3 +547,613 @@ Visual verdict from precheck:
 ### Next mutation
 - Keep the new protocol.
 - Next run should try the same flow on another fresh rolled parquet and compare symbols / thresholds, while continuing to require precheck images before training.
+
+## 2026-04-13 exp11 second one-shot scientist run (BTC mutation)
+
+Status: DONE
+
+### Mutation from prior run
+- Changed one primary factor only: symbol `ETH-USD` -> `BTC-USD`
+- Kept the same fresh parquet source, cadence (`100ms`), horizon (`64`), model family (TinyTCN), and general protocol flow.
+
+### Hypothesis
+- After the weak ETH run, switching only the symbol to BTC-USD on the same fresh parquet may reveal cleaner map structure and more tradable behavior.
+
+### Artifacts
+- JSON: `experiments/results/exp11_scientist_once_btc_20260413T232646Z.json`
+- Precheck image: `experiments/pictures/exp11_scientist_once_btc_precheck_20260413T232646Z.png`
+- Dashboard image: `experiments/pictures/exp11_scientist_once_btc_dashboard_20260413T232646Z.png`
+- Notes: `experiments/notes/exp11_scientist_once_btc_20260413T232646Z.md`
+- DB row: `experiment_runs.id = 6`
+
+### Richness gate
+- Passed.
+- books_std=`2.3890`
+- books_abs_peak=`13.3866`
+- target_active_ratio=`0.4185`
+- target_peak=`69.9300`
+
+Visual verdict from precheck:
+- rich enough for training
+- not flat
+- not dead
+- not globally saturated
+
+### Outcome
+- f1=`0.5873`
+- precision=`0.4180`
+- recall=`0.9872`
+- rmse=`1596.30530`
+- zero baseline rmse=`6.65414`
+- omniscient pnl=`163.57812`
+- prediction pnl=`45.67188`
+
+### Interpretation
+- This mutation did produce a more interesting-looking dashboard and higher raw prediction pnl than the ETH run.
+- But it is **not** genuinely promising yet.
+- The key blocker is catastrophic dense-map error: rmse exploded relative to the zero baseline.
+- So the raw precision/F1 and pnl numbers are misleading if read alone.
+- Visual read: some structure is present, but calibration / amplitude appears badly controlled.
+
+### Decision
+- **not promising yet**
+
+### Next mutation
+- Keep `BTC-USD`.
+- Change one factor that directly targets output calibration / amplitude control before trusting this branch.
+
+## 2026-04-14 exp12 third one-shot scientist run (BTC capped prediction)
+
+Status: DONE
+
+### Mutation from prior run
+- Kept `BTC-USD`
+- Changed one primary factor only: applied an inference-time prediction amplitude cap using the train-target q99.5 percentile
+- Everything else kept conceptually the same: fresh recorder parquet, `100ms`, `look_ahead=64`, TinyTCN quick run, same protocol flow
+
+### Hypothesis
+- BTC showed interesting raw structure but catastrophic dense-map error; capping prediction amplitude to a train-derived percentile may preserve useful pattern timing while controlling blow-up.
+
+### Artifacts
+- JSON: `experiments/results/exp12_scientist_once_btc_capped_20260414T035312Z.json`
+- Precheck image: `experiments/pictures/exp12_scientist_once_btc_capped_precheck_20260414T035312Z.png`
+- Dashboard image: `experiments/pictures/exp12_scientist_once_btc_capped_dashboard_20260414T035312Z.png`
+- Notes: `experiments/notes/exp12_scientist_once_btc_capped_20260414T035312Z.md`
+- DB row: `experiment_runs.id = 7`
+
+### Richness gate
+- Passed.
+- books_std=`2.4195`
+- books_abs_peak=`13.3865`
+- target_active_ratio=`0.1221`
+- target_peak=`23.2547`
+
+Visual verdict from precheck:
+- usable for training
+- not dead
+- not globally saturated
+- somewhat sparse, but acceptable
+
+### Outcome
+- prediction cap used: train q99.5 = `7.7531`
+- f1=`0.1201`
+- precision=`0.0639`
+- recall=`1.0000`
+- rmse=`0.51082`
+- zero baseline rmse=`0.84282`
+- omniscient pnl=`55.92188`
+- prediction pnl=`48.21875`
+
+### Interpretation
+- This mutation fixed the catastrophic RMSE blow-up from the previous BTC run.
+- The dashboard looks more controlled and visually more believable than the uncapped BTC version.
+- But sparse-event precision is still weak and recall is too indiscriminate.
+- So this is a real calibration improvement, not yet a tradable-model success.
+
+### Decision
+- **not promising yet**
+
+### Next mutation
+- Keep `BTC-USD` and the calibration mindset.
+- Next single-factor change should target event over-triggering / precision recovery, not dense-map amplitude anymore.
+
+## 2026-04-14 exp13 multi-file walk-forward BTC holdout run
+
+Status: DONE
+
+### Online validation tricks applied
+- Switched from same-file train/test to a stricter walk-forward holdout split, consistent with online guidance on time-series leakage control and walk-forward validation.
+- Kept `BTC-USD` because online microstructure guidance suggests larger-tick setups are often easier to forecast than smaller/noisier ones.
+
+### Mutation from prior run
+- Kept `BTC-USD`
+- Kept capped prediction calibration
+- Changed one primary validation factor: train and test now use different parquet files
+  - train:
+    - `2026-04-14T00-00-01.parquet`
+    - `2026-04-14T01-00-10.parquet`
+    - `2026-04-14T02-00-01.parquet`
+  - test:
+    - `2026-04-14T03-00-00.parquet`
+
+### Hypothesis
+- Walk-forward holdout on different parquet files, plus capped BTC predictions, should give a more honest read on whether the apparent pattern survives beyond one local file.
+
+### Artifacts
+- JSON: `experiments/results/exp13_multifile_btc_walkforward_20260414T041201Z.json`
+- Precheck image: `experiments/pictures/exp13_multifile_btc_walkforward_precheck_20260414T041201Z.png`
+- Best-slice dashboard: `experiments/pictures/exp13_multifile_btc_walkforward_best_20260414T041201Z.png`
+- Fixed-slice dashboard: `experiments/pictures/exp13_multifile_btc_walkforward_fixed_20260414T041201Z.png`
+- Notes: `experiments/notes/exp13_multifile_btc_walkforward_20260414T041201Z.md`
+- DB row: `experiment_runs.id = 8`
+
+### Outcome
+- Holdout richness gate passed, but target activity was much sparser than prior same-file runs (`target_active_ratio=0.0366`).
+- Holdout metrics:
+  - f1=`0.1299`
+  - precision=`0.0696`
+  - recall=`0.9733`
+  - rmse=`2.14880`
+- Zero baseline holdout rmse=`0.44353`
+- PnL on both best and fixed holdout slices:
+  - omniscient=`15.0625`
+  - prediction=`-3.6406`
+
+### Interpretation
+- The stricter multi-file holdout made the apparent pattern largely collapse out-of-sample.
+- This strongly supports the suspicion that earlier same-file dashboards were flattering the model.
+- Current BTC branch is still over-triggering events and failing the honest holdout test.
+
+### Decision
+- **not promising yet**
+
+### Next mutation
+- Keep the stricter multi-file validation.
+- Next single-factor change should explicitly reduce event firing / improve precision on holdout, not relax the validation standard.
+
+## 2026-04-14 exp14 / exp15 BTC batch debrief
+
+Status: DONE
+
+### Why this batch was run
+- Holdout exp13 showed the same-file-looking BTC pattern mostly collapsed under different-parquet testing.
+- New goal: keep the stricter walk-forward holdout and probe whether different training/loss styles can recover a better image-to-image signal.
+
+### Online ideas used
+- Walk-forward / different-file holdout remained mandatory to avoid flattering overlap leakage.
+- Sparse-event / field-prediction literature suggests trying different loss emphasis rather than trusting one default objective.
+- Two concrete hypotheses were tested:
+  1. lower event-loss pressure may reduce event spam and improve precision
+  2. pure image-to-image regression may preserve cleaner map geometry than event-augmented training
+
+### Scripts created
+- `scripts/exp14_multifile_btc_precision.py`
+- `scripts/exp15_multifile_btc_regonly.py`
+
+### Variant 1 — exp14 precision-focused BTC holdout
+- JSON: `experiments/results/exp14_multifile_btc_precision_20260414T042753Z.json`
+- Fixed dashboard: `experiments/pictures/exp14_multifile_btc_precision_fixed_20260414T042753Z.png`
+- Notes: `experiments/notes/exp14_multifile_btc_precision_20260414T042753Z.md`
+- DB row: `experiment_runs.id = 9`
+
+Mutation:
+- lower event loss weight (`0.05`)
+- lower positive class weight (`2.0`)
+- higher trade threshold (`0.10`)
+- kept capped prediction and multi-file holdout
+
+Outcome:
+- f1=`0.1459`
+- precision=`0.0788`
+- recall=`0.9840`
+- rmse=`2.06836`
+- zero baseline rmse=`0.44353`
+- fixed-slice prediction pnl=`29.30469`
+
+Interpretation:
+- Slightly better than exp13 on F1/precision/RMSE, but still far worse than zero-baseline RMSE.
+- Prediction PnL looked unrealistically strong relative to omniscient, so realism remains questionable.
+- Decision: **not promising yet**.
+
+### Variant 2 — exp15 regression-only BTC holdout
+- JSON: `experiments/results/exp15_multifile_btc_regonly_20260414T042842Z.json`
+- Fixed dashboard: `experiments/pictures/exp15_multifile_btc_regonly_fixed_20260414T042842Z.png`
+- Notes: `experiments/notes/exp15_multifile_btc_regonly_20260414T042842Z.md`
+- DB row: `experiment_runs.id = 10`
+
+Mutation:
+- pure regression-style training (`event_loss_weight=0.0`)
+- kept prediction cap and multi-file holdout
+
+Outcome:
+- f1=`0.1584`
+- precision=`0.0876`
+- recall=`0.8267`
+- rmse=`2.10439`
+- zero baseline rmse=`0.44353`
+- fixed-slice prediction pnl=`9.42969`
+
+Interpretation:
+- Best precision/F1 of the three strict holdout BTC variants so far (`exp13/14/15`), and the dashboard looks more believable than exp14.
+- Still fails the hard RMSE guard by a wide margin.
+- Decision: **not promising yet**.
+
+### Batch conclusion
+Across the strict holdout BTC set:
+- exp13 baseline capped holdout: f1=`0.1299`, precision=`0.0696`, rmse=`2.1488`
+- exp14 precision-focused: f1=`0.1459`, precision=`0.0788`, rmse=`2.0684`
+- exp15 regression-only: f1=`0.1584`, precision=`0.0876`, rmse=`2.1044`
+
+So:
+- regression-only currently looks like the most interesting of the strict-holdout variants
+- but none are close to clearing the dense-error guard
+- the main unresolved issue is still holdout generalization, not just pretty pictures
+
+### Next mutation
+- Keep:
+  - BTC
+  - multi-file walk-forward holdout
+  - prediction cap
+- Next single-factor experiment should target generalization / early overfit control directly:
+  - earlier stopping / fewer epochs
+  - or smaller hidden width
+
+## 2026-04-14 exp16 12-variant BTC TCN search + best-route rerun
+
+Status: DONE
+
+### Why this batch was run
+- The previous strict-holdout BTC variants had feature-rich images but weak honest generalization.
+- New goal: search a broader 12-variant TCN loss/training grid while keeping the hard holdout fixed.
+- Then rerun the best route once to see if the result is stable or just a lucky seed.
+
+### Scripts created
+- `scripts/exp16_batch_h64_tcn.py`
+- `scripts/exp16_rerun_best_variant.py`
+- `deep_orderbook/btc_search_lab.py`
+
+### Search space
+Kept fixed:
+- cadence=`100ms`
+- look_ahead=`64`
+- symbol=`BTC-USD`
+- walk-forward split:
+  - train: `2026-04-14T00-00-01.parquet`, `2026-04-14T01-00-10.parquet`, `2026-04-14T02-00-01.parquet`
+  - test: `2026-04-14T03-00-00.parquet`
+
+Varied across 12 runs:
+- regression loss: Huber / MSE / L1
+- event loss weight: `0.0`, `0.02`, `0.05`, `0.10`, `0.25`
+- class weighting: `1`, `2`, `4`, `8`
+- hidden width: `64`, `96`, `128`, `160`
+- epochs: `4`, `6`, `8`, `10`
+- learning rate / weight decay
+- one active-pixel weighted regression variant
+
+### Automatic image QC added
+Each fixed dashboard now logs:
+- gray mean / std
+- near-black fraction
+- near-white fraction
+- simple edge score
+- usable vs reject
+
+Practical eyeball rule stayed the same:
+- not fully black
+- not fully saturated
+- enough contrast to compare target vs prediction
+
+### Batch summary artifact
+- JSON: `experiments/results/exp16_batch_h64_tcn_20260414T045203Z.json`
+- Notes: `experiments/notes/exp16_batch_h64_tcn_20260414T045203Z.md`
+- Precheck: `experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png`
+
+### Ranked outcome
+Top route:
+- variant=`l1_evt005_pw2`
+- precision=`0.1829`
+- recall=`0.1115`
+- f1=`0.1386`
+- rmse=`0.44350`
+- zero-baseline rmse=`0.44353`
+- fixed pnl=`0.0000`
+- image qc: usable, gray_std=`0.3031`
+
+Most important comparison:
+- this was the first variant to get RMSE essentially back to zero-baseline while also clearing `precision > 0.10`
+- but it did that by becoming too conservative to trade (`prediction pnl = 0`)
+
+Other notable routes:
+- `regonly_short_e4`: f1=`0.1669`, precision=`0.0911`, rmse=`1.0143`, fixed pnl=`-14.25`
+- `small_h64_regonly`: f1=`0.1575`, precision=`0.0871`, rmse=`1.1727`, fixed pnl=`12.3281`
+- baseline `exp13`-like route stayed weak: precision=`0.0696`, rmse=`2.1492`
+
+### Best-route rerun
+- JSON: `experiments/results/exp16_best_rerun_l1_evt005_pw2_20260414T045412Z.json`
+- Fixed dashboard: `experiments/pictures/exp16_best_rerun_l1_evt005_pw2_fixed_20260414T045412Z.png`
+- Best dashboard: `experiments/pictures/exp16_best_rerun_l1_evt005_pw2_best_20260414T045412Z.png`
+
+Rerun metrics:
+- precision=`0.1085`
+- recall=`0.1580`
+- f1=`0.1287`
+- rmse=`0.44379`
+- fixed pnl=`0.0000`
+- image qc: usable, gray_std=`0.3041`
+
+Interpretation:
+- The rerun preserved the same story:
+  - image stays feature rich and visually usable
+  - RMSE remains near zero-baseline
+  - precision stays above prior baseline levels
+  - but trading still does not fire usefully
+- So the top route looks real, but it is real as a conservative non-trading mapper, not yet as a tradable signal generator.
+
+### Eyeball result
+Manual/vision check of the rerun dashboards:
+- not entirely black
+- not completely saturated
+- books and target panels are rich and plausible
+- prediction panel is sparse and underactive rather than noisy or blown out
+- this visually matches the zero-PnL behavior
+
+### Decision
+- **most promising route so far for honest structure preservation:** `l1_evt005_pw2`
+- **most promising route for tradability:** still unresolved
+- overall status: **not promising yet for trading**, but finally somewhat promising for stable holdout image quality
+
+### Next mutation
+Keep the winning route fixed as the geometry baseline:
+- loss=`L1 + 0.05 * BCE`
+- pos_weight=`2`
+- hid=`96`
+- epochs=`6`
+- same multi-file holdout
+
+Then mutate only the signal extraction layer, not the core mapper:
+1. lower trade threshold calibration sweep on the L1 route
+2. side-aware / local-max event extraction on prediction map
+3. maybe a shallow second-stage trigger model on top of the conservative map
+
+## EXP-17 — Event-filtered recent BTC holdout (DONE)
+
+Status: DONE
+Date: 2026-04-14
+
+### Purpose
+
+Test the user's new idea directly: train and evaluate only on the most eventful windows from the newest replay files, using present-time observable triggers rather than future-target cheating.
+
+### Setup
+
+Command used:
+
+```bash
+PYTHONPATH=. python scripts/exp16_batch_h64_tcn.py \
+  --label exp17_event_filtered_h64_tcn \
+  --eventful-top-fraction 0.35 \
+  --min-train-windows 24 \
+  --min-test-windows 12 \
+  --variants l1_evt005_pw2 regonly_huber_thr010 precision_evt005_pw2_thr010 regonly_activew3
+```
+
+Data split:
+- train files: `2026-04-14T07-00-00.parquet`, `2026-04-14T08-00-00.parquet`, `2026-04-14T09-00-00.parquet`
+- test file: `2026-04-14T10-00-00.parquet`
+- event filter: keep top 35% of windows by intrawindow eventfulness score
+- eventfulness proxies used:
+  - abs return bps
+  - intrawindow range bps
+  - realized vol of mid-price changes
+  - book std
+  - book impulse
+- selected windows:
+  - train: `51 / 144`
+  - test: `17 / 48`
+- older-file backfill needed: none
+
+Artifacts:
+- summary json: `experiments/results/exp17_event_filtered_h64_tcn_20260414T114251Z.json`
+- notes: `experiments/notes/exp17_event_filtered_h64_tcn_20260414T114251Z.md`
+- top fixed dashboard: `experiments/pictures/exp17_event_filtered_h64_tcn_l1_evt005_pw2_fixed_20260414T114251Z.png`
+- top best dashboard: `experiments/pictures/exp17_event_filtered_h64_tcn_l1_evt005_pw2_best_20260414T114251Z.png`
+
+### Outcome
+
+Best variant: `l1_evt005_pw2`
+
+Holdout metrics:
+- rmse: `1.14068`
+- zero-baseline rmse: `1.14359`
+- precision: `0.2957`
+- recall: `0.3697`
+- f1: `0.3285`
+- fixed-slice prediction pnl: `-0.02344`
+
+Other routes:
+- `regonly_huber_thr010`: precision `0.3208`, f1 `0.2310`, rmse `1.13593`, fixed pnl `0.00000`
+- `precision_evt005_pw2_thr010`: precision `0.1472`, f1 `0.2477`, rmse `1.09895`, fixed pnl `0.93750`
+- `regonly_activew3`: precision `0.1252`, f1 `0.2202`, rmse `1.08061`, fixed pnl `-16.21094`
+
+### Interpretation
+
+This branch did something real:
+- precision and F1 improved a lot versus the earlier broad-slice strict holdout runs
+- RMSE stayed near the zero baseline instead of blowing out
+- image QC stayed usable
+
+But it still failed the practical tradability test:
+- best route PnL was basically flat/slightly negative
+- vision check of the top dashboard showed partial timing alignment but underfiring / vertically collapsed predictions
+- in plain English: the model sees some reaction timing in violent windows, but the trade-trigger extraction is still too weak to monetize it
+
+### Practical conclusion from EXP-18
+
+Event-window conditioning is worth keeping in the palette.
+It is not a gimmick.
+It improved honest event-quality metrics on recent data without RMSE collapse.
+
+But it is not enough by itself.
+Current mapper outputs are still too weak/collapsed for profitable triggering.
+
+### Cache-system correction
+
+Important correction for future scientists:
+- the repo already had a proper shaper/cache path
+- `deep_orderbook/shaper.py` + `deep_orderbook/cache_manager.py` already cache shaped arrays
+- `ShaperConfig` defaults already enable `use_cache=True` and `save_cache=True`
+- the slowdown in later custom experiment scripts came from the experiment code forcing cache off, not from missing infrastructure
+
+Anti-wheel-reinvention rule:
+- before writing new preprocessing loops, inspect existing cache behavior first
+- for repeated trigger/strategy sweeps, reuse cached shaped arrays and preferably cached model predictions instead of replaying/parsing history every run
+- if any script disables cache, that must be called out explicitly in its notes/json and justified
+
+### Next mutation
+
+Keep the event-window conditioning fixed and stop thrashing the mapper family for one step.
+Next mutation should act only on signal extraction / trading conversion, for example:
+- local-max trigger extraction from predicted maps
+- side-aware trigger extraction
+- threshold sweep on the event-filtered holdout
+- or a shallow second-stage trigger model trained only on event-filtered windows
+
+## EXP-18 — 25-run event-filtered suite on recent BTC (DONE)
+
+Status: DONE
+Date: 2026-04-14
+
+### Purpose
+
+Do a larger disciplined search on the recent event-filtered regime, with enough variants to separate mapper quality from trade-trigger behavior.
+
+### Leakage check
+
+The event filter remained leakage-safe:
+- window ranking used only present-window observables
+- specifically: mid-price abs return, intrawindow range, realized vol, book std, book impulse
+- no future target intensity or future PnL was used to select windows
+- holdout stayed chronological by parquet file (`07,08,09` train -> `10` test)
+
+### Data scale and runtime accounting
+
+This was not full-dataset heavy training.
+It was a screened recent-data run.
+That needs to be stated plainly.
+
+Actual scale used:
+- train parquet files: `3`
+- test parquet files: `1`
+- per-file load cap in script: `max_windows=48`
+- train windows before filter: `144`
+- train windows after filter: `51`
+- test windows before filter: `48`
+- test windows after filter: `17`
+- rolling window size: `256`
+- approximate train timesteps seen by the model: `13,056`
+- approximate test timesteps seen by the model: `4,352`
+- approximate train target pixels: `104,448`
+- approximate test target pixels: `34,816`
+
+Runtime observed for the 25-run suite:
+- experiment timestamp: `2026-04-14 12:06:16Z`
+- first per-variant artifact written: about `12:07:03Z`
+- summary artifact written: about `12:08:02Z`
+- total wall-clock runtime from experiment start to summary: about `106s`
+- per-variant artifact span once training started: about `59s`
+
+Interpretation:
+- this is enough for a screening sweep
+- it is not enough to claim the GPU should be working hard
+- it is absolutely fair to call this a relatively small training run
+- future scientists must state this explicitly so nobody mistakes a screening run for a serious full-data training pass
+
+### Setup
+
+Run label:
+- `exp18_event_filtered_suite25`
+
+Data:
+- train files: `2026-04-14T07-00-00.parquet`, `2026-04-14T08-00-00.parquet`, `2026-04-14T09-00-00.parquet`
+- test file: `2026-04-14T10-00-00.parquet`
+- event filter: top 35% windows by present-time eventfulness score
+- selected windows:
+  - train: `51 / 144`
+  - test: `17 / 48`
+- older-file fallback needed: none
+
+Suite size:
+- 25 variants
+- hypotheses spanned:
+  - event-loss pressure
+  - class positive weight
+  - hidden width
+  - epochs
+  - learning rate / decay
+  - active-pixel regression weighting
+  - trade-threshold calibration
+
+Artifacts:
+- summary json: `experiments/results/exp18_event_filtered_suite25_20260414T120616Z.json`
+- summary notes: `experiments/notes/exp18_event_filtered_suite25_20260414T120616Z.md`
+- precheck: `experiments/pictures/exp18_event_filtered_suite25_holdout_precheck_20260414T120616Z.png`
+- per-variant json/notes/pictures: `experiments/results|notes|pictures/exp18_event_filtered_suite25_*_20260414T120616Z.*`
+
+### Ranked outcome
+
+Top route by current route-score:
+- `l1_evt005_pw2_h64`
+- precision=`0.2861`
+- f1=`0.3734`
+- rmse=`1.14125`
+- zero-baseline rmse≈`1.14359`
+- fixed pnl=`-0.02344`
+
+Other top event-quality routes:
+- `precision_evt005_pw2_thr010`: precision=`0.2744`, f1=`0.3660`, rmse=`1.09526`, pnl=`0.0000`
+- `l1_evt005_pw2_short_e4`: precision=`0.3059`, f1=`0.2772`, rmse=`1.14192`, pnl=`-0.02344`
+- `l1_evt005_pw2`: precision=`0.2878`, f1=`0.2627`, rmse=`1.14212`, pnl=`-0.02344`
+- `l1_evt005_pw2_long_e10`: precision=`0.2910`, f1=`0.2482`, rmse=`1.13212`, pnl=`-0.02344`
+
+Best positive-PnL routes on this slice:
+- `regonly_activew3`: pnl=`6.4375`, precision=`0.1272`, f1=`0.2232`, rmse ratio=`0.9237`
+- `l1_evt005_pw2_h128`: pnl=`0.9453`, precision=`0.1775`, f1=`0.0793`, rmse ratio=`1.0000`
+- `regonly_wd1e3`: pnl=`0.9375`, precision=`0.1881`, f1=`0.2999`, rmse ratio=`0.9812`
+- `regonly_huber_thr010`: pnl=`0.9375`, precision=`0.1394`, f1=`0.2368`, rmse ratio=`0.9545`
+
+### Interpretation
+
+This 25-run sweep made the situation clearer.
+
+What seems real:
+- event-window conditioning consistently improves honest event metrics versus the older broad-slice strict holdouts
+- many routes now stay at or below zero-baseline RMSE rather than blowing up
+- several routes achieve materially better precision/F1 than the earlier broad-slice BTC holdouts
+
+What still blocks deployment:
+- the highest event-quality routes still underfire and do not monetize
+- the best raw-PnL route (`regonly_activew3`) is not yet trustworthy as a trading candidate from one slice alone; it needs regime-split / neighboring-threshold confirmation
+- visual check of the top-ranked route still shows partial structure alignment plus underfiring rather than full useful capture
+
+Practical synthesis:
+- there is now enough evidence that the event-filtered regime is learnable
+- but the bottleneck has shifted from map reconstruction into signal extraction / execution conversion
+
+### Decision
+
+- keep event-window conditioning permanently in the research palette
+- keep the recent-BTC event-filtered holdout as an honest benchmark regime
+- do not call the top-ranked mapper tradable yet
+- the most interesting follow-up candidates are now:
+  - `l1_evt005_pw2_h64` for event geometry
+  - `regonly_activew3` for raw PnL curiosity
+  - `regonly_wd1e3` for balanced RMSE + positive PnL
+
+### Next mutation
+
+Stop doing large mapper sweeps for one step.
+Keep the event-filtered dataset fixed and mutate only trigger extraction / execution logic, for example:
+1. local-max extraction on predicted maps
+2. side-aware trigger extraction
+3. threshold sweep around the better balanced routes (`regonly_wd1e3`, `regonly_huber_thr010`, `l1_evt005_pw2_h64`)
+4. regime-split confirmation of `regonly_activew3` before trusting its positive PnL

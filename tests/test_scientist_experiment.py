@@ -1,6 +1,13 @@
 from pathlib import Path
 
-from deep_orderbook.scientist_experiment import choose_latest_parquet, richness_gate
+import numpy as np
+
+from deep_orderbook.scientist_experiment import (
+    apply_prediction_cap,
+    choose_latest_parquet,
+    choose_walkforward_parquets,
+    richness_gate,
+)
 
 
 def test_choose_latest_parquet_prefers_newest_file(tmp_path: Path) -> None:
@@ -16,6 +23,25 @@ def test_choose_latest_parquet_prefers_newest_file(tmp_path: Path) -> None:
     chosen = choose_latest_parquet([a, b])
 
     assert chosen == new_file
+
+
+def test_choose_walkforward_parquets_splits_train_and_test_files(tmp_path: Path) -> None:
+    files = []
+    for name in [
+        "2026-04-14T00-00-01.parquet",
+        "2026-04-14T01-00-10.parquet",
+        "2026-04-14T02-00-01.parquet",
+        "2026-04-14T03-00-00.parquet",
+    ]:
+        path = tmp_path / name
+        path.write_text("x")
+        files.append(path)
+
+    train, test = choose_walkforward_parquets(tmp_path, train_count=3, test_count=1)
+
+    assert train == files[:3]
+    assert test == [files[3]]
+    assert set(train).isdisjoint(test)
 
 
 def test_richness_gate_rejects_flat_and_accepts_active_arrays() -> None:
@@ -34,3 +60,10 @@ def test_richness_gate_rejects_flat_and_accepts_active_arrays() -> None:
     active = richness_gate(active_books, active_target)
     assert active["usable"] is True
     assert active["target_active_ratio"] > 0.0
+
+
+def test_apply_prediction_cap_clips_extreme_values() -> None:
+    pred = np.array([[0.1, 10.0], [5.0, 100.0]], dtype=np.float32)
+    clipped = apply_prediction_cap(pred, cap_value=6.0)
+    assert clipped.max() == 6.0
+    assert clipped[0, 0] == pred[0, 0]
