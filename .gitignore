@@ -13,3 +13,4 @@ cache
 checkpoints*
 /1_checkpoints/
 /.cursor
+/experiments/pictures/
