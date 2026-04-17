@@ -2,12 +2,12 @@ import argparse
 import asyncio
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
 from deep_orderbook.btc_experiment_config import (
     choose_training_device,
@@ -16,6 +16,7 @@ from deep_orderbook.btc_experiment_config import (
 )
 from deep_orderbook.btc_search_lab import get_batch_variant
 from deep_orderbook.experiment_tracking import register_experiment_run
+from deep_orderbook.scientist_experiment import richness_gate
 from deep_orderbook.strategy import Strategy
 from deep_orderbook.strategy_search import evaluate_long_strategy, evaluate_short_strategy
 from deep_orderbook.trigger_search import (
@@ -35,7 +36,6 @@ from scripts.exp16_batch_h64_tcn import (
     save_dashboard,
     save_precheck,
 )
-from deep_orderbook.scientist_experiment import richness_gate
 
 DEFAULT_TRAIN_FILES = [
     "/media/photoDS216/crypto/2025-03-10T14-00-32.parquet",
@@ -65,8 +65,10 @@ def _best_activity_start(true_seq: np.ndarray, horizon: int) -> int:
     return int(np.argmax(score))
 
 
-async def main(variants: list[str], train_files: list[Path], test_files: list[Path], label: str, directions: list[str]) -> None:
-    ts = datetime.now(timezone.utc)
+async def main(
+    variants: list[str], train_files: list[Path], test_files: list[Path], label: str, directions: list[str]
+) -> None:
+    ts = datetime.now(UTC)
     stamp = ts.strftime("%Y%m%dT%H%M%SZ")
     timestamp_utc = ts.strftime("%Y-%m-%d %H:%M:%SZ")
     git_commit = current_git_commit()
@@ -82,7 +84,9 @@ async def main(variants: list[str], train_files: list[Path], test_files: list[Pa
     )
     test_file = test_files[0]
 
-    replay_conf_test, shaper_config, X_test_w, Y_test_w, Px_test_w = await load_file_windows(test_file, "BTC-USD", max_windows=None)
+    replay_conf_test, shaper_config, X_test_w, Y_test_w, Px_test_w = await load_file_windows(
+        test_file, "BTC-USD", max_windows=None
+    )
     test_windows_before = len(X_test_w)
     X_train_w, Y_train_w, Px_train_w = [], [], []
     for train_file in train_files:
@@ -92,8 +96,12 @@ async def main(variants: list[str], train_files: list[Path], test_files: list[Pa
         Px_train_w.extend(Pxw)
     train_windows_before = len(X_train_w)
 
-    X_test_w, Y_test_w, Px_test_w, test_event_summary = filter_event_windows(X_test_w, Y_test_w, Px_test_w, top_fraction=0.35, min_count=32)
-    X_train_w, Y_train_w, Px_train_w, train_event_summary = filter_event_windows(X_train_w, Y_train_w, Px_train_w, top_fraction=0.35, min_count=128)
+    X_test_w, Y_test_w, Px_test_w, test_event_summary = filter_event_windows(
+        X_test_w, Y_test_w, Px_test_w, top_fraction=0.35, min_count=32
+    )
+    X_train_w, Y_train_w, Px_train_w, train_event_summary = filter_event_windows(
+        X_train_w, Y_train_w, Px_train_w, top_fraction=0.35, min_count=128
+    )
 
     precheck_path = Path(f"experiments/pictures/{label}_holdout_precheck_{stamp}.png")
     save_precheck(precheck_path, Px_test_w[0], X_test_w[0], Y_test_w[0], test_file.name)
@@ -155,7 +163,7 @@ async def main(variants: list[str], train_files: list[Path], test_files: list[Pa
             model.train()
             total = 0.0
             for i in range(0, xtr.shape[0], bs):
-                idx = perm[i:i + bs]
+                idx = perm[i : i + bs]
                 xb = xtr[idx]
                 yb = ytr[idx]
                 reg, cls_logits = model(xb)
@@ -200,10 +208,18 @@ async def main(variants: list[str], train_files: list[Path], test_files: list[Pa
         for direction in directions:
             strategy_fn = evaluate_long_strategy if direction == "long" else evaluate_short_strategy
             for strat_cfg in strategy_grid:
-                route = strategy_fn(px_seq, pred_seq, **{k: strat_cfg[k] for k in ["entry_threshold", "exit_threshold", "side_margin", "persistence", "cooldown", "max_hold"]})
+                route = strategy_fn(
+                    px_seq,
+                    pred_seq,
+                    **{
+                        k: strat_cfg[k]
+                        for k in ["entry_threshold", "exit_threshold", "side_margin", "persistence", "cooldown", "max_hold"]
+                    },
+                )
                 horizon = min(520, true_seq.shape[0])
                 fixed_start = 0
                 best_start = _best_activity_start(true_seq, horizon)
+
                 def slice_eval(start: int):
                     end = start + horizon
                     return {
@@ -216,18 +232,51 @@ async def main(variants: list[str], train_files: list[Path], test_files: list[Pa
                         "pred_pnl": route["pnl"][start:end],
                         "pred_pos": route["positions"][start:end],
                     }
+
                 fixed = slice_eval(fixed_start)
                 best = slice_eval(best_start)
                 route_name = f"{variant_name}__{direction}__{strat_cfg['name']}"
                 fixed_png = pictures_dir / f"{label}_{route_name}_fixed_{stamp}.png"
                 best_png = pictures_dir / f"{label}_{route_name}_best_{stamp}.png"
-                save_dashboard(fixed_png, fixed["prices"], fixed["books"], fixed["true"], fixed["pred"], train_losses, test_losses, fixed["gt_pnl"], fixed["pred_pnl"], fixed["gt_pos"], fixed["pred_pos"], f"{route_name} fixed slice")
-                save_dashboard(best_png, best["prices"], best["books"], best["true"], best["pred"], train_losses, test_losses, best["gt_pnl"], best["pred_pnl"], best["gt_pos"], best["pred_pos"], f"{route_name} best slice")
+                save_dashboard(
+                    fixed_png,
+                    fixed["prices"],
+                    fixed["books"],
+                    fixed["true"],
+                    fixed["pred"],
+                    train_losses,
+                    test_losses,
+                    fixed["gt_pnl"],
+                    fixed["pred_pnl"],
+                    fixed["gt_pos"],
+                    fixed["pred_pos"],
+                    f"{route_name} fixed slice",
+                )
+                save_dashboard(
+                    best_png,
+                    best["prices"],
+                    best["books"],
+                    best["true"],
+                    best["pred"],
+                    train_losses,
+                    test_losses,
+                    best["gt_pnl"],
+                    best["pred_pnl"],
+                    best["gt_pos"],
+                    best["pred_pos"],
+                    f"{route_name} best slice",
+                )
                 image_quality = {"usable": True, "reason": "ok"}
                 final_pnl = float(route["final_pnl"])
                 trade_count = int(route["trade_count"])
-                route_score = score_strategy_result(route, precision=metrics["precision"], f1=metrics["f1"], rmse_ratio=rmse_ratio)
-                decision = "promising" if (final_pnl > 0 and rmse_ratio <= 1.2 and metrics["precision"] >= 0.20) else "not_promising_yet"
+                route_score = score_strategy_result(
+                    route, precision=metrics["precision"], f1=metrics["f1"], rmse_ratio=rmse_ratio
+                )
+                decision = (
+                    "promising"
+                    if (final_pnl > 0 and rmse_ratio <= 1.2 and metrics["precision"] >= 0.20)
+                    else "not_promising_yet"
+                )
                 result = {
                     "experiment": label,
                     "variant_name": variant_name,
@@ -269,22 +318,21 @@ async def main(variants: list[str], train_files: list[Path], test_files: list[Pa
                 result_path = Path(f"experiments/results/{label}_{route_name}_{stamp}.json")
                 note_path = Path(f"experiments/notes/{label}_{route_name}_{stamp}.md")
                 note_path.write_text(
-                    "\n".join(
-                        [
-                            f"# {label} / {route_name}",
-                            "",
-                            f"- timestamp: {timestamp_utc}",
-                            f"- device: `{device}`",
-                            f"- decision: `{decision}`",
-                            f"- final_pnl: {final_pnl:.5f}",
-                            f"- precision: {metrics['precision']:.4f}",
-                            f"- f1: {metrics['f1']:.4f}",
-                            f"- rmse_ratio: {rmse_ratio:.4f}",
-                            f"- trades: {trade_count}",
-                            f"- fixed_png: {fixed_png}",
-                            f"- best_png: {best_png}",
-                        ]
-                    ) + "\n"
+                    "\n".join([
+                        f"# {label} / {route_name}",
+                        "",
+                        f"- timestamp: {timestamp_utc}",
+                        f"- device: `{device}`",
+                        f"- decision: `{decision}`",
+                        f"- final_pnl: {final_pnl:.5f}",
+                        f"- precision: {metrics['precision']:.4f}",
+                        f"- f1: {metrics['f1']:.4f}",
+                        f"- rmse_ratio: {rmse_ratio:.4f}",
+                        f"- trades: {trade_count}",
+                        f"- fixed_png: {fixed_png}",
+                        f"- best_png: {best_png}",
+                    ])
+                    + "\n"
                 )
                 row_id = register_experiment_run(
                     experiment=label,
@@ -314,7 +362,9 @@ async def main(variants: list[str], train_files: list[Path], test_files: list[Pa
                 result_path.write_text(json.dumps(result, indent=2))
                 all_routes.append(result)
 
-        print(f"DONE {variant_name} trigger_routes={len(strategy_grid)} precision={metrics['precision']:.4f} f1={metrics['f1']:.4f} rmse_ratio={rmse_ratio:.4f}")
+        print(
+            f"DONE {variant_name} trigger_routes={len(strategy_grid)} precision={metrics['precision']:.4f} f1={metrics['f1']:.4f} rmse_ratio={rmse_ratio:.4f}"
+        )
 
     ranked = sorted(all_routes, key=lambda x: (x["route_score"], x["strategy_metrics"]["final_pnl"]), reverse=True)
     top = ranked[0]
@@ -371,7 +421,17 @@ async def main(variants: list[str], train_files: list[Path], test_files: list[Pa
         ranked=ranked,
     )
     notes_path.write_text("\n".join(lines) + "\n")
-    print(json.dumps({"summary_json": str(summary_path), "summary_md": str(notes_path), "best_route": best_by_score["label"], "best_route_by_raw_pnl": best_by_pnl["label"]}, indent=2))
+    print(
+        json.dumps(
+            {
+                "summary_json": str(summary_path),
+                "summary_md": str(notes_path),
+                "best_route": best_by_score["label"],
+                "best_route_by_raw_pnl": best_by_pnl["label"],
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
@@ -382,4 +442,8 @@ if __name__ == "__main__":
     parser.add_argument("--test-files", nargs="*", default=DEFAULT_TEST_FILES)
     parser.add_argument("--directions", nargs="*", default=["long"], choices=["long", "short"])
     args = parser.parse_args()
-    asyncio.run(main(args.variants, [Path(p) for p in args.train_files], [Path(p) for p in args.test_files], args.label, args.directions))
+    asyncio.run(
+        main(
+            args.variants, [Path(p) for p in args.train_files], [Path(p) for p in args.test_files], args.label, args.directions
+        )
+    )
