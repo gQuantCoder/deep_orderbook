@@ -1,0 +1,103 @@
+{
+  "experiment": "exp16_batch_h64_tcn",
+  "variant_name": "regonly_activew3",
+  "timestamp_utc": "2026-04-14 04:52:03Z",
+  "git_commit": "7027592",
+  "train_files": [
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+  ],
+  "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+  "hypothesis": "Weight active target pixels more in regression to preserve sparse structures.",
+  "config": {
+    "hidden_dim": 96,
+    "epochs": 6,
+    "lr": 0.002,
+    "weight_decay": 0.0001,
+    "reg_loss": "huber",
+    "event_loss_weight": 0.0,
+    "pos_weight": 1.0,
+    "trade_threshold": 0.1,
+    "prediction_cap_quantile": 99.5,
+    "active_reg_weight": 3.0,
+    "hypothesis": "Weight active target pixels more in regression to preserve sparse structures."
+  },
+  "richness_gate": {
+    "usable": true,
+    "reason": "ok",
+    "books_std": 2.443171977996826,
+    "books_abs_peak": 13.38646411895752,
+    "target_active_ratio": 0.03662109375,
+    "target_peak": 30.975704193115234
+  },
+  "metrics": {
+    "rmse": 1.8456573486328125,
+    "mae": 0.7744199633598328,
+    "precision": 0.06864144144144144,
+    "recall": 0.9873522703711382,
+    "f1": 0.12835925496631956,
+    "event_rate_true": 0.049062093098958336,
+    "event_rate_pred": 0.705718994140625
+  },
+  "zero_baseline": {
+    "rmse": 0.4435252249240875,
+    "mae": 0.07224328070878983,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "event_rate_true": 0.049062093098958336,
+    "event_rate_pred": 0.0
+  },
+  "image_quality": {
+    "gray_mean": 0.7131251096725464,
+    "gray_std": 0.32598286867141724,
+    "near_black_fraction": 0.01467057411199774,
+    "near_white_fraction": 0.4671615705105572,
+    "edge_mean_abs_diff": 0.017783192917704582,
+    "usable": true,
+    "reason": "ok"
+  },
+  "pnl": {
+    "best_slice": {
+      "omniscient_final": 15.0625,
+      "prediction_final": 9.078125
+    },
+    "fixed_slice": {
+      "omniscient_final": 15.0625,
+      "prediction_final": 9.078125
+    }
+  },
+  "train_losses": [
+    0.6679713593588935,
+    0.4536784440279007,
+    0.3425277728173468,
+    0.27395543042156434,
+    0.21777157402700847,
+    0.1824247973660628
+  ],
+  "test_losses": [
+    0.24518434703350067,
+    0.579961359500885,
+    0.6253931522369385,
+    0.8900747299194336,
+    0.930380642414093,
+    0.7459482550621033
+  ],
+  "artifacts": {
+    "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+    "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_activew3_fixed_20260414T045203Z.png",
+    "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_activew3_best_20260414T045203Z.png",
+    "notes_md": "experiments/notes/exp16_batch_h64_tcn_regonly_activew3_20260414T045203Z.md"
+  },
+  "observations": [
+    "Variant=regonly_activew3",
+    "Holdout metrics: f1=0.1284, precision=0.0686, recall=0.9874, rmse=1.84566",
+    "Zero baseline rmse=0.44353",
+    "Image QC: usable=True, reason=ok, gray_std=0.3260, near_black=0.015, near_white=0.467",
+    "Best-slice pnl: omniscient=15.06250, prediction=9.07812",
+    "Fixed-slice pnl: omniscient=15.06250, prediction=9.07812"
+  ],
+  "decision": "not_promising_yet",
+  "experiment_db_row_id": 18
+}
