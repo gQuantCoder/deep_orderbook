@@ -381,7 +381,10 @@ async def main() -> None:
         f"Zero baseline rmse={zero_metrics['rmse']:.5f}",
         f"Final omniscient pnl={float(gt_pnl[-1]):.5f}, prediction pnl={float(pred_pnl[-1]):.5f}",
     ]
-    decision = "not_promising_yet" if (metrics["precision"] < 0.10 or pred_pnl[-1] <= gt_pnl[-1] * 0.25) else "promising"
+    rmse_ok = metrics["rmse"] <= zero_metrics["rmse"] * 1.20
+    pnl_ok = pred_pnl[-1] > 0 and pred_pnl[-1] >= gt_pnl[-1] * 0.25
+    precision_ok = metrics["precision"] >= 0.10
+    decision = "promising" if (rmse_ok and pnl_ok and precision_ok) else "not_promising_yet"
     hypothesis = "A visually rich recent 100ms/h64 slice may support a quick TinyTCN learning pass with non-random map and trade structure."
     notes = "# exp10 scientist once\n\n" + "\n".join([
         f"- timestamp: {timestamp_utc}",

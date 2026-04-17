@@ -54,6 +54,17 @@ graph LR
         cli[__main__.py]
     end
 
+    subgraph experiment
+        exptrack[experiment_tracking.py]
+        scientist[scientist_experiment.py]
+        evtsel[event_selection.py]
+        stratSearch[strategy_search.py]
+        trigSearch[trigger_search.py]
+        btclab[btc_search_lab.py]
+        btccfg[btc_experiment_config.py]
+        btcvar[btc_variant_configs.py]
+    end
+
     cli --> recorder
     cli --> replayer
 
@@ -64,13 +75,11 @@ graph LR
     coinbase --> utils
 
     base --> md
-
     replayer --> config
     replayer --> utils
 
     recorder --> base
     recorder --> coinbase
-
     readpolar --> coinbase
 
     shaper --> coinbase
@@ -111,13 +120,18 @@ graph LR
     pure --> visu
     pure --> strategy
 
-    subgraph tooling
-        exptrack[experiment_tracking.py]
-        scientist[scientist_experiment.py]
-    end
-
     exptrack --> utils
     scientist --> utils
+
+    evtsel --> shaper
+    stratSearch --> shaper
+    trigSearch --> stratSearch
+    btclab --> btccfg
+    btclab --> btcvar
+    btclab --> evtsel
+    btclab --> stratSearch
+    btclab --> trigSearch
+    btclab --> exptrack
 
     testlearn --> attn
     testlearn --> pure
@@ -212,18 +226,6 @@ graph LR
 
 ---
 
-### `deep_orderbook/` — tooling
-
-- **`experiment_tracking.py`** — SQLite experiment registry + PNG preview export
-  - `register_experiment_run()` — upserts run metadata/metrics into `experiments.db`
-  - `save_map_preview()` — renders a numpy array as a PNG for experiment comparison
-
-- **`scientist_experiment.py`** — helpers for choosing data and gating experiments
-  - `choose_latest_parquet()` — picks the most recent parquet file from the data dir
-  - `richness_gate()` — checks dataset has enough rows before running an experiment
-
----
-
 ### `deep_orderbook/learn/`
 > PyTorch training pipeline: data loading → model → loss → checkpoint.
 
@@ -257,6 +259,41 @@ graph LR
 
 ---
 
+### `deep_orderbook/` — experiment tooling
+
+- **`experiment_tracking.py`** — SQLite experiment registry + PNG preview export
+  - `register_experiment_run()` — upserts run metadata/metrics into `experiments.db`
+  - `save_map_preview()` — renders a numpy array as a PNG for experiment comparison
+
+- **`scientist_experiment.py`** — helpers for choosing data and gating experiments
+  - `choose_latest_parquet()` — picks the most recent parquet file from the data dir
+  - `richness_gate()` — checks dataset has enough rows before running an experiment
+
+- **`event_selection.py`** — leakage-safe window ranking by observable market eventfulness
+  - `score_window_eventfulness()` — composite score from return, range, vol, book std, impulse
+  - `rank_eventful_windows()` — sort all windows by eventfulness score
+  - `select_eventful_window_indices()` — pick top-N% windows for focused training
+
+- **`strategy_search.py`** — vectorized directional strategy backtester over predicted maps
+  - `build_signal_features()` — extract up/down max and margin from prediction map
+  - `evaluate_long_strategy()` / `evaluate_short_strategy()` — simulate PnL with entry/exit/persistence/cooldown logic
+
+- **`trigger_search.py`** — train-calibrated strategy grid generator + scoring
+  - `build_train_calibrated_strategy_grid()` — generate 10 strategy parameter sets from train-data quantiles
+  - `score_strategy_result()` — composite PnL + precision + F1 + market-time-penalty score
+
+- **`btc_search_lab.py`** — image quality metrics and holdout route ranking
+  - `compute_png_quality_stats()` — PNG image QC (contrast, edge density, saturation)
+  - `score_holdout_route()` — composite precision + F1 + image + RMSE score for ranking variants
+  - `rank_variant_results()` — sort all variant results by route score
+
+- **`btc_variant_configs.py`** — named parameter grid for BTC batch experiments
+  - `BATCH_VARIANTS` — 25+ named variant dicts covering loss/epochs/width/threshold combinations
+  - `EVENT_FILTERED_SUITE_25` — curated 25-variant list for event-filtered runs
+  - `get_batch_variant()` — retrieve a variant config by name
+
+- **`btc_experiment_config.py`** — shared BTC experiment setup (file lists, split definitions)
+
 ---
 
 ### `scripts/` — numbered experiments
@@ -272,6 +309,9 @@ Each script is a self-contained scientific experiment using `iter_shapes_t2l` sh
 - **`exp06`** — hurdle-style classifier+regressor maps on shaped data
 - **`exp07`** — long-horizon sweep with post-filtering heuristics
 - **`exp08`** — purged train/test splits + hurdle analysis
+- **`exp10`** — one-shot scientist protocol: richness gate → train → dashboard → DB
+- **`exp16_batch_h64_tcn.py`** — 12-variant BTC TCN grid search with image QC
+- **`exp10_scientist_once.py`** — end-to-end scientist protocol runner
 - **`hourly_experiment_cycle.py`** — scheduled loop over horizons with sklearn metrics
 - **`soundness_audit_overlap.py`** — audit leakage between train/test window hashes
 - **`replay_readme_style_prediction.py`** / **`sim_data_prediction_snapshot.py`** — demo/README-style prediction plots
@@ -306,4 +346,9 @@ Each script is a self-contained scientific experiment using `iter_shapes_t2l` sh
 - **CLI** → `__main__.py` → `deepbook record|replay`
 - **Track experiment results** → `experiment_tracking.py` → `register_experiment_run()`
 - **Pick data for experiment** → `scientist_experiment.py` → `choose_latest_parquet()` / `richness_gate()`
+- **Event-filter windows** → `event_selection.py` → `select_eventful_window_indices()`
+- **Backtest strategy** → `strategy_search.py` → `evaluate_long_strategy()`
+- **Calibrate triggers** → `trigger_search.py` → `build_train_calibrated_strategy_grid()`
+- **Rank experiment routes** → `btc_search_lab.py` → `rank_variant_results()`
+- **BTC variant grid** → `btc_variant_configs.py` → `BATCH_VARIANTS`
 - **Run a numbered experiment** → `scripts/exp0N_*.py`
