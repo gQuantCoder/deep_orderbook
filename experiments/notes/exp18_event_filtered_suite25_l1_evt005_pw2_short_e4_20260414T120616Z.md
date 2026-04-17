@@ -1,0 +1,22 @@
+# exp16 batch variant
+
+- timestamp: 2026-04-14 12:06:16Z
+- variant: `l1_evt005_pw2_short_e4`
+- train files:
+  - `2026-04-14T07-00-00.parquet`
+  - `2026-04-14T08-00-00.parquet`
+  - `2026-04-14T09-00-00.parquet`
+- test file: `2026-04-14T10-00-00.parquet`
+- config: `{"active_reg_weight": 1.0, "epochs": 4, "event_loss_weight": 0.05, "hidden_dim": 96, "hypothesis": "Earlier stopping may help if event-filtered windows overfit quickly.", "lr": 0.0015, "pos_weight": 2.0, "prediction_cap_quantile": 99.5, "reg_loss": "l1", "trade_threshold": 0.1, "weight_decay": 0.0001}`
+- precheck image: `experiments/pictures/exp18_event_filtered_suite25_holdout_precheck_20260414T120616Z.png`
+- fixed dashboard: `experiments/pictures/exp18_event_filtered_suite25_l1_evt005_pw2_short_e4_fixed_20260414T120616Z.png`
+- best dashboard: `experiments/pictures/exp18_event_filtered_suite25_l1_evt005_pw2_short_e4_best_20260414T120616Z.png`
+- result json: `experiments/results/exp18_event_filtered_suite25_l1_evt005_pw2_short_e4_20260414T120616Z.json`
+- observations:
+  - Variant=l1_evt005_pw2_short_e4
+  - Holdout metrics: f1=0.2772, precision=0.3059, recall=0.2535, rmse=1.14192
+  - Zero baseline rmse=1.14359
+  - Image QC: usable=True, reason=ok, gray_std=0.2991, near_black=0.013, near_white=0.449
+  - Best-slice pnl: omniscient=23.15625, prediction=-2.10156
+  - Fixed-slice pnl: omniscient=20.06250, prediction=-0.02344
+- decision: not_promising_yet

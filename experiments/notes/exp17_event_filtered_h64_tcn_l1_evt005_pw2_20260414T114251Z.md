@@ -1,0 +1,22 @@
+# exp16 batch variant
+
+- timestamp: 2026-04-14 11:42:51Z
+- variant: `l1_evt005_pw2`
+- train files:
+  - `2026-04-14T07-00-00.parquet`
+  - `2026-04-14T08-00-00.parquet`
+  - `2026-04-14T09-00-00.parquet`
+- test file: `2026-04-14T10-00-00.parquet`
+- config: `{"active_reg_weight": 1.0, "epochs": 6, "event_loss_weight": 0.05, "hidden_dim": 96, "hypothesis": "L1 can resist outlier explosions and keep maps less washed out.", "lr": 0.0015, "pos_weight": 2.0, "prediction_cap_quantile": 99.5, "reg_loss": "l1", "trade_threshold": 0.1, "weight_decay": 0.0001}`
+- precheck image: `experiments/pictures/exp17_event_filtered_h64_tcn_holdout_precheck_20260414T114251Z.png`
+- fixed dashboard: `experiments/pictures/exp17_event_filtered_h64_tcn_l1_evt005_pw2_fixed_20260414T114251Z.png`
+- best dashboard: `experiments/pictures/exp17_event_filtered_h64_tcn_l1_evt005_pw2_best_20260414T114251Z.png`
+- result json: `experiments/results/exp17_event_filtered_h64_tcn_l1_evt005_pw2_20260414T114251Z.json`
+- observations:
+  - Variant=l1_evt005_pw2
+  - Holdout metrics: f1=0.3285, precision=0.2957, recall=0.3697, rmse=1.14068
+  - Zero baseline rmse=1.14359
+  - Image QC: usable=True, reason=ok, gray_std=0.3028, near_black=0.013, near_white=0.471
+  - Best-slice pnl: omniscient=23.15625, prediction=-0.01562
+  - Fixed-slice pnl: omniscient=20.06250, prediction=-0.02344
+- decision: not_promising_yet

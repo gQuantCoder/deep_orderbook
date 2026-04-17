@@ -1,0 +1,22 @@
+# exp16 batch variant
+
+- timestamp: 2026-04-14 12:06:16Z
+- variant: `regonly_short_e4`
+- train files:
+  - `2026-04-14T07-00-00.parquet`
+  - `2026-04-14T08-00-00.parquet`
+  - `2026-04-14T09-00-00.parquet`
+- test file: `2026-04-14T10-00-00.parquet`
+- config: `{"active_reg_weight": 1.0, "epochs": 4, "event_loss_weight": 0.0, "hidden_dim": 96, "hypothesis": "Earlier stop may help strict holdout if we are overfitting fast.", "lr": 0.002, "pos_weight": 1.0, "prediction_cap_quantile": 99.5, "reg_loss": "huber", "trade_threshold": 0.1, "weight_decay": 0.0001}`
+- precheck image: `experiments/pictures/exp18_event_filtered_suite25_holdout_precheck_20260414T120616Z.png`
+- fixed dashboard: `experiments/pictures/exp18_event_filtered_suite25_regonly_short_e4_fixed_20260414T120616Z.png`
+- best dashboard: `experiments/pictures/exp18_event_filtered_suite25_regonly_short_e4_best_20260414T120616Z.png`
+- result json: `experiments/results/exp18_event_filtered_suite25_regonly_short_e4_20260414T120616Z.json`
+- observations:
+  - Variant=regonly_short_e4
+  - Holdout metrics: f1=0.2406, precision=0.1427, recall=0.7656, rmse=1.10073
+  - Zero baseline rmse=1.14359
+  - Image QC: usable=True, reason=ok, gray_std=0.2953, near_black=0.014, near_white=0.472
+  - Best-slice pnl: omniscient=23.15625, prediction=-6.04688
+  - Fixed-slice pnl: omniscient=20.06250, prediction=0.00000
+- decision: not_promising_yet

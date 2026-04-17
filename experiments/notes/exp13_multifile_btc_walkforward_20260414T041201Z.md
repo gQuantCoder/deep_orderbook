@@ -1,0 +1,25 @@
+# exp13 multifile btc walkforward
+
+- timestamp: 2026-04-14 04:12:01Z
+- train files:
+  - `2026-04-14T00-00-01.parquet`
+  - `2026-04-14T01-00-10.parquet`
+  - `2026-04-14T02-00-01.parquet`
+- test file: `2026-04-14T03-00-00.parquet`
+- symbol: `BTC-USD`
+- mutation: walk-forward multi-file holdout + prediction cap at train q99.5
+- hypothesis: Walk-forward holdout on different parquet files, plus capped BTC predictions, should give a more honest read on whether the apparent pattern survives beyond one local file.
+- precheck image: `experiments/pictures/exp13_multifile_btc_walkforward_precheck_20260414T041201Z.png`
+- best-slice dashboard: `experiments/pictures/exp13_multifile_btc_walkforward_best_20260414T041201Z.png`
+- fixed-slice dashboard: `experiments/pictures/exp13_multifile_btc_walkforward_fixed_20260414T041201Z.png`
+- result json: `experiments/results/exp13_multifile_btc_walkforward_20260414T041201Z.json`
+- observations:
+  - Richness gate passed on holdout file: books_std=2.4432, target_active_ratio=0.036621
+  - Used different parquet files for training (3) and testing (1 holdout)
+  - Applied prediction cap at train q99.5=9.3100
+  - Holdout metrics: f1=0.1299, precision=0.0696, recall=0.9733, rmse=2.14880
+  - Zero baseline holdout rmse=0.44353
+  - Best-slice pnl: omniscient=15.06250, prediction=-3.64062
+  - Fixed-slice pnl: omniscient=15.06250, prediction=-3.64062
+- decision: not_promising_yet
+- next mutation: if precision is still weak, keep this multi-file split and change one factor that reduces event over-triggering rather than touching the split again.

@@ -1,0 +1,41 @@
+# exp16 batch h64 tcn search
+
+- timestamp: 2026-04-14 12:06:16Z
+- train files: 2026-04-14T07-00-00.parquet, 2026-04-14T08-00-00.parquet, 2026-04-14T09-00-00.parquet
+- test file: `2026-04-14T10-00-00.parquet`
+- precheck image: `experiments/pictures/exp18_event_filtered_suite25_holdout_precheck_20260414T120616Z.png`
+- summary json: `experiments/results/exp18_event_filtered_suite25_20260414T120616Z.json`
+- event filter: top_fraction=0.35
+- selected train windows: 51 / 144
+- selected test windows: 17 / 48
+- older fallback files added: none
+- top route: `l1_evt005_pw2_h64` score=1.7350
+- top metrics: precision=0.2861, f1=0.3734, rmse=1.14125, fixed pnl=-0.02344
+- top image qc: usable=True, reason=ok, gray_std=0.3027
+
+## ranked variants
+- 1. `l1_evt005_pw2_h64` score=1.7350 precision=0.2861 f1=0.3734 rmse=1.14125 fixed_pnl=-0.02344 image=ok
+- 2. `precision_evt005_pw2_thr010` score=1.6853 precision=0.2744 f1=0.3660 rmse=1.09526 fixed_pnl=0.00000 image=ok
+- 3. `l1_evt005_pw2_short_e4` score=1.6020 precision=0.3059 f1=0.2772 rmse=1.14192 fixed_pnl=-0.02344 image=ok
+- 4. `l1_evt005_pw2` score=1.5187 precision=0.2878 f1=0.2627 rmse=1.14212 fixed_pnl=-0.02344 image=ok
+- 5. `l1_evt005_pw2_long_e10` score=1.4993 precision=0.2910 f1=0.2482 rmse=1.13212 fixed_pnl=-0.02344 image=ok
+- 6. `baseline_evt025_pw8_lr2e3_h96_e6` score=1.3451 precision=0.1981 f1=0.3103 rmse=1.09679 fixed_pnl=-0.00781 image=ok
+- 7. `regonly_huber_thr014` score=1.3122 precision=0.1931 f1=0.3014 rmse=1.09002 fixed_pnl=0.00000 image=ok
+- 8. `regonly_wd1e3` score=1.2964 precision=0.1881 f1=0.2999 rmse=1.12206 fixed_pnl=0.93750 image=ok
+- 9. `l1_evt002_pw2_thr010` score=1.2809 precision=0.2492 f1=0.2017 rmse=1.14280 fixed_pnl=-0.02344 image=ok
+- 10. `l1_evt005_pw3_thr010` score=1.2607 precision=0.2451 f1=0.1978 rmse=1.14360 fixed_pnl=-0.02344 image=ok
+- 11. `l1_evt005_pw2_thr014` score=1.1650 precision=0.2570 f1=0.1320 rmse=1.14353 fixed_pnl=-0.02344 image=ok
+- 12. `regonly_huber_thr006` score=1.1609 precision=0.1650 f1=0.2680 rmse=1.08726 fixed_pnl=-0.02344 image=ok
+- 13. `regonly_huber_activew2` score=1.0474 precision=0.1436 f1=0.2434 rmse=1.07822 fixed_pnl=0.00000 image=ok
+- 14. `regonly_short_e4` score=1.0394 precision=0.1427 f1=0.2406 rmse=1.10073 fixed_pnl=0.00000 image=ok
+- 15. `regonly_huber_thr010` score=1.0243 precision=0.1394 f1=0.2368 rmse=1.09156 fixed_pnl=0.93750 image=ok
+- 16. `small_h64_regonly` score=1.0159 precision=0.1379 f1=0.2362 rmse=1.07316 fixed_pnl=-0.02344 image=ok
+- 17. `regonly_activew3` score=0.9740 precision=0.1272 f1=0.2232 rmse=1.05634 fixed_pnl=6.43750 image=ok
+- 18. `large_h160_evt002_lr8e4` score=0.9643 precision=0.1298 f1=0.2224 rmse=1.12421 fixed_pnl=0.00000 image=ok
+- 19. `medium_h128_regonly_lr1e3` score=0.9170 precision=0.1215 f1=0.2113 rmse=1.11965 fixed_pnl=0.00000 image=ok
+- 20. `l1_evt010_pw2_thr010` score=0.9062 precision=0.1938 f1=0.0974 rmse=1.14346 fixed_pnl=-0.00781 image=ok
+- 21. `mse_evt010_pw4` score=0.8238 precision=0.1095 f1=0.1942 rmse=1.12363 fixed_pnl=-9.31250 image=ok
+- 22. `l1_evt005_pw2_h128` score=0.8235 precision=0.1775 f1=0.0793 rmse=1.14354 fixed_pnl=0.94531 image=ok
+- 23. `regonly_long_e10_lr8e4` score=0.7337 precision=0.0911 f1=0.1652 rmse=1.07628 fixed_pnl=0.00000 image=ok
+- 24. `l1_evt005_pw1_thr010` score=0.6927 precision=0.1367 f1=0.0762 rmse=1.14360 fixed_pnl=-0.00781 image=ok
+- 25. `l1_evt005_pw2_thr006` score=0.3275 precision=0.0593 f1=0.0217 rmse=1.14357 fixed_pnl=-9.54688 image=ok
