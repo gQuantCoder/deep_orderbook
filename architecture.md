@@ -19,10 +19,13 @@ graph LR
         coinbase[coinbase_feed.py]
     end
 
+    subgraph consumers
+        cons_rec[recorder.py]
+    end
+
     subgraph data
         md[marketdata.py]
         replayer[replayer.py]
-        recorder[consumers/recorder.py]
         readpolar[readpolar.py]
     end
 
@@ -65,7 +68,7 @@ graph LR
         btcvar[btc_variant_configs.py]
     end
 
-    cli --> recorder
+    cli --> cons_rec
     cli --> replayer
 
     coinbase --> md
@@ -78,8 +81,8 @@ graph LR
     replayer --> config
     replayer --> utils
 
-    recorder --> base
-    recorder --> coinbase
+    cons_rec --> base
+    cons_rec --> coinbase
     readpolar --> coinbase
 
     shaper --> coinbase
@@ -218,11 +221,35 @@ graph LR
 ---
 
 ### `deep_orderbook/consumers/`
-> Side-effect consumers of the live feed.
+> Async writers that subscribe to a `BaseFeed`, persist raw JSONL, and fold it into parquet through the feed’s `polarize` pipeline.
 
-- **`recorder.py`** — write live stream to hourly JSONL then convert to parquet
-  - `FeedWriter.start_recording()` — hourly file rotation loop
-  - `FeedWriter.post_process_file()` — polarize + merge on close
+*Last updated (this subsection): 2026-04-17*
+
+```mermaid
+graph TB
+    subgraph cons["consumers/"]
+        FC[FeedConsumer]
+        FW[FeedWriter]
+    end
+    BF[BaseFeed]
+    JSONL["update + trades .jsonl"]
+    PQ[merged .parquet]
+
+    BF --> FC
+    FC --> FW
+    FW --> JSONL
+    FW --> PQ
+
+    classDef ink fill:#e8eef5,stroke:#475569,color:#0f172a;
+    classDef panel fill:#1e293b,stroke:#64748b,color:#f1f5f9;
+    class FC,FW,BF ink;
+    class JSONL,PQ panel;
+```
+
+- **`recorder.py`** — `FeedWriter` context manager: opens paired JSONL files, async loop filters subscription noise and appends book vs trade lines; on exit closes the feed queue, closes files, runs `post_process_file()` (Polars string cache, `feed.polarize` for each stream, `merge_sorted` by timestamp, write parquet, delete JSONL)
+  - `FeedConsumer` — shared `feed` handle; `sleep_until_next_hour()` / `sleep_until_midnight()` for scheduled gaps between capture windows
+  - `FeedWriter.start_recording()` / `_write_messages()` — background task driving the async iterator over `feed`
+  - `FeedWriter.post_process_file()` — NDJSON → typed columns → single parquet artifact
 
 ---
 

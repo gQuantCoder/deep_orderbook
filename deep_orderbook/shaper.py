@@ -1,16 +1,17 @@
-from typing import AsyncGenerator, cast, Iterator
-import numpy as np
 import asyncio
-import polars as pl
 import random
+from collections.abc import AsyncGenerator, Iterator
+from typing import cast
 
-from deep_orderbook.config import ReplayConfig, ShaperConfig
-from deep_orderbook.utils import logger
-from deep_orderbook.cache_manager import ArrayCache
-from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed, CoinbaseMessage
-from deep_orderbook.replayer import ParquetReplayer
+import numpy as np
+import polars as pl
 
 import deep_orderbook.marketdata as md
+from deep_orderbook.cache_manager import ArrayCache
+from deep_orderbook.config import ReplayConfig, ShaperConfig
+from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed, CoinbaseMessage
+from deep_orderbook.replayer import ParquetReplayer
+from deep_orderbook.utils import logger
 
 
 class ArrayShaper:
@@ -27,43 +28,34 @@ class ArrayShaper:
         self.ALL_BIN_LABELS = self.bid_bin_labels + self.ask_bin_labels
         self.lev_labels = pl.Enum(self.ALL_BIN_LABELS)
 
-        self.ask_bin_idx = pl.DataFrame(
-            {'bin_idx': pl.Series(self.ask_bin_labels, dtype=self.lev_labels)}
-        ).sort('bin_idx')
-        self.bid_bin_idx = pl.DataFrame(
-            {'bin_idx': pl.Series(self.bid_bin_labels, dtype=self.lev_labels)}
-        ).sort('bin_idx')
+        self.ask_bin_idx = pl.DataFrame({"bin_idx": pl.Series(self.ask_bin_labels, dtype=self.lev_labels)}).sort("bin_idx")
+        self.bid_bin_idx = pl.DataFrame({"bin_idx": pl.Series(self.bid_bin_labels, dtype=self.lev_labels)}).sort("bin_idx")
         self.ALL_BIN_INDEX = self.bid_bin_idx.vstack(self.ask_bin_idx)
 
-        self.total_array = np.zeros(
-            (self.config.rolling_window_size, self.config.num_side_lvl * 2, 3)
-        )
+        self.total_array = np.zeros((self.config.rolling_window_size, self.config.num_side_lvl * 2, 3))
         self.prices_array = np.zeros((self.config.rolling_window_size, 2)) + np.nan
 
     def update_ema(self, price: float) -> None:
         if self.ema_price is None:
             self.ema_price = price
         self.prev_price = self.ema_price
-        self.ema_price = price * self.ema_new_fac + (self.ema_price) * (
-            1 - self.ema_new_fac
-        )
+        self.ema_price = price * self.ema_new_fac + (self.ema_price) * (1 - self.ema_new_fac)
 
-    def price_level_binning(
-        self, df: pl.DataFrame, all_edges: list[float]
-    ) -> pl.DataFrame:
+    def price_level_binning(self, df: pl.DataFrame, all_edges: list[float]) -> pl.DataFrame:
         df_binned = df.with_columns(
-            pl.col('price')
+            pl
+            .col("price")
             .cut(
                 breaks=all_edges,
                 labels=self.ALL_BIN_LABELS,
             )
             .cast(self.lev_labels)
-            .alias('bin_idx')
+            .alias("bin_idx")
         )
         return self.ALL_BIN_INDEX.join(
-            df_binned.group_by('bin_idx').agg(pl.col('size').sum().alias('size')),
-            on='bin_idx',
-            how='left',
+            df_binned.group_by("bin_idx").agg(pl.col("size").sum().alias("size")),
+            on="bin_idx",
+            how="left",
         ).fill_null(0)
 
     def bin_books(
@@ -81,12 +73,10 @@ class ArrayShaper:
         ask_edges: pl.Series = self.prev_price + self._cut_scales * price_side_view
         all_edges = bid_edges[1:].reverse().append(ask_edges).to_list()
 
-        dfa = one_sec.asks.with_columns((-pl.col('size')).alias('size'))
+        dfa = one_sec.asks.with_columns((-pl.col("size")).alias("size"))
         dfb = one_sec.bids
-        trup = one_sec.trades.filter(pl.col('side') == 'BUY')
-        trdn = one_sec.trades.filter(pl.col('side') == 'SELL').with_columns(
-            (-pl.col('size')).alias('size')
-        )
+        trup = one_sec.trades.filter(pl.col("side") == "BUY")
+        trdn = one_sec.trades.filter(pl.col("side") == "SELL").with_columns((-pl.col("size")).alias("size"))
 
         dfb = self.price_level_binning(dfb, all_edges)
         dfa = self.price_level_binning(dfa, all_edges)
@@ -95,12 +85,13 @@ class ArrayShaper:
 
         # sum the sizes for the same bin_idx
         df_book = (
-            dfb.join(dfa, on='bin_idx', suffix='_ask', how='left')
-            .with_columns(pl.col('size') + pl.col('size_ask').alias('size'))
-            .drop('size_ask')
+            dfb
+            .join(dfa, on="bin_idx", suffix="_ask", how="left")
+            .with_columns(pl.col("size") + pl.col("size_ask").alias("size"))
+            .drop("size_ask")
         )
-        df_book = df_book.join(df_trup, on='bin_idx', how='left', suffix='_trup')
-        df_book = df_book.join(df_trdn, on='bin_idx', how='left', suffix='_trdn')
+        df_book = df_book.join(df_trup, on="bin_idx", how="left", suffix="_trup")
+        df_book = df_book.join(df_trdn, on="bin_idx", how="left", suffix="_trdn")
 
         # # re-add the edges in a new column "price"
         # df_book = df_book.with_columns(
@@ -109,14 +100,12 @@ class ArrayShaper:
 
         return df_book
 
-    async def make_arr3d(
-        self, new_books: md.OneSecondEnds
-    ) -> tuple[np.ndarray, np.ndarray]:
+    async def make_arr3d(self, new_books: md.OneSecondEnds) -> tuple[np.ndarray, np.ndarray]:
         self.update_ema(new_books.avg_price())
         df_book = self.bin_books(new_books)
         # print(df_book.reverse()[self.num_side_lvl - 5 : self.num_side_lvl + 5])
 
-        df_3d = df_book.drop('bin_idx')
+        df_3d = df_book.drop("bin_idx")
         df_3d_exp = df_3d.select(pl.all().arcsinh())
 
         # add a new first axis to represent time
@@ -143,9 +132,7 @@ class ArrayShaper:
 
         # Check for NaN in input prices
         if np.isnan(prices).any():
-            logger.warning(
-                f"NaN found in prices array: {np.isnan(prices).sum()} NaN values"
-            )
+            logger.warning(f"NaN found in prices array: {np.isnan(prices).sum()} NaN values")
             # Replace NaN with the last valid price
             prices = np.nan_to_num(prices, nan=prices[~np.isnan(prices)].mean())
 
@@ -164,9 +151,7 @@ class ArrayShaper:
 
         # Safety check for price steps
         if pricestep_up <= 0 or pricestep_down <= 0:
-            logger.warning(
-                f"Invalid price steps: up={pricestep_up}, down={pricestep_down}"
-            )
+            logger.warning(f"Invalid price steps: up={pricestep_up}, down={pricestep_down}")
             pricestep_up = max(pricestep_up, 1e-6)
             pricestep_down = max(pricestep_down, 1e-6)
 
@@ -176,24 +161,18 @@ class ArrayShaper:
 
         # Compute price levels for thresholds from crossing sides
         a_plus_thresh = a[:, np.newaxis] + thresh_up[np.newaxis, :]  # Levels above ask
-        b_minus_thresh = (
-            b[:, np.newaxis] - thresh_down[np.newaxis, :]
-        )  # Levels below bid
+        b_minus_thresh = b[:, np.newaxis] - thresh_down[np.newaxis, :]  # Levels below bid
 
         # Create sliding windows for all points
         asks_future = np.lib.stride_tricks.sliding_window_view(
-            np.pad(prices[:, 1], (0, FUTURE - 1), mode='edge'),  # Pad with last value
+            np.pad(prices[:, 1], (0, FUTURE - 1), mode="edge"),  # Pad with last value
             window_shape=FUTURE,
-        )[
-            :num_t
-        ]  # Keep only original length
+        )[:num_t]  # Keep only original length
 
         bids_future = np.lib.stride_tricks.sliding_window_view(
-            np.pad(prices[:, 0], (0, FUTURE - 1), mode='edge'),  # Pad with last value
+            np.pad(prices[:, 0], (0, FUTURE - 1), mode="edge"),  # Pad with last value
             window_shape=FUTURE,
-        )[
-            :num_t
-        ]  # Keep only original length
+        )[:num_t]  # Keep only original length
 
         # Expand dimensions for broadcasting
         asks_future = asks_future[:, :, np.newaxis]  # (T_eff, FUTURE, 1)
@@ -204,12 +183,8 @@ class ArrayShaper:
         # Compute tradeUp and tradeDn conditions
         # For up moves: bid must cross above ask-based levels
         # For down moves: ask must cross below bid-based levels
-        tradeUp = (
-            bids_future >= a_plus_thresh
-        )  # Bid crossing up through ask-based levels
-        tradeDn = (
-            asks_future <= b_minus_thresh
-        )  # Ask crossing down through bid-based levels
+        tradeUp = bids_future >= a_plus_thresh  # Bid crossing up through ask-based levels
+        tradeDn = asks_future <= b_minus_thresh  # Ask crossing down through bid-based levels
 
         # Exclude the current time step
         tradeUp[:, 0, :] = False
@@ -239,9 +214,7 @@ class ArrayShaper:
         timeDn_reversed = timeDn[:, ::-1]
 
         # Concatenate timeDn and timeUp to form the time2levels matrix
-        time2levels = np.concatenate(
-            [timeDn_reversed, timeUp], axis=1
-        )  # (T_eff, 2 * side_width)
+        time2levels = np.concatenate([timeDn_reversed, timeUp], axis=1)  # (T_eff, 2 * side_width)
 
         # Add a new axis to match the expected output shape
         time2levels = time2levels[:, :, np.newaxis]  # (T_eff, 2 * side_width, 1)
@@ -253,9 +226,7 @@ class ArrayShaper:
         # Final safety check to ensure all values are positive and finite
         min_val = time2levels_full.min()
         if min_val < 0 or np.isnan(min_val):
-            logger.error(
-                f"Invalid values in time2levels_full: min={min_val}, has_nan={np.isnan(time2levels_full).any()}"
-            )
+            logger.error(f"Invalid values in time2levels_full: min={min_val}, has_nan={np.isnan(time2levels_full).any()}")
             raise ValueError(f"Invalid time values detected: min={min_val}")
 
         return 5 / time2levels_full
@@ -296,9 +267,7 @@ async def iter_shapes_t2l(
                 books_array, time_levels, prices_array = cached_data
                 total_length = len(books_array)
 
-                end_indexes = list(
-                    range(1, 1 + total_length, shaper_config.window_stride)
-                )
+                end_indexes = list(range(1, 1 + total_length, shaper_config.window_stride))
                 if replay_config.randomize:
                     end_indexes = random.sample(end_indexes, len(end_indexes))
                 for end_idx in end_indexes:
@@ -308,17 +277,14 @@ async def iter_shapes_t2l(
                     window_prices = prices_array[start_idx:end_idx]
 
                     if not shaper_config.only_full_arrays or (
-                        not np.isnan(window_prices).any()
-                        and len(window_books) >= shaper_config.rolling_window_size
+                        not np.isnan(window_prices).any() and len(window_books) >= shaper_config.rolling_window_size
                     ):
                         yield window_books, window_times, window_prices
 
                 current_file_idx += 1
             else:
                 # Cache miss - switch to live processing from this file onwards
-                logger.info(
-                    f"Cache miss for {current_file}, switching to live processing"
-                )
+                logger.info(f"Cache miss for {current_file}, switching to live processing")
                 break
         else:
             logger.debug("All files processed")
@@ -326,19 +292,13 @@ async def iter_shapes_t2l(
 
     async with CoinbaseFeed(
         config=replay_config,
-        replayer=(
-            cast(Iterator[CoinbaseMessage], replayer) if replayer is not None else None
-        ),
+        replayer=(cast(Iterator[CoinbaseMessage], replayer) if replayer is not None else None),
     ) as feed:
         if replayer is not None:
             replayer.skip_n_files(current_file_idx)
         async for onesec in feed.one_second_iterator():
             # Check if we've moved to a new file
-            if (
-                not live
-                and replayer is not None
-                and replayer.current_file != collector.current_file
-            ):
+            if not live and replayer is not None and replayer.current_file != collector.current_file:
                 # Cache previous file's data if we have any
                 if shaper_config.save_cache:
                     await collector.cache_arrays(shaper_config, shaper, replay_config)
@@ -362,9 +322,7 @@ async def iter_shapes_t2l(
                     window_size = shaper_config.rolling_window_size
                 else:
                     # Yield whatever we have, up to rolling_window_size
-                    window_size = min(
-                        len(collector.all_books), shaper_config.rolling_window_size
-                    )
+                    window_size = min(len(collector.all_books), shaper_config.rolling_window_size)
 
                 # Get window arrays
                 window_books, window_prices = collector.get_window(window_size)
@@ -376,10 +334,7 @@ async def iter_shapes_t2l(
                 window_times = await shaper.build_time_level_trade()
 
                 # Skip windows with NaN values if only_full_arrays is True
-                if (
-                    not shaper_config.only_full_arrays
-                    or not np.isnan(window_prices).any()
-                ):
+                if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
                     yield window_books, window_times, window_prices
 
         # Cache the last file's data if we have any
@@ -391,7 +346,7 @@ async def main() -> None:
     import pyinstrument
 
     replay_config = ReplayConfig(
-        date_regexp='2024-08-06',
+        date_regexp="2024-08-06",
         # max_samples=300,
     )
     shaper_config = ShaperConfig(window_stride=1)
@@ -404,9 +359,8 @@ async def main() -> None:
             # live=True,
         ):
             print(f"{books_array.shape=}, {time_levels.shape=}, {pxar.shape=}")
-            pass
     # profiler.open_in_browser()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main())

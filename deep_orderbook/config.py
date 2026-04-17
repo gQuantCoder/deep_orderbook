@@ -1,7 +1,8 @@
 import datetime
-from pathlib import Path
 import random
-from typing import Self, Optional, Any
+from pathlib import Path
+from typing import Any, Self
+
 from pydantic import BaseModel
 
 
@@ -34,7 +35,7 @@ class ReplayConfig(FeedConfig):
         filename_regexp = f"{self.date_regexp}.parquet"
         # print(f"Searching for {filename_regexp} in {self.data_dir}")
         return sorted(self.data_dir.glob(filename_regexp))
-    
+
     def num_files(self) -> int:
         assert len(self.file_list()) > 0, f"No files found for {self.date_regexp}"
         return len(self.file_list())
@@ -61,6 +62,7 @@ class ShaperConfig(BaseConfig):
 
     use_cache: bool = True
     save_cache: bool = True
+
 
 class TrainConfig(BaseConfig):
     device: str = "cuda"  # "cpu" or "cuda"
@@ -91,7 +93,7 @@ class TrainConfig(BaseConfig):
 class CacheConfig(BaseConfig):
     enabled: bool = True
     cache_dir: Path = Path("cache")
-    max_age_days: Optional[int] = 7  # Auto-clear cache files older than this
+    max_age_days: int | None = 7  # Auto-clear cache files older than this
 
 
 class Fullconfig(BaseConfig):
