@@ -394,7 +394,7 @@ class CoinbaseFeed(BaseFeed):
             yield one_sec
 
 
-async def main() -> None:
+async def main() -> None:  # pragma: no cover
     import pyinstrument
 
     async with CoinbaseFeed(

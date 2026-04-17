@@ -1,8 +1,6 @@
 import argparse
 import asyncio
-
-
-__version__ = '0.0.1'
+from importlib.metadata import PackageNotFoundError, version
 
 
 def main() -> None:
@@ -20,7 +18,10 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.version:
-        print(__version__)
+        try:
+            print(version('deep-orderbook'))
+        except PackageNotFoundError:
+            print('unknown')
         return
 
     if args.command == 'record':
