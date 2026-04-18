@@ -1,0 +1,51 @@
+{
+  "windows_analyzed": 140,
+  "train_windows": 105,
+  "test_windows": 35,
+  "samples_train": 26880,
+  "samples_test": 8960,
+  "feature_dim": 48,
+  "target_dim": 8,
+  "models": {
+    "zero_baseline": {
+      "rmse": 0.026336170464509277,
+      "mae": 0.0033665619615239825,
+      "r2": -0.016612049941744145,
+      "event_threshold": 0.0001,
+      "event_precision": 0.0,
+      "event_recall": 0.0,
+      "event_f1": 0.0,
+      "event_rate_true": 0.026981026785714287,
+      "event_rate_pred": 0.0
+    },
+    "ridge_mse": {
+      "rmse": 3.4312436367979275,
+      "mae": 0.09411605192900535,
+      "r2": -17255.515932851828,
+      "event_threshold": 0.0001,
+      "event_precision": 0.04296620247822918,
+      "event_recall": 0.5791106514994827,
+      "event_f1": 0.07999714295905144,
+      "event_rate_true": 0.026981026785714287,
+      "event_rate_pred": 0.36365792410714287
+    },
+    "ridge_weighted_sparse": {
+      "rmse": 4.537018762944834,
+      "mae": 0.13723661068168735,
+      "r2": -30170.1007142689,
+      "event_threshold": 0.0001,
+      "event_precision": 0.05077578744090031,
+      "event_recall": 0.7885211995863491,
+      "event_f1": 0.09540790790779423,
+      "event_rate_true": 0.026981026785714287,
+      "event_rate_pred": 0.4190011160714286
+    }
+  },
+  "delta_vs_zero": {
+    "ridge_mse_rmse_gain_pct": -12928.635432370846,
+    "ridge_weighted_rmse_gain_pct": -17127.329117145808,
+    "ridge_mse_f1_minus_zero": 0.07999714295905144,
+    "ridge_weighted_f1_minus_zero": 0.09540790790779423,
+    "weighted_vs_mse_f1": 0.015410764948742786
+  }
+}

@@ -6,7 +6,9 @@ import numpy as np
 from pathlib import Path
 
 from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
-from deep_orderbook.learn.tcn import TCNModel
+from deep_orderbook.learn.tcn import TCNModel as OriginalTCNModel
+from deep_orderbook.learn.attention_tcn import AttentionTCN
+from deep_orderbook.learn.pure_attention import TimeSeriesTransformer
 from deep_orderbook.learn.trainer import Trainer
 from deep_orderbook.utils import logger
 
@@ -29,10 +31,28 @@ async def train_and_predict(
     input_channels = 3  # FeatureDimension of books_array
     output_channels = 1  # ValueDimension of time_levels
 
-    # Initialize model, optimizer, and loss function
-    model = TCNModel(
-        input_channels,
-        output_channels,
+    # Initialize model with reduced memory footprint
+    # model = OriginalTCNModel(
+    #     input_channels,
+    #     output_channels,
+    #     num_levels=config.num_levels,
+    #     num_side_lvl=shaper_config.num_side_lvl,
+    #     target_side_width=shaper_config.look_ahead_side_width,
+    # )
+    # model = TimeSeriesTransformer(
+    #     input_channels=input_channels,
+    #     output_channels=output_channels,
+    #     d_model=32,  # Reduced from 64 to help with memory
+    #     nhead=4,
+    #     num_layers=4,  # Fixed number instead of using config.num_levels
+    #     num_side_lvl=shaper_config.num_side_lvl,
+    #     target_side_width=shaper_config.look_ahead_side_width,
+    #     dropout=0.1,
+    #     max_seq_len=shaper_config.rolling_window_size  # Match the rolling window size
+    # )
+    model = AttentionTCN(
+        input_channels=input_channels,
+        output_channels=output_channels,
         num_levels=config.num_levels,
         num_side_lvl=shaper_config.num_side_lvl,
         target_side_width=shaper_config.look_ahead_side_width,
@@ -42,7 +62,7 @@ async def train_and_predict(
 
     logger.info("[Training] Model initialized, starting trainer setup")
 
-    # Create the trainer
+    # Create the trainer with gradient accumulation
     trainer = Trainer(
         model,
         optimizer,
@@ -132,6 +152,11 @@ async def main() -> None:
         num_levels=8,
         learning_rate=0.0001,
         epochs=10,
+        criterion="StructuredT2L",
+        loss_focus_last_step=True,
+        loss_pointwise_weight=1.0,
+        loss_updown_rank_weight=0.25,
+        loss_monotonic_weight=0.10,
         save_checkpoint_mins=5.0,  # But wait at least N minutes between saves
         checkpoint_dir=Path("checkpoints"),  # Directory to save checkpoints
     )

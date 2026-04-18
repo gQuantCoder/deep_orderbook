@@ -1,0 +1,25 @@
+# exp15 multifile btc regonly
+
+- timestamp: 2026-04-14 04:28:42Z
+- train files:
+  - `2026-04-14T00-00-01.parquet`
+  - `2026-04-14T01-00-10.parquet`
+  - `2026-04-14T02-00-01.parquet`
+- test file: `2026-04-14T03-00-00.parquet`
+- symbol: `BTC-USD`
+- mutation: pure regression-style training (event loss weight 0) with multi-file holdout and prediction cap
+- hypothesis: Pure image-to-image regression may preserve map geometry better than event-augmented training on sparse holdout data.
+- precheck image: `experiments/pictures/exp15_multifile_btc_regonly_precheck_20260414T042842Z.png`
+- best-slice dashboard: `experiments/pictures/exp15_multifile_btc_regonly_best_20260414T042842Z.png`
+- fixed-slice dashboard: `experiments/pictures/exp15_multifile_btc_regonly_fixed_20260414T042842Z.png`
+- result json: `experiments/results/exp15_multifile_btc_regonly_20260414T042842Z.json`
+- observations:
+  - Richness gate passed on holdout file: books_std=2.4432, target_active_ratio=0.036621
+  - Used different parquet files for training (3) and testing (1 holdout)
+  - Applied prediction cap at train q99.5=9.3100
+  - Holdout metrics: f1=0.1584, precision=0.0876, recall=0.8267, rmse=2.10439
+  - Zero baseline holdout rmse=0.44353
+  - Best-slice pnl: omniscient=15.06250, prediction=9.42969
+  - Fixed-slice pnl: omniscient=15.06250, prediction=9.42969
+- decision: not_promising_yet
+- next mutation: if precision is still weak, keep this multi-file split and change one factor that reduces event over-triggering rather than touching the split again.

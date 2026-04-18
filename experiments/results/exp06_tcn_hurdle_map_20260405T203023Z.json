@@ -1,0 +1,65 @@
+{
+  "experiment": "exp06_tcn_hurdle_map",
+  "timestamp_utc": "2026-04-05 20:30:23Z",
+  "look_ahead": 64,
+  "windows": {
+    "total": 120,
+    "train": 90,
+    "test": 30
+  },
+  "mutation": {
+    "mutation_name": "gate_threshold",
+    "gate_threshold": 0.58,
+    "pos_weight": 8.0,
+    "reg_weight_scale": 12.0,
+    "note": "Increase event-gate threshold from 0.50 -> 0.58 to cut false positives and lift precision/F1 on long horizon."
+  },
+  "results": {
+    "zero_baseline": {
+      "rmse": 0.01770420496977935,
+      "mae": 0.0023603322724343695,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.0,
+      "side_acc_on_signals": NaN
+    },
+    "single_stage_baseline": {
+      "rmse": 0.02962946124677159,
+      "mae": 0.004945647066039573,
+      "precision": 0.13576294837068043,
+      "recall": 0.9209354120267256,
+      "f1": 0.23664067529843824,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.198291015625,
+      "side_acc_on_signals": 0.532348300100416
+    },
+    "hurdle_candidate": {
+      "rmse": 0.03320737645034499,
+      "mae": 0.009139283110616998,
+      "precision": 0.14152700186219738,
+      "recall": 0.9732739420935407,
+      "f1": 0.24711953064231734,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.201025390625,
+      "side_acc_on_signals": 0.3896644624050943
+    },
+    "delta_hurdle_vs_single_stage": {
+      "f1": 0.010478855343879101,
+      "precision": 0.005764053491516957,
+      "side_acc": -0.14268383769532172,
+      "rmse_delta": 0.0035779152035733987
+    },
+    "event_gate": {
+      "positive_rate_train": 0.38702256944444446,
+      "predicted_event_rate_test": 0.531640625,
+      "gate_threshold": 0.58
+    },
+    "rows": {
+      "train": 23040,
+      "test": 7680,
+      "train_active_rows": 8917
+    }
+  }
+}

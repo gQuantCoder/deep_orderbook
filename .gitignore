@@ -10,5 +10,9 @@ dist
 /cov.xml
 preprocessed_data
 cache
-checkpoints
+checkpoints*
 /1_checkpoints/
+/.cursor
+/experiments/pictures/
+/experiments/notes/
+/experiments/results/

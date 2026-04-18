@@ -1,10 +1,10 @@
 import asyncio
-import logging
+
 from deep_orderbook.config import FeedConfig, ShaperConfig
 from deep_orderbook.shaper import iter_shapes_t2l
-from deep_orderbook.visu import Visualizer
 from deep_orderbook.strategy import Strategy
-from deep_orderbook.utils import make_handlers, logger
+from deep_orderbook.utils import logger, make_handlers
+
 
 def setup_config() -> tuple[FeedConfig, ShaperConfig]:
     feed_conf = FeedConfig(
@@ -21,11 +21,12 @@ def setup_config() -> tuple[FeedConfig, ShaperConfig]:
     )
     return feed_conf, shaper_config
 
+
 async def rolling_plot(config: FeedConfig, shaper_config: ShaperConfig) -> None:
     # vis = Visualizer()
     strategy = Strategy(threshold=0.2)
     logger.info("Starting rolling plot")
-    
+
     try:
         async for books_array, level_prox, pxar in iter_shapes_t2l(
             replay_config=config,
@@ -41,22 +42,24 @@ async def rolling_plot(config: FeedConfig, shaper_config: ShaperConfig) -> None:
             #     positions=pos,
             # )
     except Exception as e:
-        logger.error(f"Error in rolling plot: {str(e)}")
+        logger.error(f"Error in rolling plot: {e!s}")
         raise
 
+
 def main() -> None:
-    logger.setLevel('DEBUG')
-    line_handler, noline_handler = make_handlers('live.log')
+    logger.setLevel("DEBUG")
+    line_handler, noline_handler = make_handlers("live.log")
     logger.addHandler(line_handler)
-    
+
     feed_conf, shaper_config = setup_config()
     try:
         asyncio.run(rolling_plot(feed_conf, shaper_config))
     except KeyboardInterrupt:
         logger.info("Application stopped by user")
     except Exception as e:
-        logger.error(f"Application error: {str(e)}")
+        logger.error(f"Application error: {e!s}")
         raise
 
+
 if __name__ == "__main__":
-    main() 
+    main()

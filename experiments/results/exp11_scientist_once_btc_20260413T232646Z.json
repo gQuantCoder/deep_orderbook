@@ -1,0 +1,76 @@
+{
+  "experiment": "exp11_scientist_once_btc",
+  "timestamp_utc": "2026-04-13 23:26:46Z",
+  "git_commit": "7027592",
+  "selected_parquet": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-13T22-51-51.parquet",
+  "replay_config": {
+    "markets": [
+      "BTC-USD"
+    ],
+    "max_samples": -1,
+    "freq": 1.0,
+    "data_dir": "/mnt/data/repos/gaelreinaudi/crypto",
+    "date_regexp": "2026-04-13T22-51-51",
+    "one_path": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-13T22-51-51.parquet",
+    "skip_until_time": "00:00:00",
+    "every": "100ms",
+    "randomize": false
+  },
+  "shaper_config": {
+    "view_bips": 5,
+    "num_side_lvl": 8,
+    "rolling_window_size": 256,
+    "window_stride": 8,
+    "only_full_arrays": true,
+    "for_image_display": false,
+    "look_ahead": 64,
+    "look_ahead_side_bips": 5,
+    "look_ahead_side_width": 4,
+    "use_cache": false,
+    "save_cache": false
+  },
+  "hypothesis": "After the weak ETH run, switching only the symbol to BTC-USD on the same fresh parquet may reveal cleaner map structure and more tradable behavior.",
+  "richness_gate": {
+    "usable": true,
+    "reason": "ok",
+    "books_std": 2.3890442848205566,
+    "books_abs_peak": 13.386584281921387,
+    "target_active_ratio": 0.41845703125,
+    "target_peak": 69.93001556396484
+  },
+  "metrics": {
+    "rmse": 1596.3052978515625,
+    "mae": 42.58173370361328,
+    "precision": 0.41795782225091455,
+    "recall": 0.987166454891995,
+    "f1": 0.5872703908076551,
+    "event_rate_true": 0.38427734375,
+    "event_rate_pred": 0.9076171875
+  },
+  "zero_baseline": {
+    "rmse": 6.654143810272217,
+    "mae": 2.861053943634033,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "event_rate_true": 0.38427734375,
+    "event_rate_pred": 0.0
+  },
+  "pnl": {
+    "omniscient_final": 163.578125,
+    "prediction_final": 45.671875
+  },
+  "artifacts": {
+    "precheck_png": "experiments/pictures/exp11_scientist_once_btc_precheck_20260413T232646Z.png",
+    "dashboard_png": "experiments/pictures/exp11_scientist_once_btc_dashboard_20260413T232646Z.png",
+    "notes_md": "experiments/notes/exp11_scientist_once_btc_20260413T232646Z.md"
+  },
+  "observations": [
+    "Richness gate passed: books_std=2.3890, target_active_ratio=0.418457",
+    "TinyTCN quick run metrics: f1=0.5873, precision=0.4180, recall=0.9872, rmse=1596.30530",
+    "Zero baseline rmse=6.65414",
+    "Final omniscient pnl=163.57812, prediction pnl=45.67188"
+  ],
+  "decision": "not_promising_yet",
+  "experiment_db_row_id": 6
+}
