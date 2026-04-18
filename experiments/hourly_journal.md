@@ -303,3 +303,56 @@
 - la=64: best=hgb_d6_lr006_w | f1=0.2236, precision=0.1275, recall=0.9081, side_acc=0.5678131991051454, rmse=0.02970, zero_rmse=0.01770
 - Artifact: experiments/results/hourly/run_20260413T221201Z.json
 
+
+
+## 2026-04-17 (UTC) exp23_longwindow_2026_btc handoff - honest trigger loop baseline
+- **Continuity source read**: latest exp22 artifacts + the 2026-04 BTC lab entries in `image_prediction_lab_log.md`. Prior best 2025-BTC trigger sweep winners (`l1_evt005_pw2_h64`, `regonly_wd1e3`, `regonly_huber_thr010`, `precision_evt005_pw2_thr010`) reported overlapping-window ghost-timeline PnL and must be treated as `deprecated_overlapping_pnl=True`.
+- **Hypothesis**: Keeping the same 4 frozen TCN variants but (a) giving the model a meaningful 204.8 s image (rolling=2048, look_ahead=128 at 100ms cadence, 16x context/horizon ratio) and (b) computing PnL per non-overlapping window instead of on a `reshape(-1, ...)` ghost timeline should (i) preserve or improve event metrics, (ii) keep RMSE at or below the zero baseline, and (iii) produce a recalibrated honest PnL baseline on fresh 2026 BTC data.
+- **What changed**:
+  - new executable gates in `deep_orderbook/pipeline_guards.py` (`assert_image_meaningful`, `assert_non_overlapping`, `select_non_overlapping_indices`, `aggregate_per_window_strategy_result`, `dt_seconds_from_every`) + `tests/test_continuity.py` exercising them
+  - `scripts/exp16_batch_h64_tcn.load_file_windows` now accepts a `ShaperConfig` and defaults to rolling=2048/look_ahead=128 via `DEFAULT_SHAPER_CONFIG_2026`; `assert_image_meaningful` is called automatically at load time
+  - `scripts/exp22_trigger_sweep.py` backtest path replaced: per-window `aggregate_per_window_strategy_result` instead of flattened ghost timeline; dashboards now plot a single non-overlapping 2048-step slice; `compute_png_quality_stats` replaces the stub image-QC
+  - new `scripts/exp23_longwindow_2026_btc.py` pointed at `/mnt/data/repos/gaelreinaudi/crypto/2026-04-{15,16}`
+  - SKILL.md amended with Executable sanity gates, Minimum image length, Never flatten overlapping windows sections
+- **What stayed fixed**: same 4 TCN variants, same view_bips=5, num_side_lvl=8, look_ahead_side_bips=5, look_ahead_side_width=4, same event-filter top_fraction=0.35, same `build_train_calibrated_strategy_grid` trigger grid, same long direction.
+- **Selected data slice**: train = 3 hourly BTC-USD parquet files (2026-04-15T14/15/16); test = 2026-04-16T17 (walk-forward).
+- **Richness-gate verdict**: passed on test window 0.
+- **Main metrics** (recalibrated honest baseline under per-window PnL):
+  - best by score: `regonly_huber_thr010 / long / q90_p2_hold48` - precision=0.3320, f1=0.4951, rmse_ratio=1.0049, final_pnl=62.54 across 2 non-overlapping 204.8 s test windows, 23 trades, pnl_per_trade=2.72
+  - best by raw PnL: `precision_evt005_pw2_thr010 / long / q80_p2_hold48` - precision=0.3340, f1=0.4977, rmse_ratio=0.9949, final_pnl=88.80, 45 trades, pnl_per_trade=1.97
+  - all 4 variants: rmse_ratio between 0.9949 and 1.0049 (at or below zero baseline - first time this is honestly achieved without overlapping-window flattering), precision in the 0.33-0.39 range, f1 in the 0.49-0.52 range.
+- **Visual verdict**: fixed-slice dashboards now show a single internally continuous 2048-step segment; no artefactual vertical jumps at 256/512/..., because no ghost-timeline is stitched. image_quality returns `usable=True`, gray_std~0.34.
+- **Decision**: `promising_as_recalibrated_baseline` - NOT promising-as-tradable. PnL magnitudes here are NOT comparable to the older exp22/exp34 numbers; older winners may collapse or invert under honest per-window aggregation. Promotion requires neighbouring holdouts + friction kill-test under the same gates.
+- **Exact next mutation**: keep the 4-variant set and gates fixed; run the same exp23 harness on `2026-04-16T18` and `2026-04-16T19` as adjacent walk-forward holdouts. Rank routes by friction-adjusted pnl_per_trade (costs 1/2/5/10 units). Only after both neighbours confirm the top route as positive-after-friction do we touch the mapper again.
+- **Data scale used**:
+  - parquet files: 3 train + 1 test
+  - windows before filter: 2400 train / 800 test (max-windows-per-file=800 cap; `anti-self-deception`: this IS a capped screening run and should NOT be mistaken for a full-hour walk-forward)
+  - windows after event filter (top_fraction=0.35): 840 train / 280 test
+  - rolling_window_size: 2048; look_ahead: 128; stride: 8
+  - non-overlapping backtest windows: 2 per 280-window test stack (via `select_non_overlapping_indices`)
+- **Runtime accounting**:
+  - total wall clock: 758.57 s (~12.6 min)
+  - device: cuda
+  - cache state: cold first pass for rolling=2048/la=128 on all 4 files; the `.npz` cache is now warm for these files.
+- **Anti-self-deception note**: this run was capped at 800 windows per file (23 minutes of replayed data per file, not the full hour). Treat the numbers above as recalibrated screening baselines, not as a serious historical training run. A full uncapped walk-forward requires a higher-memory host (rolling=2048 full-hour stacks ~= 10 GB RAM) or disk-backed accumulation.
+- **Summary JSON**: experiments/results/exp23_longwindow_2026_btc_20260418T024330Z.json
+- **Summary MD**: experiments/notes/exp23_longwindow_2026_btc_20260418T024330Z.md
+
+## 2026-04-18 (UTC) queued next mutations (exp24 -> exp28) after exp23 handoff
+
+- **Continuity**: read `exp23_longwindow_2026_btc_20260418T024330Z.json`, its 40 per-route JSON children, the `_fixed_*.png` dashboards for the two top routes, and the consolidated `exp23_deepanalysis_overview_20260418T024330Z.png`. The exp23 handoff explicitly marks older `exp22/exp34` PnL as `deprecated_overlapping_pnl=True`.
+- **Current best known practical candidate**: `regonly_huber_thr010 / long / q90_p2_hold48` (score-winner; pnl=62.54, 23 trades, pnl_per_trade=2.72, precision=0.332, rmse_ratio=1.005 on the primary 2026-04-16T17 holdout, 2 non-overlapping 204.8 s windows). NOT yet tradable.
+- **Current blocker**: all 4 exp23 mapper variants overfit from epoch 1 (train loss 0.59 -> 0.27; test loss 0.71 -> 0.88 across 6 epochs); no top-6 route survives a friction kill-test at cost=3/trade.
+- **Next explicit hypothesis (queue head)**: the overfit is capacity + epoch-count driven, not geometry driven. Halving the TCN hidden dim, dropping to 2 epochs, adding dropout=0.2 and weight_decay=1e-3 will flatten the test-loss curve and push `rmse_ratio` below 0.985 on the same primary test file.
+- **Queued mutations** (one primary factor each, executed in this order; each inherits exp24's training config if exp24 passes):
+  1. `exp24_smallnet_earlystop` — TrainConfig only (epochs 6->2, hidden 64->32, dropout 0->0.2, wd->1e-3). Run first; block until done.
+  2. `exp25_timing_500ms` — ReplayConfig `every: 100ms -> 500ms` with compensated `rolling_window_size=512`, `look_ahead=32`, `window_stride=2`.
+  3. `exp26_horizon_la32` — ShaperConfig `look_ahead: 128 -> 32` (+`look_ahead_side_bips=3`, `_width=2`), `allow_microburst=True` with reason logged.
+  4. `exp27_binning_fine` — ShaperConfig `view_bips: 5 -> 2`, `num_side_lvl: 8 -> 16`.
+  5. `exp28_loss_structured` — TrainConfig `criterion: Huber -> StructuredT2L` with `updown_rank_weight=0.50`, `monotonic_weight=0.20`, `focus_last_step=True`.
+- **What stays fixed across the queue**: `pipeline_guards` gates, per-window PnL aggregation, non-overlapping dashboard slicing, friction kill-test at costs {1,2,5,10} per trade, direction reported on every route, primary test file = `2026-04-16T17-00-10.parquet`, cap `max_windows_per_file=800`, richness-gate on the primary test file BEFORE training, both `best_route` and `best_route_by_raw_pnl` reported in every summary.
+- **Promotion rule for the queue**: no route is `promising_as_tradable` from the primary test file alone. A passing variant must then survive `2026-04-16T18` and `2026-04-16T19` as neighbour holdouts at cost=3/trade. exp28 bakes this in; exp24-27 require a follow-on `exp29_neighbour_sweep_<id>` run that re-uses the passing variant's checkpoint.
+- **Kill-all-five rule**: if every one of exp24-exp28 kills on its own criterion, the next scientist must stop running one-factor sweeps on the current TCN and pivot architecturally (second-stage trigger head, attention trunk, or per-level conv). Tag the exit note `queued_exit_branch: architectural`.
+- **Anti-self-deception note**: all five experiments use `max_windows_per_file=800` (~23 min of replayed data per file). They are screening runs. Any claim of `promising_as_tradable` requires a subsequent uncapped walk-forward on a higher-memory host OR a streamed/float16 training accumulator — see Risks in the exp23 plan.
+- **Exact next action for the bot**: execute `scripts/exp24_smallnet_earlystop.py` (to be authored; template identical to `scripts/exp23_longwindow_2026_btc.py`, inheriting `exp22_trigger_sweep.main` and passing a `TrainConfig` override dict). Block until it produces `experiments/results/exp24_smallnet_earlystop_<ts>.json`, at least 40 `_fixed_*.png` dashboards, and 40 DB rows. Then read the summary and decide pass/kill BEFORE launching exp25.
+- **Full queue handoff doc**: `experiments/notes/exp24_exp28_queue_postexp23_20260418T030000Z.md` (per-experiment hypothesis, pass/kill criteria, expected artifacts, cost estimate, implementation notes).

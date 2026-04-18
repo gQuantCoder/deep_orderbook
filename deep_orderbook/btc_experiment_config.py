@@ -33,7 +33,7 @@ def summarize_dataset_scale(
     test_windows_after_filter: int,
     rolling_window_size: int,
     target_levels: int,
-    max_windows_per_file: int | None,
+    n_samples_per_file: int | None,
 ) -> dict:
     return {
         "train_file_count": len(train_files),
@@ -50,7 +50,7 @@ def summarize_dataset_scale(
         "test_timesteps": test_windows_after_filter * rolling_window_size,
         "train_target_pixels": train_windows_after_filter * rolling_window_size * target_levels,
         "test_target_pixels": test_windows_after_filter * rolling_window_size * target_levels,
-        "max_windows_per_file": max_windows_per_file,
+        "max_windows_per_file": n_samples_per_file,  # artifact key kept for backward compat
     }
 
 

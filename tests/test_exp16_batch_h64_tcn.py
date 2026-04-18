@@ -36,14 +36,14 @@ def test_summarize_dataset_scale_reports_timesteps_and_caps() -> None:
         test_windows_after_filter=16,
         rolling_window_size=256,
         target_levels=8,
-        max_windows_per_file=512,
+        n_samples_per_file=512,
     )
 
     assert summary["train_file_count"] == 2
     assert summary["test_file_count"] == 1
     assert summary["train_timesteps"] == 48 * 256
     assert summary["test_target_pixels"] == 16 * 256 * 8
-    assert summary["max_windows_per_file"] == 512
+    assert summary["max_windows_per_file"] == 512  # dict key is stable for artifact compat
 
 
 

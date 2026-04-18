@@ -14,3 +14,5 @@ checkpoints*
 /1_checkpoints/
 /.cursor
 /experiments/pictures/
+/experiments/notes/
+/experiments/results/

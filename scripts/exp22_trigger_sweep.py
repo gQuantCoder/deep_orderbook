@@ -14,8 +14,13 @@ from deep_orderbook.btc_experiment_config import (
     resolve_train_test_files,
     summarize_dataset_scale,
 )
-from deep_orderbook.btc_search_lab import get_batch_variant
+from deep_orderbook.btc_search_lab import compute_png_quality_stats, get_batch_variant
 from deep_orderbook.experiment_tracking import register_experiment_run
+from deep_orderbook.pipeline_guards import (
+    aggregate_per_window_strategy_result,
+    assert_image_meaningful,
+    select_non_overlapping_indices,
+)
 from deep_orderbook.scientist_experiment import richness_gate
 from deep_orderbook.strategy import Strategy
 from deep_orderbook.strategy_search import evaluate_long_strategy, evaluate_short_strategy
@@ -56,17 +61,13 @@ DEFAULT_VARIANTS = [
 ]
 
 
-def _best_activity_start(true_seq: np.ndarray, horizon: int) -> int:
-    per_t = true_seq.sum(axis=1)
-    if per_t.size <= horizon:
-        return 0
-    kernel = np.ones(horizon, dtype=np.float64)
-    score = np.convolve(per_t, kernel, mode="valid")
-    return int(np.argmax(score))
-
-
 async def main(
-    variants: list[str], train_files: list[Path], test_files: list[Path], label: str, directions: list[str]
+    variants: list[str],
+    train_files: list[Path],
+    test_files: list[Path],
+    label: str,
+    directions: list[str],
+    n_samples_per_file: int | None = None,
 ) -> None:
     ts = datetime.now(UTC)
     stamp = ts.strftime("%Y%m%dT%H%M%SZ")
@@ -85,12 +86,14 @@ async def main(
     test_file = test_files[0]
 
     replay_conf_test, shaper_config, X_test_w, Y_test_w, Px_test_w = await load_file_windows(
-        test_file, "BTC-USD", max_windows=None
+        test_file, "BTC-USD", n_samples=n_samples_per_file
     )
     test_windows_before = len(X_test_w)
     X_train_w, Y_train_w, Px_train_w = [], [], []
     for train_file in train_files:
-        _rc, _sc, Xw, Yw, Pxw = await load_file_windows(train_file, "BTC-USD", max_windows=None)
+        _rc, _sc, Xw, Yw, Pxw = await load_file_windows(
+            train_file, "BTC-USD", n_samples=n_samples_per_file
+        )
         X_train_w.extend(Xw)
         Y_train_w.extend(Yw)
         Px_train_w.extend(Pxw)
@@ -118,17 +121,23 @@ async def main(
         test_windows_after_filter=len(X_test_w),
         rolling_window_size=shaper_config.rolling_window_size,
         target_levels=2 * shaper_config.look_ahead_side_width,
-        max_windows_per_file=None,
+        n_samples_per_file=n_samples_per_file,
     )
     event_filter = {"enabled": True, "top_fraction": 0.35, "train": train_event_summary, "test": test_event_summary}
 
     X_train = np.stack([x.reshape(x.shape[0], -1) for x in X_train_w], axis=0)
     Y_train = np.stack(Y_train_w, axis=0)
-    PX_train = np.stack(Px_train_w, axis=0)
     X_test = np.stack([x.reshape(x.shape[0], -1) for x in X_test_w], axis=0)
     Y_test = np.stack(Y_test_w, axis=0)
     PX_test = np.stack(Px_test_w, axis=0)
     books_test = np.stack(X_test_w, axis=0)
+
+    assert_image_meaningful(shaper_config, replay_conf_test)
+    non_overlap_idx = select_non_overlapping_indices(
+        stride=shaper_config.window_stride,
+        rolling_window=shaper_config.rolling_window_size,
+        n_windows=PX_test.shape[0],
+    )
 
     device = torch.device(choose_training_device(prefer_cuda=True, cuda_available=torch.cuda.is_available()))
     pictures_dir = Path("experiments/pictures")
@@ -197,44 +206,58 @@ async def main(
         rmse_ratio = metrics["rmse"] / max(zero_metrics["rmse"], 1e-9)
 
         train_seq = pred_train.reshape(-1, pred_train.shape[-1])
-        true_seq = Y_test.reshape(-1, Y_test.shape[-1])
-        pred_seq = pred_test.reshape(-1, pred_test.shape[-1])
-        px_seq = PX_test.reshape(-1, PX_test.shape[-1])
-        books_seq = books_test.reshape(-1, books_test.shape[-2], books_test.shape[-1])
+        PX_test_nov = PX_test[non_overlap_idx]
+        Y_test_nov = Y_test[non_overlap_idx]
+        pred_test_nov = pred_test[non_overlap_idx]
+        books_test_nov = books_test[non_overlap_idx]
+
         gt_strategy = Strategy(threshold=0.2)
-        gt_pnl, gt_pos, _, _ = gt_strategy.compute_pnl(px_seq, true_seq[..., None])
 
         strategy_grid = build_train_calibrated_strategy_grid(train_seq)
         for direction in directions:
             strategy_fn = evaluate_long_strategy if direction == "long" else evaluate_short_strategy
             for strat_cfg in strategy_grid:
-                route = strategy_fn(
-                    px_seq,
-                    pred_seq,
-                    **{
-                        k: strat_cfg[k]
-                        for k in ["entry_threshold", "exit_threshold", "side_margin", "persistence", "cooldown", "max_hold"]
-                    },
+                strat_kwargs = {
+                    k: strat_cfg[k]
+                    for k in ["entry_threshold", "exit_threshold", "side_margin", "persistence", "cooldown", "max_hold"]
+                }
+                route = aggregate_per_window_strategy_result(
+                    PX_test_nov, pred_test_nov, strategy_fn, **strat_kwargs
                 )
-                horizon = min(520, true_seq.shape[0])
-                fixed_start = 0
-                best_start = _best_activity_start(true_seq, horizon)
 
-                def slice_eval(start: int):
-                    end = start + horizon
+                per_window_activity = Y_test_nov.sum(axis=(1, 2))
+                fixed_win_local = 0
+                best_win_local = int(np.argmax(per_window_activity)) if per_window_activity.size else 0
+
+                def _slice_eval(
+                    win_local: int,
+                    px_all=PX_test_nov,
+                    books_all=books_test_nov,
+                    y_all=Y_test_nov,
+                    pred_all=pred_test_nov,
+                    _strategy_fn=strategy_fn,
+                    _gt_strategy=gt_strategy,
+                    _strat_kwargs=strat_kwargs,
+                ):
+                    px = px_all[win_local]
+                    bk = books_all[win_local]
+                    yt = y_all[win_local]
+                    yp = pred_all[win_local]
+                    gt_pnl_w, gt_pos_w, _, _ = _gt_strategy.compute_pnl(px, yt[..., None])
+                    pred_route_w = _strategy_fn(px, yp, **_strat_kwargs)
                     return {
-                        "prices": px_seq[start:end],
-                        "books": books_seq[start:end],
-                        "true": true_seq[start:end],
-                        "pred": pred_seq[start:end],
-                        "gt_pnl": gt_pnl[start:end],
-                        "gt_pos": gt_pos[start:end],
-                        "pred_pnl": route["pnl"][start:end],
-                        "pred_pos": route["positions"][start:end],
+                        "prices": px,
+                        "books": bk,
+                        "true": yt,
+                        "pred": yp,
+                        "gt_pnl": gt_pnl_w,
+                        "gt_pos": gt_pos_w,
+                        "pred_pnl": np.asarray(pred_route_w["pnl"]),
+                        "pred_pos": np.asarray(pred_route_w["positions"]),
                     }
 
-                fixed = slice_eval(fixed_start)
-                best = slice_eval(best_start)
+                fixed = _slice_eval(fixed_win_local)
+                best = _slice_eval(best_win_local)
                 route_name = f"{variant_name}__{direction}__{strat_cfg['name']}"
                 fixed_png = pictures_dir / f"{label}_{route_name}_fixed_{stamp}.png"
                 best_png = pictures_dir / f"{label}_{route_name}_best_{stamp}.png"
@@ -266,7 +289,10 @@ async def main(
                     best["pred_pos"],
                     f"{route_name} best slice",
                 )
-                image_quality = {"usable": True, "reason": "ok"}
+                try:
+                    image_quality = compute_png_quality_stats(fixed_png)
+                except (OSError, ValueError) as exc:
+                    image_quality = {"usable": False, "reason": f"qc_error:{type(exc).__name__}"}
                 final_pnl = float(route["final_pnl"])
                 trade_count = int(route["trade_count"])
                 route_score = score_strategy_result(
@@ -299,11 +325,16 @@ async def main(
                         "trade_count": trade_count,
                         "avg_hold_steps": route["avg_hold_steps"],
                         "market_time_fraction": route["market_time_fraction"],
-                        "fixed_slice_pnl": float(fixed["pred_pnl"][-1]),
-                        "best_slice_pnl": float(best["pred_pnl"][-1]),
-                        "omniscient_fixed_pnl": float(fixed["gt_pnl"][-1]),
-                        "omniscient_best_pnl": float(best["gt_pnl"][-1]),
+                        "fixed_slice_pnl": float(fixed["pred_pnl"][-1]) if len(fixed["pred_pnl"]) else 0.0,
+                        "best_slice_pnl": float(best["pred_pnl"][-1]) if len(best["pred_pnl"]) else 0.0,
+                        "omniscient_fixed_pnl": float(fixed["gt_pnl"][-1]) if len(fixed["gt_pnl"]) else 0.0,
+                        "omniscient_best_pnl": float(best["gt_pnl"][-1]) if len(best["gt_pnl"]) else 0.0,
+                        "aggregation": route.get("aggregation"),
+                        "n_windows_backtested": route.get("n_windows"),
+                        "per_window_final_pnl": route.get("per_window_final_pnl"),
                     },
+                    "image_quality": image_quality,
+                    "shaper_config": shaper_config.model_dump(),
                     "artifacts": {
                         "precheck_png": str(precheck_path),
                         "dashboard_fixed_png": str(fixed_png),
@@ -441,9 +472,21 @@ if __name__ == "__main__":
     parser.add_argument("--train-files", nargs="*", default=DEFAULT_TRAIN_FILES)
     parser.add_argument("--test-files", nargs="*", default=DEFAULT_TEST_FILES)
     parser.add_argument("--directions", nargs="*", default=["long"], choices=["long", "short"])
+    parser.add_argument(
+        "--n-samples-per-file",
+        type=int,
+        default=None,
+        dest="n_samples_per_file",
+        help="Max rolling-frame samples per parquet file (memory cap for rolling=2048 runs). Default: unlimited.",
+    )
     args = parser.parse_args()
     asyncio.run(
         main(
-            args.variants, [Path(p) for p in args.train_files], [Path(p) for p in args.test_files], args.label, args.directions
+            args.variants,
+            [Path(p) for p in args.train_files],
+            [Path(p) for p in args.test_files],
+            args.label,
+            args.directions,
+            n_samples_per_file=args.n_samples_per_file,
         )
     )

@@ -1157,3 +1157,75 @@ Keep the event-filtered dataset fixed and mutate only trigger extraction / execu
 2. side-aware trigger extraction
 3. threshold sweep around the better balanced routes (`regonly_wd1e3`, `regonly_huber_thr010`, `l1_evt005_pw2_h64`)
 4. regime-split confirmation of `regonly_activew3` before trusting its positive PnL
+
+## 2026-04-17 - exp23_longwindow_2026_btc - honest trigger loop baseline on 2026 data
+
+### Context
+
+Introduces an executable sanity layer in `deep_orderbook/pipeline_guards.py` and makes every experiment script call it. Fixes a numerically dishonest PnL path in the trigger sweep: exp22 was flattening overlapping rolling windows with `reshape(-1, ...)` and feeding the resulting ghost timeline (each real timestep appearing `rolling_window_size / window_stride = 256` times, with synthetic jumps at every seam) to the strategy backtester. All exp22/exp34 PnL magnitudes up to this point should be treated as `deprecated_overlapping_pnl=True` and NOT compared directly to exp23 numbers.
+
+Simultaneously lengthens the image geometry from `rolling=256, look_ahead=64` (25.6 s context at 100 ms cadence, 4x context/horizon ratio) to `rolling=2048, look_ahead=128` (204.8 s context, 16x ratio). The new geometry is now the default in `scripts/exp16_batch_h64_tcn.DEFAULT_SHAPER_CONFIG_2026` and is enforced at load time by `assert_image_meaningful` (`rolling * dt >= 60 s` AND `rolling >= 8 * look_ahead`).
+
+Data source: `/mnt/data/repos/gaelreinaudi/crypto/` (fresh 2026-04 BTC-USD recordings). Training on 2026-04-15T14/15/16; walk-forward test on 2026-04-16T17.
+
+### Result (recalibrated honest baseline, rolling=2048 / look_ahead=128, per-window PnL)
+
+4 TCN variants, 10 trigger routes each, 40 artifacts total, `rmse_ratio` in [0.9949, 1.0049].
+
+| Rank | Variant | Strategy | Precision | F1 | RMSE ratio | Final PnL | Trades | PnL/trade |
+|---|---|---|---|---|---|---|---|---|
+| best by score | regonly_huber_thr010 | q90_p2_hold48 | 0.3320 | 0.4951 | 1.0049 | 62.54 | 23 | 2.72 |
+| best by raw PnL | precision_evt005_pw2_thr010 | q80_p2_hold48 | 0.3340 | 0.4977 | 0.9949 | 88.80 | 45 | 1.97 |
+
+Full 40-row table lives in `experiments/results/exp23_longwindow_2026_btc_20260418T024330Z.json`.
+
+### What is different vs prior event-filtered suite lab log
+
+- RMSE ratios cluster at ~1.00 for the first time under an honest backtest. Before, exp22-era numbers were already near the zero baseline but the PnL was computed on a ghost timeline, so the low RMSE was honest while the PnL sign was potentially fake.
+- Precision jumped from the 0.10-0.20 range of earlier BTC event-filtered runs to 0.33-0.39. The 16x longer context window is the most plausible cause: the TCN now sees 204.8 s of pre-event microstructure instead of 25.6 s.
+- Each test-side backtest now runs on exactly 2 non-overlapping 2048-step windows (picked via `select_non_overlapping_indices(stride=8, rolling=2048, n_windows=280)`), which means PnL magnitudes here are NOT comparable in absolute units to older overlapping-stack numbers.
+
+### What still blocks deployment
+
+- Only 2 non-overlapping test windows per variant. A positive PnL on 2 windows is a recalibrated baseline, not yet a pattern.
+- Per-file window cap of 800 (to stay under 32 GB RAM at rolling=2048). Full-hour walk-forward runs need either a higher-memory host or a streamed / float16 training accumulator (see Risks in the plan).
+- No friction kill-test yet on the new honest numbers.
+
+### Decision
+
+- Keep the new `rolling=2048 / look_ahead=128` geometry and `pipeline_guards` in the permanent research palette.
+- Treat exp23 as the new recalibrated baseline; do NOT promote any variant to tradable from it alone.
+- Freeze the 4 variants and trigger grid; only vary the holdout.
+
+### Next mutation
+
+Run exp23 unchanged on the two neighbouring holdouts `2026-04-16T18` and `2026-04-16T19`. Rank routes by friction-adjusted `pnl_per_trade` at fixed costs 1 / 2 / 5 / 10 units per trade. Only if the same variant wins on BOTH neighbours after friction do we accept it as a real candidate and go back to varying mapper knobs.
+
+## 2026-04-18 - post-exp23 analysis and queued mutations exp24..exp28
+
+### Analysis performed (not a new training run)
+
+Deep analysis of the exp23 artifacts (`experiments/results/exp23_longwindow_2026_btc_20260418T024330Z.json` + 40 per-route children, the `_fixed_*.png` dashboards for the top two routes, and the consolidated overview `experiments/pictures/exp23_deepanalysis_overview_20260418T024330Z.png`).
+
+### Findings
+
+- All 4 mapper variants overfit from epoch 1: training loss monotonically down, test loss monotonically up across 6 epochs. `rmse_ratio` clusters at 0.995-1.005 (at or WORSE than the zero-baseline on the test set).
+- Eyeball verdict on the prediction heatmap: the model learns `where` intensity lives on the price axis, but NOT `when`. Predictions are a low-frequency smear of a visibly structured target map.
+- Order-book pathology: `Books` panels show mass only at rows 0 and 15 (the far-edge bins); the inner 14 rows are empty. Most liquidity lives within +-1 bp and is being aliased into the edges by `view_bips=5 / num_side_lvl=8`.
+- Friction kill-test on the exp23 top-6 routes: all cross zero between cost=1 and cost=2 per trade; all negative by cost=3; all below -100 at cost=10.
+- Conclusion: exp23 did NOT find a tradable pattern. It established an honest recalibrated baseline and surfaced four candidate blockers.
+
+### Queued next mutations (single-factor, in execution order)
+
+1. `exp24_smallnet_earlystop` — TrainConfig only: epochs 6->2, hidden 64->32, dropout 0->0.2, weight_decay->1e-3. Directly targets the overfit.
+2. `exp25_timing_500ms` — ReplayConfig cadence 100ms -> 500ms with compensated rolling=512 / la=32. Tests whether 100 ms is oversampled.
+3. `exp26_horizon_la32` — ShaperConfig look_ahead 128 -> 32 (+`allow_microburst=True`). Tests whether the model can learn `when` at short horizon.
+4. `exp27_binning_fine` — ShaperConfig view_bips 5->2 and num_side_lvl 8->16. Tests whether book-edge aliasing was the real bottleneck.
+5. `exp28_loss_structured` — TrainConfig criterion Huber -> StructuredT2L with rank+monotonic terms. Tests whether the map is a rank problem rather than a magnitude one. This one bakes in the neighbour-holdout promotion step.
+
+Each has explicit hypothesis, pass-criteria, kill-criteria, required artifacts, and cost estimate in `experiments/notes/exp24_exp28_queue_postexp23_20260418T030000Z.md`. Each obeys the SKILL's locked-in guards: `pipeline_guards`, per-window PnL, non-overlapping dashboards, friction kill-test, direction reported, both best-by-score and best-by-raw-PnL reported, richness-gate first on the primary test file.
+
+### Decision for the queue
+
+Execute exp24 first and block until done. Inherit its training config into exp25-exp28 only if exp24 passes. If all five kill, tag `queued_exit_branch: architectural` and stop sweeping the TCN with one-factor mutations; next scientist should change the architecture (second-stage trigger head, attention trunk, or per-level conv) rather than keep running loss/geometry tweaks on an overfit model.
+

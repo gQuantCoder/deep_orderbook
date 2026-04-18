@@ -26,9 +26,24 @@ from deep_orderbook.btc_search_lab import (
 from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.event_selection import rank_eventful_windows, select_eventful_window_indices
 from deep_orderbook.experiment_tracking import register_experiment_run
+from deep_orderbook.pipeline_guards import assert_image_meaningful
 from deep_orderbook.scientist_experiment import apply_prediction_cap, choose_walkforward_parquets, richness_gate
 from deep_orderbook.shaper import iter_shapes_t2l
 from deep_orderbook.strategy import Strategy
+
+
+DEFAULT_SHAPER_CONFIG_2026 = ShaperConfig(
+    only_full_arrays=True,
+    view_bips=5,
+    num_side_lvl=8,
+    look_ahead=128,
+    look_ahead_side_bips=5,
+    look_ahead_side_width=4,
+    rolling_window_size=2048,
+    window_stride=8,
+    use_cache=True,
+    save_cache=True,
+)
 
 
 class CausalConv1d(nn.Module):
@@ -113,38 +128,44 @@ def _entries_exits(positions: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 async def load_file_windows(
     one_path: Path,
     market: str,
-    max_windows: int | None = 48,
+    n_samples: int | None = 48,
     *,
     use_cache: bool = True,
     save_cache: bool = True,
+    shaper_config: ShaperConfig | None = None,
+    every: str = "100ms",
+    allow_microburst: bool = False,
 ):
+    """Shape a single parquet file into rolling-frame samples (books, t2l, prices).
+
+    ``n_samples`` caps how many frames are returned (memory guard for large files).
+    ``None`` means take all frames.  The underlying cache is always populated on
+    first pass regardless of the cap — subsequent calls load instantly from .npz.
+
+    Default geometry: ``DEFAULT_SHAPER_CONFIG_2026`` (rolling=2048, look_ahead=128).
+    Pass a custom ``shaper_config`` or set ``allow_microburst=True`` for shorter windows.
+    """
+    if shaper_config is None:
+        shaper_config = DEFAULT_SHAPER_CONFIG_2026.but(use_cache=use_cache, save_cache=save_cache)
+    else:
+        shaper_config = shaper_config.but(use_cache=use_cache, save_cache=save_cache)
+
     replay_conf = ReplayConfig(
         markets=[market],
         one_path=one_path,
         data_dir=one_path.parent,
         date_regexp=one_path.stem,
         max_samples=-1,
-        every="100ms",
+        every=every,
     )
-    shaper_config = ShaperConfig(
-        only_full_arrays=True,
-        view_bips=5,
-        num_side_lvl=8,
-        look_ahead=64,
-        look_ahead_side_bips=5,
-        look_ahead_side_width=4,
-        rolling_window_size=256,
-        window_stride=8,
-        use_cache=use_cache,
-        save_cache=save_cache,
-    )
+    assert_image_meaningful(shaper_config, replay_conf, allow_microburst=allow_microburst)
 
     Xw, Yw, Pxw = [], [], []
     async for books_array, level_prox, pxar in iter_shapes_t2l(replay_conf, shaper_config, live=False):
         Xw.append(books_array.astype(np.float32))
         Yw.append(level_prox[:, :, 0].astype(np.float32))
         Pxw.append(pxar.astype(np.float32))
-        if max_windows is not None and len(Xw) >= max_windows:
+        if n_samples is not None and len(Xw) >= n_samples:
             break
     return replay_conf, shaper_config, Xw, Yw, Pxw
 
@@ -497,7 +518,7 @@ async def main(
     eventful_top_fraction: float | None = None,
     min_train_windows: int = 24,
     min_test_windows: int = 12,
-    max_windows_per_file: int | None = 48,
+    n_samples_per_file: int | None = 48,
     explicit_train_files: list[Path] | None = None,
     explicit_test_files: list[Path] | None = None,
     prefer_cuda: bool = True,
@@ -519,7 +540,7 @@ async def main(
     )
     test_file = test_files[0]
 
-    replay_conf_test, shaper_config, X_test_w, Y_test_w, Px_test_w = await load_file_windows(test_file, "BTC-USD", max_windows=max_windows_per_file)
+    replay_conf_test, shaper_config, X_test_w, Y_test_w, Px_test_w = await load_file_windows(test_file, "BTC-USD", n_samples=n_samples_per_file)
     test_windows_before_filter = len(X_test_w)
     if len(X_test_w) < min_test_windows:
         raise RuntimeError(f"Too few test windows loaded from {test_file}: {len(X_test_w)}")
@@ -546,7 +567,7 @@ async def main(
     older_candidates = list(reversed(all_files[: max(0, len(all_files) - 4)]))
     expanded_with: list[str] = []
     for train_file in train_file_pool:
-        _rc, _sc, Xw, Yw, Pxw = await load_file_windows(train_file, "BTC-USD", max_windows=max_windows_per_file)
+        _rc, _sc, Xw, Yw, Pxw = await load_file_windows(train_file, "BTC-USD", n_samples=n_samples_per_file)
         X_train_w.extend(Xw)
         Y_train_w.extend(Yw)
         Px_train_w.extend(Pxw)
@@ -564,7 +585,7 @@ async def main(
             extra_file = older_candidates.pop(0)
             train_file_pool.insert(0, extra_file)
             expanded_with.append(extra_file.name)
-            _rc, _sc, Xw, Yw, Pxw = await load_file_windows(extra_file, "BTC-USD", max_windows=max_windows_per_file)
+            _rc, _sc, Xw, Yw, Pxw = await load_file_windows(extra_file, "BTC-USD", n_samples=n_samples_per_file)
             X_train_w.extend(Xw)
             Y_train_w.extend(Yw)
             Px_train_w.extend(Pxw)
@@ -604,7 +625,7 @@ async def main(
         test_windows_after_filter=test_windows_after_filter,
         rolling_window_size=shaper_config.rolling_window_size,
         target_levels=2 * shaper_config.look_ahead_side_width,
-        max_windows_per_file=max_windows_per_file,
+        n_samples_per_file=n_samples_per_file,
     )
     device = torch.device(choose_training_device(prefer_cuda=prefer_cuda, cuda_available=torch.cuda.is_available()))
 
@@ -721,12 +742,12 @@ if __name__ == "__main__":
     parser.add_argument("--eventful-top-fraction", type=float, default=None, help="keep only the most eventful windows by realized move/activity score")
     parser.add_argument("--min-train-windows", type=int, default=24, help="minimum train windows after filtering")
     parser.add_argument("--min-test-windows", type=int, default=12, help="minimum test windows after filtering")
-    parser.add_argument("--max-windows-per-file", type=int, default=48, help="cap windows loaded per parquet file; use 0 for no cap")
+    parser.add_argument("--n-samples-per-file", type=int, default=48, dest="n_samples_per_file", help="max rolling-frame samples per parquet file; 0 = unlimited")
     parser.add_argument("--train-files", nargs="*", default=None, help="explicit train parquet file paths")
     parser.add_argument("--test-files", nargs="*", default=None, help="explicit test parquet file paths")
     parser.add_argument("--cpu", action="store_true", help="force CPU even if CUDA is available")
     args = parser.parse_args()
-    max_windows = None if args.max_windows_per_file == 0 else args.max_windows_per_file
+    n_samples = None if args.n_samples_per_file == 0 else args.n_samples_per_file
     train_files = [Path(p) for p in args.train_files] if args.train_files else None
     test_files = [Path(p) for p in args.test_files] if args.test_files else None
     asyncio.run(
@@ -736,7 +757,7 @@ if __name__ == "__main__":
             eventful_top_fraction=args.eventful_top_fraction,
             min_train_windows=args.min_train_windows,
             min_test_windows=args.min_test_windows,
-            max_windows_per_file=max_windows,
+            n_samples_per_file=n_samples,
             explicit_train_files=train_files,
             explicit_test_files=test_files,
             prefer_cuda=not args.cpu,
