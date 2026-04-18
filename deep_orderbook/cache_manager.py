@@ -103,15 +103,15 @@ class ArrayCache:
         cache_subdir.mkdir(parents=True, exist_ok=True)
 
         cache_name = f"{data_file.stem}.npz"
-        logger.info(f"Getting cache path for {data_file}: {cache_subdir}/{cache_name}")
+        logger.debug(f"Getting cache path for {data_file}: {cache_subdir}/{cache_name}")
         return cache_subdir / cache_name
 
     def load_cached(
         self, data_file: Path, shaper_config: ShaperConfig, replay_config: ReplayConfig
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
-        """Load cached arrays if they exist"""
+        """Load cached arrays if they exist. Returns None on miss or corrupt file."""
         cache_path = self._get_cache_path(data_file, shaper_config, replay_config)
-        logger.info(f"Loading cached arrays from {cache_path}")
+        logger.debug(f"Looking for cached arrays in {cache_path}")
         if not cache_path.exists():
             return None
 
@@ -120,10 +120,10 @@ class ArrayCache:
                 books_array = data["books_array"]
                 time_levels = data["time_levels"]
                 prices_array = data["prices_array"]
-            logger.debug(f"Loaded cached arrays of length {len(books_array)} from {cache_path}")
+            logger.debug(f"Cache hit: {len(books_array)} ticks from {cache_path}")
             return books_array, time_levels, prices_array
         except Exception as e:
-            print(f"Error loading cache: {e}")
+            logger.warning(f"Corrupt cache file {cache_path}, will rebuild: {e}")
             return None
 
     def save_to_cache(
@@ -154,44 +154,32 @@ class ArrayCache:
         all_prices: list[np.ndarray],
         shaper: "ArrayShaper",
     ) -> None:
-        """Cache a complete set of arrays for a file, computing time_levels at the end."""
-        if len(all_books) == 0:
+        """Cache a complete set of arrays for a file, computing time_levels over the full file."""
+        if not all_books:
             return
 
-        try:
-            full_books_array = np.stack(all_books)
-            full_prices_array = np.stack(all_prices)
+        full_books_array = np.stack(all_books)
+        full_prices_array = np.stack(all_prices)
+        shaper.prices_array = full_prices_array
+        full_time_levels = await shaper.build_time_level_trade()
+        self.save_to_cache(data_file, shaper_config, replay_config, full_books_array, full_time_levels, full_prices_array)
 
-            # Compute time_levels for the entire array at once
-            shaper.prices_array = full_prices_array
-            full_time_levels = await shaper.build_time_level_trade()
+    def clear_cache(self, older_than_days: int | None = None) -> int:
+        """Delete cached .npz files. Returns the number of files removed.
 
-            self.save_to_cache(
-                data_file,
-                shaper_config,
-                replay_config,
-                full_books_array,
-                full_time_levels,
-                full_prices_array,
-            )
-            logger.info(f"Successfully cached {len(full_books_array)} timesteps from {data_file}")
-        except Exception as e:
-            logger.error(f"Failed to cache data for {data_file}: {e}")
+        If ``older_than_days`` is given, only files older than that many days are removed.
+        Otherwise all .npz files under the cache directory are removed.
+        """
+        import time as _time
 
-    # def clear_cache(self, older_than_days: Optional[int] = None) -> None:
-    #     """Clear old cache files"""
-    #     if older_than_days is not None:
-    #         import time
-
-    #         current_time = time.time()
-    #         for cache_file in self.cache_dir.glob("*.npz"):
-    #             if (current_time - cache_file.stat().st_mtime) > (
-    #                 older_than_days * 86400
-    #             ):
-    #                 cache_file.unlink()
-    #     else:
-    #         for cache_file in self.cache_dir.glob("*.npz"):
-    #             cache_file.unlink()
+        cutoff = _time.time() - older_than_days * 86400 if older_than_days is not None else None
+        removed = 0
+        for cache_file in self.cache_dir.rglob("*.npz"):
+            if cutoff is None or cache_file.stat().st_mtime < cutoff:
+                cache_file.unlink()
+                removed += 1
+        logger.info(f"Cleared {removed} cache files from {self.cache_dir}")
+        return removed
 
 
 async def cache_manager_main() -> None:
