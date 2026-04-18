@@ -58,19 +58,20 @@ class CausalConv1d(nn.Module):
 
 
 class TinyTCN(nn.Module):
-    def __init__(self, in_ch: int = 48, hid: int = 96, out_ch: int = 8):
+    def __init__(self, in_ch: int = 48, hid: int = 96, out_ch: int = 8, trunk_dropout: float = 0.0):
         super().__init__()
         self.b1 = nn.Sequential(CausalConv1d(in_ch, hid, 3, 1), nn.GELU())
         self.b2 = nn.Sequential(CausalConv1d(hid, hid, 3, 2), nn.GELU())
         self.b3 = nn.Sequential(CausalConv1d(hid, hid, 3, 4), nn.GELU())
+        self.trunk_dropout = nn.Dropout(trunk_dropout)
         self.reg_head = CausalConv1d(hid, out_ch, 1, 1)
         self.cls_head = CausalConv1d(hid, out_ch, 1, 1)
 
     def forward(self, x_bt_f: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         x = x_bt_f.transpose(1, 2)
-        h = self.b1(x)
-        h = h + self.b2(h)
-        h = h + self.b3(h)
+        h = self.trunk_dropout(self.b1(x))
+        h = h + self.trunk_dropout(self.b2(h))
+        h = h + self.trunk_dropout(self.b3(h))
         reg_raw = self.reg_head(h).transpose(1, 2)
         cls_logits = self.cls_head(h).transpose(1, 2)
         reg = F.softplus(reg_raw)

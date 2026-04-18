@@ -24,6 +24,7 @@ dependencies = [
     "pydantic-settings>=2",
     "rich>=13",
     "tqdm>=4.66",
+    "loguru",
 ]
 
 [project.optional-dependencies]

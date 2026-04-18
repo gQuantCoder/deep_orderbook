@@ -19,6 +19,7 @@ from deep_orderbook.experiment_tracking import register_experiment_run
 from deep_orderbook.pipeline_guards import (
     aggregate_per_window_strategy_result,
     assert_image_meaningful,
+    dt_seconds_from_every,
     select_non_overlapping_indices,
 )
 from deep_orderbook.scientist_experiment import richness_gate
@@ -68,6 +69,10 @@ async def main(
     label: str,
     directions: list[str],
     n_samples_per_file: int | None = None,
+    *,
+    load_every: str = "100ms",
+    shaper_config_override=None,
+    allow_microburst: bool = False,
 ) -> None:
     ts = datetime.now(UTC)
     stamp = ts.strftime("%Y%m%dT%H%M%SZ")
@@ -86,13 +91,23 @@ async def main(
     test_file = test_files[0]
 
     replay_conf_test, shaper_config, X_test_w, Y_test_w, Px_test_w = await load_file_windows(
-        test_file, "BTC-USD", n_samples=n_samples_per_file
+        test_file,
+        "BTC-USD",
+        n_samples=n_samples_per_file,
+        shaper_config=shaper_config_override,
+        every=load_every,
+        allow_microburst=allow_microburst,
     )
     test_windows_before = len(X_test_w)
     X_train_w, Y_train_w, Px_train_w = [], [], []
     for train_file in train_files:
         _rc, _sc, Xw, Yw, Pxw = await load_file_windows(
-            train_file, "BTC-USD", n_samples=n_samples_per_file
+            train_file,
+            "BTC-USD",
+            n_samples=n_samples_per_file,
+            shaper_config=shaper_config_override,
+            every=load_every,
+            allow_microburst=allow_microburst,
         )
         X_train_w.extend(Xw)
         Y_train_w.extend(Yw)
@@ -156,7 +171,12 @@ async def main(
         X_train_n = (X_train - mu) / sd
         X_test_n = (X_test - mu) / sd
 
-        model = TinyTCN(in_ch=X_train_n.shape[-1], hid=cfg["hidden_dim"], out_ch=Y_train.shape[-1]).to(device)
+        model = TinyTCN(
+            in_ch=X_train_n.shape[-1],
+            hid=cfg["hidden_dim"],
+            out_ch=Y_train.shape[-1],
+            trunk_dropout=cfg.get("trunk_dropout", 0.0),
+        ).to(device)
         opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
         bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(cfg["pos_weight"], device=device))
         xtr = torch.from_numpy(X_train_n).to(device)
@@ -221,9 +241,7 @@ async def main(
                     k: strat_cfg[k]
                     for k in ["entry_threshold", "exit_threshold", "side_margin", "persistence", "cooldown", "max_hold"]
                 }
-                route = aggregate_per_window_strategy_result(
-                    PX_test_nov, pred_test_nov, strategy_fn, **strat_kwargs
-                )
+                route = aggregate_per_window_strategy_result(PX_test_nov, pred_test_nov, strategy_fn, **strat_kwargs)
 
                 per_window_activity = Y_test_nov.sum(axis=(1, 2))
                 fixed_win_local = 0
@@ -371,8 +389,8 @@ async def main(
                     timestamp_utc=timestamp_utc,
                     git_commit=git_commit,
                     symbol="BTC-USD",
-                    cadence="100ms",
-                    look_ahead=int(pred_test.shape[-1]),
+                    cadence=load_every,
+                    look_ahead=int(shaper_config.look_ahead),
                     model=variant_name,
                     result_json_path=result_path,
                     picture_path=fixed_png,
@@ -411,6 +429,9 @@ async def main(
         "test_file": str(test_file),
         "data_scale": data_scale,
         "event_filter": event_filter,
+        "cadence": load_every,
+        "dt_seconds_from_every": dt_seconds_from_every(load_every),
+        "shaper_config": shaper_config.model_dump(),
         "route_count": len(all_routes),
         "ranked_routes": ranked,
         "best_route": {

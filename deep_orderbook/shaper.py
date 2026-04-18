@@ -1,7 +1,6 @@
 import asyncio
 import random
-from collections.abc import AsyncGenerator, Iterator
-from typing import cast
+from collections.abc import AsyncGenerator
 
 import numpy as np
 import polars as pl
@@ -9,7 +8,7 @@ import polars as pl
 import deep_orderbook.marketdata as md
 from deep_orderbook.cache_manager import ArrayCache
 from deep_orderbook.config import ReplayConfig, ShaperConfig
-from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed, CoinbaseMessage
+from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
 from deep_orderbook.replayer import ParquetReplayer
 from deep_orderbook.utils import logger
 
@@ -278,7 +277,7 @@ async def iter_shapes_t2l(
     try:
         async with CoinbaseFeed(
             config=replay_config,
-            replayer=(cast(Iterator[CoinbaseMessage], replayer) if replayer is not None else None),
+            replayer=replayer,
         ) as feed:
             if replayer is not None:
                 replayer.skip_n_files(current_file_idx)
@@ -318,25 +317,35 @@ async def iter_shapes_t2l(
             await collector.cache_arrays(shaper_config, shaper, replay_config)
 
 
-async def main() -> None:
-    import pyinstrument
+# =============================================================================
+# CLI for testing: this makes local testing and debugging fast and easy
+# =============================================================================
+if __name__ == "__main__":  # pragma: no cover
 
-    replay_config = ReplayConfig(
-        date_regexp="2024-08-06*",
-        # max_samples=300,
-    )
-    shaper_config = ShaperConfig(window_stride=1)
+    async def main() -> None:
+        from pathlib import Path
 
-    profiler = pyinstrument.Profiler()
-    with profiler:
-        async for books_array, time_levels, pxar in iter_shapes_t2l(
-            replay_config=replay_config,
-            shaper_config=shaper_config,
-            # live=True,
-        ):
-            print(f"{books_array.shape=}, {time_levels.shape=}, {pxar.shape=}")
-    # profiler.open_in_browser()
+        import matplotlib.pyplot as plt
 
+        replay_config = ReplayConfig(
+            markets=["ETH-USD"],
+            date_regexp="2024-08-06*",
+            # max_samples=300,
+        )
+        shaper_config = ShaperConfig(window_stride=1, only_full_arrays=True)
+        out_path = Path("tests/shaper_main_preview.png")
 
-if __name__ == "__main__":
+        books_array, *_ = await iter_shapes_t2l(replay_config, shaper_config).__anext__()
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        books_show = books_array[:, :, 0].T
+        lim = max(float(np.percentile(np.abs(books_show), 99.0)), 1e-6)
+        ax.imshow(books_show, aspect="auto", origin="lower", cmap="RdBu_r", vmin=-lim, vmax=lim)
+        ax.set_title(f"books ch0 — {shaper_config.rolling_window_size}-step warm window")
+        fig.tight_layout()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_path, dpi=170)
+        plt.close(fig)
+        print(f"Wrote {out_path.resolve()}")
+
     asyncio.run(main())

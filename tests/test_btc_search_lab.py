@@ -6,6 +6,7 @@ import numpy as np
 
 from deep_orderbook.btc_search_lab import (
     compute_png_quality_stats,
+    get_batch_variant,
     list_batch_variant_names,
     list_event_filtered_suite_25,
     rank_variant_results,
@@ -45,6 +46,24 @@ def test_batch_variant_registry_has_expected_size() -> None:
     assert set(suite).issubset(set(names))
     assert "l1_evt005_pw2_thr006" in suite
     assert "regonly_huber_thr014" in suite
+
+
+def test_exp24_smallnet_variants_are_registered_with_expected_training_knobs() -> None:
+    for name in [
+        "l1_evt005_pw2_h32",
+        "precision_evt005_pw2_thr010_h32",
+        "regonly_wd1e3_h32",
+        "regonly_huber_thr010_h32",
+    ]:
+        cfg = get_batch_variant(name)
+        assert cfg["hidden_dim"] == 32
+        assert cfg["epochs"] == 2
+        assert cfg["trunk_dropout"] == 0.2
+
+    assert get_batch_variant("regonly_wd1e3_h32")["weight_decay"] == 1e-3
+    assert get_batch_variant("l1_evt005_pw2_h32")["weight_decay"] == 1e-3
+    assert get_batch_variant("precision_evt005_pw2_thr010_h32")["weight_decay"] == 1e-3
+    assert get_batch_variant("regonly_huber_thr010_h32")["weight_decay"] == 1e-3
 
 
 def test_compute_png_quality_stats_flags_usable_nonflat_image(tmp_path: Path) -> None:

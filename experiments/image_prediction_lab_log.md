@@ -1229,3 +1229,220 @@ Each has explicit hypothesis, pass-criteria, kill-criteria, required artifacts, 
 
 Execute exp24 first and block until done. Inherit its training config into exp25-exp28 only if exp24 passes. If all five kill, tag `queued_exit_branch: architectural` and stop sweeping the TCN with one-factor mutations; next scientist should change the architecture (second-stage trigger head, attention trunk, or per-level conv) rather than keep running loss/geometry tweaks on an overfit model.
 
+## 2026-04-18 - exp24_smallnet_earlystop - smaller net / early stop follow-on
+
+### Context
+
+This was the first queued post-exp23 mutation from `experiments/notes/exp24_exp28_queue_postexp23_20260418T030000Z.md`, run on the same honest 2026 BTC walk-forward slice after implementing the missing wrapper `scripts/exp24_smallnet_earlystop.py` and the minimal code support it needed:
+- new h32 variants in `deep_orderbook.btc_search_lab`
+- `TinyTCN(..., trunk_dropout=...)` support in `scripts/exp16_batch_h64_tcn.py`
+- `scripts/exp22_trigger_sweep.py` passing `cfg.get("trunk_dropout", 0.0)` into the model
+
+Sanity check before implementation was done with failing tests first, then green:
+- `tests/test_btc_search_lab.py`
+- `tests/test_exp24_smallnet.py`
+- command: `pytest tests/test_btc_search_lab.py tests/test_exp24_smallnet.py -q`
+
+### Exact mutation
+
+Compared with exp23 baseline:
+- hidden dim: 64/96 family -> 32 for all queued exp24 variants
+- epochs: 6 -> 2
+- trunk dropout: 0.0 -> 0.2
+- weight decay: -> 1e-3
+
+Variants run:
+- `l1_evt005_pw2_h32`
+- `precision_evt005_pw2_thr010_h32`
+- `regonly_wd1e3_h32`
+- `regonly_huber_thr010_h32`
+
+Everything else stayed fixed:
+- same train/test files (`2026-04-15T14/15/16` train, `2026-04-16T17` test)
+- same honest long-window geometry (`rolling=2048`, `look_ahead=128`, `stride=8`)
+- same event filter top_fraction=0.35
+- same long-only trigger grid
+- same per-window PnL aggregation and non-overlapping dashboard slice selection
+
+### Artifact-backed results
+
+Summary JSON:
+- `experiments/results/exp24_smallnet_earlystop_20260418T040625Z.json`
+
+Summary note:
+- `experiments/notes/exp24_smallnet_earlystop_20260418T040625Z.md`
+
+Representative dashboard:
+- `experiments/pictures/exp24_smallnet_earlystop_precision_evt005_pw2_thr010_h32__long__q80_persistence2_wide_margin_fixed_20260418T040625Z.png`
+
+Data scale:
+- train windows before/after filter: 2400 -> 840
+- test windows before/after filter: 800 -> 280
+- rolling window: 2048
+- train timesteps: 1,720,320
+- test timesteps: 573,440
+- runtime: 710.359s on cuda
+
+Best by score:
+- `precision_evt005_pw2_thr010_h32 / long / q80_persistence2_wide_margin`
+- precision = 0.3277
+- f1 = 0.4932
+- rmse_ratio = 0.9468
+- pnl = 89.125
+- trades = 24
+- pnl_per_trade = 3.71
+
+Best by raw PnL:
+- `precision_evt005_pw2_thr010_h32 / long / q80_p1_hold48`
+- pnl = 122.4766
+- trades = 76
+- pnl_per_trade = 1.61
+
+Variant-level mapper summary:
+- `l1_evt005_pw2_h32`: precision 0.3300, f1 0.4898, rmse_ratio 0.9818
+- `precision_evt005_pw2_thr010_h32`: precision 0.3277, f1 0.4932, rmse_ratio 0.9468
+- `regonly_wd1e3_h32`: precision 0.3277, f1 0.4933, rmse_ratio 0.9496
+- `regonly_huber_thr010_h32`: precision 0.3276, f1 0.4931, rmse_ratio 0.9501
+
+### Visual / scientific read
+
+The fixed dashboard is scientist-usable and no longer suffers from the old ghost-timeline discontinuities. The prediction map is still somewhat diffuse, but visually meaningful, with rough timing alignment to truth. The main structural change is that the dense-map error improved materially; all four h32 variants landed well below the exp23 ~1.00 RMSE-ratio cluster.
+
+### Friction sanity
+
+Top score route:
+- +65.1 at cost=1/trade
+- +41.1 at cost=2/trade
+- -30.9 at cost=5/trade
+- -150.9 at cost=10/trade
+
+So the route still dies under moderate friction. This is not tradable yet.
+
+### Decision
+
+Call exp24 a pass as a recalibrated baseline improvement, not a trading success.
+
+What improved:
+- dense-map honesty improved a lot (`rmse_ratio` 0.9468-0.9818 vs exp23 ~0.995-1.005)
+- raw honest PnL improved
+- score-best churn remained more reasonable than the raw-PnL winner
+
+What did not improve enough:
+- precision/F1 did not clearly beat exp23
+- the route still fails a realistic friction kill-test
+- the original queue hypothesis about fully curing overfit is only partially supported
+
+### Next mutation
+
+Proceed to `exp25_timing_500ms` next.
+Use the smaller-net training config as the inherited baseline unless we explicitly want to isolate cadence from exp23 instead.
+
+## EXP-25 — 500 ms cadence with compensated geometry
+
+Status: DONE
+Date: 2026-04-18
+
+### Purpose
+
+Test whether 100 ms is simply oversampled for this branch. If adjacent frames are too redundant, moving to 500 ms should reduce memorization pressure without throwing away useful signal.
+
+### What changed vs exp24
+
+- `ReplayConfig.every: 100ms -> 500ms`
+- `ShaperConfig.rolling_window_size: 2048 -> 512`
+- `ShaperConfig.look_ahead: 128 -> 32`
+- `ShaperConfig.window_stride: 8 -> 2`
+- kept the exp24 smaller-net mapper family:
+  - `l1_evt005_pw2_h32`
+  - `precision_evt005_pw2_thr010_h32`
+  - `regonly_wd1e3_h32`
+  - `regonly_huber_thr010_h32`
+
+Implementation work needed:
+- added `scripts/exp25_timing_500ms.py`
+- extended `scripts/exp22_trigger_sweep.py` so the honest trigger-sweep path accepts cadence/shaper overrides
+- added tests in `tests/test_exp25_timing_500ms.py`
+- verification run:
+  - `pytest tests/test_btc_search_lab.py tests/test_exp24_smallnet.py tests/test_exp25_timing_500ms.py tests/test_continuity.py -q`
+  - `24 passed`
+
+### Data scale / runtime
+
+- train files: 3
+- test files: 1
+- windows before filter: train `2400`, test `800`
+- windows after filter: train `840`, test `280`
+- rolling window: `512`
+- look ahead: `32`
+- train timesteps: `430,080`
+- test timesteps: `143,360`
+- total runtime: `276.434s`
+- device: `cuda`
+- cadence in artifact: `500ms`
+- `dt_seconds_from_every`: `0.5`
+
+Artifacts:
+- JSON: `experiments/results/exp25_timing_500ms_20260418T155751Z.json`
+- Notes: `experiments/notes/exp25_timing_500ms_20260418T155751Z.md`
+- Representative fixed dashboard:
+  - `experiments/pictures/exp25_timing_500ms_regonly_wd1e3_h32__long__q90_persistence2_fast_exit_fixed_20260418T155751Z.png`
+
+### Main result
+
+Best route by score:
+- `regonly_wd1e3_h32 / long / q90_persistence2_fast_exit`
+- pnl `82.3672`
+- trades `10`
+- pnl/trade `8.2367`
+- precision `0.3187`
+- f1 `0.4812`
+- rmse_ratio `0.9806`
+
+Best route by raw pnl:
+- `regonly_wd1e3_h32 / long / q80_p1_hold48`
+- pnl `82.9219`
+- trades `25`
+- pnl/trade `3.3169`
+- precision `0.3187`
+- f1 `0.4812`
+- rmse_ratio `0.9806`
+
+Friction sanity for the score-winner:
+- cost 1/trade -> `72.3672`
+- cost 2/trade -> `62.3672`
+- cost 5/trade -> `32.3672`
+- cost 10/trade -> `-17.6328`
+- therefore cost 3/trade is still positive (`52.3672`)
+
+Variant-level dense-map honesty:
+- `l1_evt005_pw2_h32`: `rmse_ratio=0.9713`
+- `precision_evt005_pw2_thr010_h32`: `rmse_ratio=0.9848`
+- `regonly_wd1e3_h32`: `rmse_ratio=0.9806`
+- `regonly_huber_thr010_h32`: `rmse_ratio=0.9646`
+
+### What the run says
+
+Good news:
+- cadence coarsening did not kill signal quality
+- precision stayed above `0.30`
+- multiple variants stayed below `rmse_ratio < 0.99`
+- at least one route survives a realistic intermediate friction check on the primary holdout
+
+Bad news:
+- the core overfit hypothesis did not actually clear
+- test loss still increased on every variant, e.g. `regonly_wd1e3_h32`:
+  - train: `2.4943 -> 2.2395`
+  - test: `2.5544 -> 2.8206`
+- so 500 ms cadence improved trade behavior on this holdout but did not fix the train/test generalization drift
+
+### Decision
+
+Call exp25 `mixed_not_promoted`.
+
+This is not a dead branch, but it is also not a pass on the queue's main criterion. The result is strategy-positive and dense-map-honest, but cadence alone did not solve overfit.
+
+### Next mutation
+
+Proceed to `exp26_horizon_la32` next.
+The next thing to test is whether shortening the horizon / target geometry improves timing/localization enough to reduce the remaining train/test drift.
+

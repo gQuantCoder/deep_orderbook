@@ -356,3 +356,57 @@
 - **Anti-self-deception note**: all five experiments use `max_windows_per_file=800` (~23 min of replayed data per file). They are screening runs. Any claim of `promising_as_tradable` requires a subsequent uncapped walk-forward on a higher-memory host OR a streamed/float16 training accumulator — see Risks in the exp23 plan.
 - **Exact next action for the bot**: execute `scripts/exp24_smallnet_earlystop.py` (to be authored; template identical to `scripts/exp23_longwindow_2026_btc.py`, inheriting `exp22_trigger_sweep.main` and passing a `TrainConfig` override dict). Block until it produces `experiments/results/exp24_smallnet_earlystop_<ts>.json`, at least 40 `_fixed_*.png` dashboards, and 40 DB rows. Then read the summary and decide pass/kill BEFORE launching exp25.
 - **Full queue handoff doc**: `experiments/notes/exp24_exp28_queue_postexp23_20260418T030000Z.md` (per-experiment hypothesis, pass/kill criteria, expected artifacts, cost estimate, implementation notes).
+
+## 2026-04-18 (UTC) exp24_smallnet_earlystop
+- **Continuity**: executed the queued next mutation from `experiments/notes/exp24_exp28_queue_postexp23_20260418T030000Z.md` after implementing the missing wrapper `scripts/exp24_smallnet_earlystop.py`, adding h32 variants to `deep_orderbook.btc_search_lab`, and adding trunk dropout support to `TinyTCN` in `scripts/exp16_batch_h64_tcn.py` / `scripts/exp22_trigger_sweep.py`. Verified with tests: `pytest tests/test_btc_search_lab.py tests/test_exp24_smallnet.py -q`.
+- **Hypothesis**: the exp23 overfit is capacity/epoch driven; shrinking hidden dim to 32, stopping at 2 epochs, adding dropout=0.2 and weight_decay=1e-3 should improve honest holdout generalization on the same primary 2026-04-16T17 BTC file.
+- **What changed**: variants = `l1_evt005_pw2_h32`, `precision_evt005_pw2_thr010_h32`, `regonly_wd1e3_h32`, `regonly_huber_thr010_h32`; all use hidden_dim=32, epochs=2, trunk_dropout=0.2, weight_decay=1e-3.
+- **What stayed fixed**: data slice (2026-04-15T14/15/16 train, 2026-04-16T17 test), 100ms cadence, `DEFAULT_SHAPER_CONFIG_2026` (rolling=2048/look_ahead=128/stride=8), event-filter top_fraction=0.35, per-window PnL aggregation, non-overlapping dashboards, long direction only, friction kill-test.
+- **Richness-gate verdict**: passed.
+- **Main metrics**:
+  - best by score: `precision_evt005_pw2_thr010_h32 / long / q80_persistence2_wide_margin` -> precision=0.3277, f1=0.4932, rmse_ratio=0.9468, pnl=89.125, trades=24, pnl_per_trade=3.71.
+  - best by raw pnl: `precision_evt005_pw2_thr010_h32 / long / q80_p1_hold48` -> pnl=122.4766, trades=76, pnl_per_trade=1.61.
+  - variant-level rmse_ratio: `l1_evt005_pw2_h32=0.9818`, `precision_evt005_pw2_thr010_h32=0.9468`, `regonly_wd1e3_h32=0.9496`, `regonly_huber_thr010_h32=0.9501`.
+- **Visual verdict**: usable dashboard; prediction map remains somewhat diffuse but clearly structured, with rough timing alignment to truth and a scientist-usable fixed slice. No ghost-timeline discontinuities.
+- **Friction kill-test**: still fails at realistic cost. Top score route adjusted pnl = +65.1 @ cost=1, +41.1 @ cost=2, -30.9 @ cost=5, -150.9 @ cost=10. So this is not `promising_as_tradable`.
+- **Decision**: pass as `promising_as_recalibrated_baseline_improvement`, fail as tradable. The smaller net materially improved dense-map honesty (`rmse_ratio` well below 0.985 pass criterion) and improved raw honest pnl vs exp23, but it did not survive friction at cost=3+ and did not flatten the score-route precision/f1 enough to claim the overfit is solved.
+- **Exact next mutation**: run `exp25_timing_500ms` next, inheriting the smaller-net training config unless we choose to isolate cadence strictly from exp23.
+- **Data scale used**:
+  - parquet files: 3 train + 1 test
+  - windows before filter: 2400 train / 800 test (capped at 800 per file)
+  - windows after filter: 840 train / 280 test
+  - rolling_window_size=2048, look_ahead=128, stride=8
+  - non-overlapping backtest windows: 2
+- **Runtime accounting**: total wall clock 710.359s on cuda.
+- **Artifacts**:
+  - summary json: `experiments/results/exp24_smallnet_earlystop_20260418T040625Z.json`
+  - summary md: `experiments/notes/exp24_smallnet_earlystop_20260418T040625Z.md`
+  - representative fixed dashboard: `experiments/pictures/exp24_smallnet_earlystop_precision_evt005_pw2_thr010_h32__long__q80_persistence2_wide_margin_fixed_20260418T040625Z.png`
+
+## 2026-04-18 (UTC) exp25_timing_500ms
+- **Continuity**: picked up from the queued next mutation in `experiments/notes/exp24_exp28_queue_postexp23_20260418T030000Z.md` and the completed `exp24_smallnet_earlystop` handoff. Implemented the missing wrapper `scripts/exp25_timing_500ms.py`, extended `scripts/exp22_trigger_sweep.py` to accept cadence/shaper overrides, and verified with `pytest tests/test_btc_search_lab.py tests/test_exp24_smallnet.py tests/test_exp25_timing_500ms.py tests/test_continuity.py -q`.
+- **Hypothesis**: 100 ms is oversampled for this branch; moving to 500 ms with compensated geometry should reduce redundancy, narrow the train/test gap, keep precision >= 0.30, and leave at least one route positive after friction at cost=3/trade.
+- **What changed**: cadence `100ms -> 500ms`; shaper geometry `rolling_window_size 2048 -> 512`, `look_ahead 128 -> 32`, `window_stride 8 -> 2`; inherited the exp24 h32 smaller-net variant family (`l1_evt005_pw2_h32`, `precision_evt005_pw2_thr010_h32`, `regonly_wd1e3_h32`, `regonly_huber_thr010_h32`).
+- **What stayed fixed**: same 3-train/1-test BTC file block, event-filter top_fraction=0.35, per-window PnL aggregation, non-overlapping dashboards, long-only direction, friction table, max_windows_per_file=800.
+- **Richness-gate verdict**: passed.
+- **Main metrics**:
+  - best by score: `regonly_wd1e3_h32 / long / q90_persistence2_fast_exit` -> pnl=82.3672, trades=10, pnl_per_trade=8.2367, precision=0.3187, f1=0.4812, rmse_ratio=0.9806.
+  - best by raw pnl: `regonly_wd1e3_h32 / long / q80_p1_hold48` -> pnl=82.9219, trades=25, pnl_per_trade=3.3169, precision=0.3187, f1=0.4812, rmse_ratio=0.9806.
+  - variant-level rmse_ratio: `l1_evt005_pw2_h32=0.9713`, `precision_evt005_pw2_thr010_h32=0.9848`, `regonly_wd1e3_h32=0.9806`, `regonly_huber_thr010_h32=0.9646`.
+- **Visual verdict**: usable dashboards; geometry stayed honest and compact at 500 ms, with no ghost-timeline seams, but prediction maps are still somewhat diffuse rather than sharply localized.
+- **Pass/kill check**:
+  - pass: precision stayed above 0.30; multiple variants beat `rmse_ratio < 0.99`; top score route stays positive at cost=3/trade (`82.3672 - 10*3 = 52.3672`).
+  - fail: the main hypothesis did NOT clear because test loss still increased on every variant (for example `regonly_wd1e3_h32`: train `2.4943 -> 2.2395`, test `2.5544 -> 2.8206`). Cadence alone did not solve the overfit/generalization gap.
+- **Decision**: `mixed_not_promoted`. Useful branch because 500 ms preserves precision and improves honest friction-adjusted pnl on the primary holdout, but it fails the queue pass criterion that required non-increasing test loss. Treat this as a strategy-positive but generalization-unfixed result, not promotion.
+- **Exact next mutation**: proceed to `exp26_horizon_la32` next. Test whether shortening the horizon/target geometry, with explicit `allow_microburst=True`, improves timing/localization enough to reduce the remaining train/test drift.
+- **Data scale used**:
+  - parquet files: 3 train + 1 test
+  - windows before filter: 2400 train / 800 test
+  - windows after filter: 840 train / 280 test
+  - rolling_window_size=512, look_ahead=32, stride=2
+  - train timesteps=430,080; test timesteps=143,360
+- **Runtime accounting**: total wall clock 276.434s on cuda. 500 ms cache was cold on first run.
+- **Artifacts**:
+  - summary json: `experiments/results/exp25_timing_500ms_20260418T155751Z.json`
+  - summary md: `experiments/notes/exp25_timing_500ms_20260418T155751Z.md`
+  - representative fixed dashboard: `experiments/pictures/exp25_timing_500ms_regonly_wd1e3_h32__long__q90_persistence2_fast_exit_fixed_20260418T155751Z.png`

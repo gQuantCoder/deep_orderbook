@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, cast, Iterator
+from typing import AsyncGenerator
 import numpy as np
 import asyncio
 import random
@@ -7,7 +7,7 @@ from pathlib import Path
 from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.utils import logger
 from deep_orderbook.cache_manager import ArrayCache
-from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed, CoinbaseMessage
+from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
 from deep_orderbook.replayer import ParquetReplayer
 from deep_orderbook.shaper import ArrayShaper
 import deep_orderbook.marketdata as md
@@ -148,9 +148,7 @@ async def iter_shapes_t2l(
 
     async with CoinbaseFeed(
         config=replay_config,
-        replayer=(
-            cast(Iterator[CoinbaseMessage], replayer) if replayer is not None else None
-        ),
+        replayer=replayer,
     ) as feed:
         if replayer is not None:
             replayer.skip_n_files(current_file_idx)
