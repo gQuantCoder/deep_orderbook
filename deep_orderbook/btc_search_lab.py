@@ -428,6 +428,68 @@ BATCH_VARIANTS: dict[str, dict] = {
         "active_reg_weight": 1.0,
         "hypothesis": "MSE with lighter event pressure may sharpen reaction maps without the heavier baseline penalties.",
     },
+    # ── 2D-model variants ────────────────────────────────────────────────────
+    # These variants are scaled for OrderBook2DTCN (Conv2d over T×bins).
+    # hidden_dim maps to `hid` in OrderBook2DTCN. Because each Conv2d kernel
+    # covers (kT=3, kBins=3) vs Conv1d (kT=3) in TinyTCN, a 2D model with
+    # hid=8 has roughly the same FLOPs as TinyTCN with hid=24. Start small.
+    #
+    #   hid | Conv2d(hid,hid,3,3) params/block | ~RF@1000ms (num_levels=10)
+    #     8 | 576                              | 2047 s (~34 min)
+    #    16 | 2304                             | 2047 s (~34 min)
+    #    32 | 9216                             | 2047 s (~34 min)  ← medium
+    "regonly_huber_2d_h8": {
+        "hidden_dim": 8,
+        "epochs": 4,
+        "lr": 2e-3,
+        "weight_decay": 1e-4,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.0,
+        "pos_weight": 1.0,
+        "trade_threshold": 0.10,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "2D baseline: pure Huber regression, tiny hid=8 for screening speed.",
+    },
+    "regonly_huber_2d_h16": {
+        "hidden_dim": 16,
+        "epochs": 4,
+        "lr": 2e-3,
+        "weight_decay": 1e-4,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.0,
+        "pos_weight": 1.0,
+        "trade_threshold": 0.10,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "2D screening: hid=16, 4 epochs, ~4x more capacity than 2d_h8.",
+    },
+    "regonly_l1_2d_h8": {
+        "hidden_dim": 8,
+        "epochs": 4,
+        "lr": 2e-3,
+        "weight_decay": 1e-4,
+        "reg_loss": "l1",
+        "event_loss_weight": 0.0,
+        "pos_weight": 1.0,
+        "trade_threshold": 0.10,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "2D L1 loss promotes sparsity; compare vs Huber for event localization.",
+    },
+    "precision_evt_2d_h8": {
+        "hidden_dim": 8,
+        "epochs": 4,
+        "lr": 2e-3,
+        "weight_decay": 1e-4,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.05,
+        "pos_weight": 2.0,
+        "trade_threshold": 0.10,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "2D with BCE event head (weight=0.05, pw=2): can the 2D spatial structure improve event precision vs 1D?",
+    },
 }
 
 

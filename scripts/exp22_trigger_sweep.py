@@ -32,14 +32,15 @@ from deep_orderbook.trigger_search import (
     score_strategy_result,
     summarize_route,
 )
+from deep_orderbook.learn.tcn import OrderBook2DTCN, assert_min_receptive_field_2d
 from scripts.exp16_batch_h64_tcn import (
-    TinyTCN,
     current_git_commit,
     event_metrics,
     filter_event_windows,
     load_file_windows,
     regression_loss,
     save_dashboard,
+    save_sliding_inference_dashboard,
     save_precheck,
 )
 
@@ -140,9 +141,10 @@ async def main(
     )
     event_filter = {"enabled": True, "top_fraction": 0.35, "train": train_event_summary, "test": test_event_summary}
 
-    X_train = np.stack([x.reshape(x.shape[0], -1) for x in X_train_w], axis=0)
+    # Keep full 2-D spatial structure (T, bins, channels) — NEVER flatten.
+    X_train = np.stack(X_train_w, axis=0)   # (N, T, bins=16, ch=3)
     Y_train = np.stack(Y_train_w, axis=0)
-    X_test = np.stack([x.reshape(x.shape[0], -1) for x in X_test_w], axis=0)
+    X_test = np.stack(X_test_w, axis=0)
     Y_test = np.stack(Y_test_w, axis=0)
     PX_test = np.stack(Px_test_w, axis=0)
     books_test = np.stack(X_test_w, axis=0)
@@ -171,12 +173,15 @@ async def main(
         X_train_n = (X_train - mu) / sd
         X_test_n = (X_test - mu) / sd
 
-        model = TinyTCN(
-            in_ch=X_train_n.shape[-1],
+        model = OrderBook2DTCN(
+            bins=X_train_n.shape[2],
+            in_ch=X_train_n.shape[3],
             hid=cfg["hidden_dim"],
-            out_ch=Y_train.shape[-1],
+            out_levels=Y_train.shape[-1],
             trunk_dropout=cfg.get("trunk_dropout", 0.0),
+            num_levels=cfg.get("n_blocks", 10),
         ).to(device)
+        assert_min_receptive_field_2d(model)
         opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
         bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(cfg["pos_weight"], device=device))
         xtr = torch.from_numpy(X_train_n).to(device)
@@ -233,9 +238,37 @@ async def main(
 
         gt_strategy = Strategy(threshold=0.2)
 
+        # Pre-compute continuous gt_pnl for the sliding dashboard (once per variant).
+        gt_pnl_cont_parts = []
+        for _i in range(len(PX_test_nov)):
+            _gpnl, _, _, _ = gt_strategy.compute_pnl(PX_test_nov[_i], Y_test_nov[_i, ..., None])
+            gt_pnl_cont_parts.append(_gpnl)
+        gt_pnl_cont = np.concatenate(gt_pnl_cont_parts) if gt_pnl_cont_parts else np.zeros(0)
+
         strategy_grid = build_train_calibrated_strategy_grid(train_seq)
         for direction in directions:
             strategy_fn = evaluate_long_strategy if direction == "long" else evaluate_short_strategy
+
+            # --- Continuous sliding-inference dashboard (one per variant × direction) ---
+            _slide_route_0 = aggregate_per_window_strategy_result(
+                PX_test_nov, pred_test_nov, strategy_fn,
+                **{k: strategy_grid[0][k] for k in ["entry_threshold", "exit_threshold", "side_margin", "persistence", "cooldown", "max_hold"]},
+            ) if strategy_grid else {}
+            _slide_pred_pnl = np.asarray(_slide_route_0.get("pnl", []))
+            slide_png = pictures_dir / f"{label}_{variant_name}__{direction}_slide_{stamp}.png"
+            save_sliding_inference_dashboard(
+                slide_png,
+                PX_test_nov,
+                books_test_nov,
+                Y_test_nov,
+                pred_test_nov,
+                train_losses,
+                test_losses,
+                gt_pnl_cont,
+                _slide_pred_pnl,
+                f"{variant_name} | {direction} | {label}",
+            )
+
             for strat_cfg in strategy_grid:
                 strat_kwargs = {
                     k: strat_cfg[k]

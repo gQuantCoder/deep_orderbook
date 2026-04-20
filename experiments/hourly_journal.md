@@ -410,3 +410,42 @@
   - summary json: `experiments/results/exp25_timing_500ms_20260418T155751Z.json`
   - summary md: `experiments/notes/exp25_timing_500ms_20260418T155751Z.md`
   - representative fixed dashboard: `experiments/pictures/exp25_timing_500ms_regonly_wd1e3_h32__long__q90_persistence2_fast_exit_fixed_20260418T155751Z.png`
+
+## 2026-04-19 (UTC) exp30_2d_model_ms1000_slow — 2D architecture baseline
+
+- **Continuity**: All experiments exp23–exp29 used `TinyTCN` (1D Conv1d on flattened order-book features). This was architecturally broken: it treated bin 7 and bin 8 as unrelated features, making cross-bin patterns (bid-ask imbalance, best-bid thickening vs ask thinning) impossible to learn. `TinyTCN` is now TOMBSTONED. This run establishes the first 2D baseline.
+- **Hypothesis**: `OrderBook2DTCN` (Conv2d sliding over both time AND price bins) should materially improve map quality vs the 1D model. Single mutation: model architecture only. Everything else identical to exp29_ms1000_slow (cadence=1000ms, rolling=1024, look_ahead=64, data files, trigger grid).
+- **What changed**: model class `TinyTCN 1D (hid=96)` → `OrderBook2DTCN 2D (hid=8, num_levels=10, RF=2047 ticks)`. Hidden dim was rescaled: Conv2d(hid,hid,3,3) has 3× more params/block than Conv1d(hid,hid,3), so `hid=8` (2D) ≈ `hid=24` (1D equivalent).
+- **What stayed fixed**: cadence=1000ms, rolling_window_size=1024, look_ahead=64, window_stride=4, view_bips=5, same 3 train files + 1 test file (2026-04-16T17), n_samples_per_file=250, trigger grid, long-only, per-window PnL aggregation, non-overlapping dashboard.
+- **Richness-gate verdict**: passed (cached shaped arrays from exp29 reused instantly).
+- **Main metrics**:
+  - best by score AND raw pnl: `regonly_l1_2d_h8 / long / q80_p3_hold48` → pnl=+127.22, trades=3, pnl_per_trade=42.41, precision=0.5766, f1=0.7314, **rmse_ratio=0.8442**
+  - variant-level rmse_ratio: `regonly_huber_2d_h8=0.8568`, `regonly_l1_2d_h8=0.8442`, `precision_evt_2d_h8=0.8613`
+  - L1 variant tops Huber variant on both PnL and RMSE — sparsity-promoting loss helps on this map geometry.
+  - **ALL 30 routes show positive PnL** — first time in experiment history.
+  - Top 10 routes survive friction at cost=10/trade (best route: pnl=97.22 @ cost=10, 3 trades).
+- **Comparison to exp29_ms1000_slow (1D TinyTCN, hid=96)**:
+  - rmse_ratio: 0.980 → **0.844** (14pp improvement, vs 2pp before)
+  - f1: 0.718 → 0.731
+  - best route pnl: +52.72 (1 trade) → **+127.22 (3 trades)**
+  - The 2D model definitively outperforms 1D on this geometry.
+- **Visual verdict**: not yet inspected (dashboards saved to experiments/pictures/exp30_*).
+- **Warning — low trade count**: best route has only 3 trades on the primary test file. While the friction robustness is impressive (survives cost=10), 3 trades is statistically insufficient to claim real signal. **Neighbor holdout validation is MANDATORY before promotion.**
+- **Warning — precision/F1 identical across variants**: all 3 variants show exactly the same precision=0.5766, f1=0.7314. This may indicate: (a) the event classification threshold is saturated, or (b) all 3 models learned similar prediction distributions. Not a blocker but worth monitoring.
+- **Decision**: `very_promising_requires_neighbor_holdout`. Best rmse_ratio seen (0.844), all routes positive, robust to friction. But only 3 trades — cannot promote without neighbor holdout.
+- **Exact next mutation**: run the `regonly_l1_2d_h8` frozen mapper on adjacent holdout files:
+  1. `2026-04-16T18-00-10.parquet` as test
+  2. `2026-04-16T19-00-10.parquet` as test (if T18 passes)
+  Use the same trigger grid. If both holdouts show positive PnL at cost=3/trade, this is promotable.
+  Also: try `hid=16` to see if more 2D capacity further improves RMSE ratio.
+- **Data scale used**:
+  - parquet files: 3 train + 1 test (same as exp29_ms1000_slow)
+  - windows before filter: 597 train / 199 test
+  - windows after filter: 209 train / 70 test
+  - rolling_window_size=1024, look_ahead=64, stride=4
+  - train_timesteps=214,016; test_timesteps=71,680
+  - non-overlapping backtest windows: very few (rolling/stride constraints)
+- **Runtime accounting**: total wall-clock 147.0 s on cuda (GTX 1070). Cache was warm (all 4 files hit instantly from exp29 run). Training+evaluation: ~145s.
+- **Anti-self-deception note**: capped at 250 windows/file. 209 training windows (after filter) and only 3 test trades. These numbers are thin. Do NOT claim promotable without neighbor holdout and higher-sample rerun.
+- **Summary JSON**: `experiments/results/exp30_2d_model_ms1000_slow_20260420T020151Z.json`
+- **Summary MD**: `experiments/notes/exp30_2d_model_ms1000_slow_20260420T020151Z.md`

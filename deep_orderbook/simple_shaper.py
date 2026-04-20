@@ -1,16 +1,17 @@
-from typing import AsyncGenerator
-import numpy as np
 import asyncio
 import random
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
-from deep_orderbook.config import ReplayConfig, ShaperConfig
-from deep_orderbook.utils import logger
+import numpy as np
+
+import deep_orderbook.marketdata as md
 from deep_orderbook.cache_manager import ArrayCache
+from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
 from deep_orderbook.replayer import ParquetReplayer
 from deep_orderbook.shaper import ArrayShaper
-import deep_orderbook.marketdata as md
+from deep_orderbook.utils import logger
 
 
 class SimpleShaper(ArrayShaper):
@@ -22,15 +23,11 @@ class SimpleShaper(ArrayShaper):
         )
         self.prices_array = np.zeros((self.config.rolling_window_size, 2)) + np.nan
 
-    async def make_arr3d(
-        self, new_books: md.OneSecondEnds
-    ) -> tuple[np.ndarray, np.ndarray]:
+    async def make_arr3d(self, new_books: md.OneSecondEnds) -> tuple[np.ndarray, np.ndarray]:
         # Calculate book pressure
-        total_bid_size = new_books.bids['size'].sum()
-        total_ask_size = new_books.asks['size'].sum()
-        book_pressure = (total_bid_size - total_ask_size) / (
-            total_bid_size + total_ask_size + 1e-6
-        )
+        total_bid_size = new_books.bids["size"].sum()
+        total_ask_size = new_books.asks["size"].sum()
+        book_pressure = (total_bid_size - total_ask_size) / (total_bid_size + total_ask_size + 1e-6)
 
         # Get current prices
         bbo = new_books.bbos()
@@ -60,9 +57,7 @@ class SimpleShaper(ArrayShaper):
 
         # Check for NaN in input prices
         if np.isnan(prices).any():
-            logger.warning(
-                f"NaN found in prices array: {np.isnan(prices).sum()} NaN values"
-            )
+            logger.warning(f"NaN found in prices array: {np.isnan(prices).sum()} NaN values")
             # Replace NaN with the last valid price
             prices = np.nan_to_num(prices, nan=prices[~np.isnan(prices)].mean())
 
@@ -71,21 +66,19 @@ class SimpleShaper(ArrayShaper):
 
         # Create sliding windows for future prices
         future_prices = np.lib.stride_tricks.sliding_window_view(
-            np.pad(mid_prices, (0, FUTURE - 1), mode='edge'),
+            np.pad(mid_prices, (0, FUTURE - 1), mode="edge"),
             window_shape=FUTURE,
         )[: len(mid_prices)]
 
         # Calculate forward returns
         current_prices = mid_prices[:, np.newaxis]
-        forward_returns = (
-            future_prices[:, -1] - current_prices[:, 0]
-        ) / current_prices[:, 0]
+        forward_returns = (future_prices[:, -1] - current_prices[:, 0]) / current_prices[:, 0]
 
         # Reshape to match expected dimensions (T, 1, 1)
         forward_returns = forward_returns.reshape(-1, 1, 1)
-        
+
         # Get book pressure from total_array and ensure same shape
-        book_pressure = self.total_array[:len(forward_returns), :1, :]
+        book_pressure = self.total_array[: len(forward_returns), :1, :]
 
         # Combine forward returns and book pressure
         time2levels = np.concatenate([forward_returns, book_pressure], axis=1)
@@ -99,7 +92,7 @@ async def iter_shapes_t2l(
     live: bool = False,
 ) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray], None]:
     """Iterator that yields shaped arrays from market data, using cache when possible."""
-    cache = ArrayCache(cache_dir=Path('cache/simple_shaper'))
+    cache = ArrayCache(cache_dir=Path("cache/simple_shaper"))
     shaper = SimpleShaper(config=shaper_config)
     collector = cache.create_collector()
     replayer = ParquetReplayer(config=replay_config) if not live else None
@@ -118,9 +111,7 @@ async def iter_shapes_t2l(
                 books_array, time_levels, prices_array = cached_data
                 total_length = len(books_array)
 
-                end_indexes = list(
-                    range(1, 1 + total_length, shaper_config.window_stride)
-                )
+                end_indexes = list(range(1, 1 + total_length, shaper_config.window_stride))
                 if replay_config.randomize:
                     end_indexes = random.sample(end_indexes, len(end_indexes))
                 for end_idx in end_indexes:
@@ -130,17 +121,14 @@ async def iter_shapes_t2l(
                     window_prices = prices_array[start_idx:end_idx]
 
                     if not shaper_config.only_full_arrays or (
-                        not np.isnan(window_prices).any()
-                        and len(window_books) >= shaper_config.rolling_window_size
+                        not np.isnan(window_prices).any() and len(window_books) >= shaper_config.rolling_window_size
                     ):
                         yield window_books, window_times, window_prices
 
                 current_file_idx += 1
             else:
                 # Cache miss - switch to live processing from this file onwards
-                logger.info(
-                    f"Cache miss for {current_file}, switching to live processing"
-                )
+                logger.info(f"Cache miss for {current_file}, switching to live processing")
                 break
         else:
             logger.debug("All files processed")
@@ -154,11 +142,7 @@ async def iter_shapes_t2l(
             replayer.skip_n_files(current_file_idx)
         async for onesec in feed.one_second_iterator():
             # Check if we've moved to a new file
-            if (
-                not live
-                and replayer is not None
-                and replayer.current_file != collector.current_file
-            ):
+            if not live and replayer is not None and replayer.current_file != collector.current_file:
                 # Cache previous file's data if we have any
                 if shaper_config.save_cache:
                     await collector.cache_arrays(shaper_config, shaper, replay_config)
@@ -182,9 +166,7 @@ async def iter_shapes_t2l(
                     window_size = shaper_config.rolling_window_size
                 else:
                     # Yield whatever we have, up to rolling_window_size
-                    window_size = min(
-                        len(collector.all_books), shaper_config.rolling_window_size
-                    )
+                    window_size = min(len(collector.all_books), shaper_config.rolling_window_size)
 
                 # Get window arrays
                 window_books, window_prices = collector.get_window(window_size)
@@ -194,10 +176,7 @@ async def iter_shapes_t2l(
                 window_times = await shaper.build_time_level_trade()
 
                 # Skip windows with NaN values if only_full_arrays is True
-                if (
-                    not shaper_config.only_full_arrays
-                    or not np.isnan(window_prices).any()
-                ):
+                if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
                     yield window_books, window_times, window_prices
 
         # Cache the last file's data if we have any
@@ -209,9 +188,9 @@ async def main() -> None:
     import pyinstrument
 
     replay_config = ReplayConfig(
-        date_regexp='2024-11-06*',
+        date_regexp="2024-11-06*",
         markets=["ETH-USD"],
-        data_dir='/media/photoDS216/crypto/',
+        data_dir="/media/photoDS216/crypto/",
     )
     shaper_config = ShaperConfig(
         window_stride=1,
@@ -239,13 +218,13 @@ async def main() -> None:
                     f"prices={pxar.shape}"
                 )
                 logger.warning(
-                    f"Sample values: book_pressure={books_array[-1,0,0]:.3f}, "
-                    f"forward_return={time_levels[-1,0,0]:.3f}, "
+                    f"Sample values: book_pressure={books_array[-1, 0, 0]:.3f}, "
+                    f"forward_return={time_levels[-1, 0, 0]:.3f}, "
                     f"bid/ask={pxar[-1]}"
                 )
 
     logger.warning(f"Finished processing {count} samples")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main())

@@ -61,9 +61,14 @@ class ArrayShaper:
         self,
         one_sec: md.OneSecondEnds,
     ) -> pl.DataFrame:
-        """
-        This function bins order book and trade data into specified price levels,
-        applies cumulative sums, reindexes the data, and applies the arcsinh transformation.
+        """Bin order book depth and trade flow into price-level bins for one tick.
+
+        Price bins span ±view_bips around the EMA price (prev_price), divided into
+        num_side_lvl bins per side.  Returns a DataFrame with columns:
+          size      — net signed depth per bin (bids positive, asks negative)
+          size_trup — buy-trade volume per bin
+          size_trdn — sell-trade volume per bin (stored as negative)
+        arcsinh is NOT applied here; it is applied in make_arr3d.
         """
         # print(one_sec.avg_price())
         price_side_view = self.prev_price * self.config.view_bips * 0.0001
@@ -82,11 +87,10 @@ class ArrayShaper:
         df_trup = self.price_level_binning(trup, all_edges)
         df_trdn = self.price_level_binning(trdn, all_edges)
 
-        # sum the sizes for the same bin_idx
         df_book = (
             dfb
             .join(dfa, on="bin_idx", suffix="_ask", how="left")
-            .with_columns(pl.col("size") + pl.col("size_ask").alias("size"))
+            .with_columns((pl.col("size") + pl.col("size_ask")).alias("size"))
             .drop("size_ask")
         )
         df_book = df_book.join(df_trup, on="bin_idx", how="left", suffix="_trup")
@@ -143,16 +147,11 @@ class ArrayShaper:
         b = prices[:, 0]  # All bid prices
         a = prices[:, 1]  # All ask prices
 
-        # Calculate price steps based on the respective crossing sides
-        # Ensure positive steps by taking absolute value and adding small epsilon
-        pricestep_up = np.abs(a[-1]) * mult + 1e-6
+        # Grid step size: fraction of current price, same for all ticks in this array.
+        # NOTE: uses a[-1] / b[-1] (the LAST tick's price). In the live path this is
+        # the current price; in the cache path this is the end-of-file price for ALL ticks.
+        pricestep_up = np.abs(a[-1]) * mult + 1e-6  # +1e-6 guarantees > 0
         pricestep_down = np.abs(b[-1]) * mult + 1e-6
-
-        # Safety check for price steps
-        if pricestep_up <= 0 or pricestep_down <= 0:
-            logger.warning(f"Invalid price steps: up={pricestep_up}, down={pricestep_down}")
-            pricestep_up = max(pricestep_up, 1e-6)
-            pricestep_down = max(pricestep_down, 1e-6)
 
         # Compute thresholds for each direction starting from 1 to avoid division by zero
         thresh_up = np.arange(1, side_width + 1) * pricestep_up
@@ -218,15 +217,7 @@ class ArrayShaper:
         # Add a new axis to match the expected output shape
         time2levels = time2levels[:, :, np.newaxis]  # (T_eff, 2 * side_width, 1)
 
-        # The final array is now the full length
-        time2levels_full = np.full((num_t, 2 * side_width, 1), 1e9, dtype=np.float32)
-        time2levels_full[:] = np.clip(time2levels, 0, 1e9).astype(np.float32)
-
-        # Final safety check to ensure all values are positive and finite
-        min_val = time2levels_full.min()
-        if min_val < 0 or np.isnan(min_val):
-            logger.error(f"Invalid values in time2levels_full: min={min_val}, has_nan={np.isnan(time2levels_full).any()}")
-            raise ValueError(f"Invalid time values detected: min={min_val}")
+        time2levels_full = np.clip(time2levels, 0, 1e9).astype(np.float32)
 
         return 5 / time2levels_full
 
@@ -330,9 +321,14 @@ if __name__ == "__main__":  # pragma: no cover
         replay_config = ReplayConfig(
             markets=["ETH-USD"],
             date_regexp="2024-08-06*",
+            every="1s",
             # max_samples=300,
         )
-        shaper_config = ShaperConfig(window_stride=1, only_full_arrays=True)
+        shaper_config = ShaperConfig(
+            window_stride=1,
+            rolling_window_size=1024,
+            only_full_arrays=True,
+        )
         out_path = Path("tests/shaper_main_preview.png")
 
         books_array, *_ = await iter_shapes_t2l(replay_config, shaper_config).__anext__()

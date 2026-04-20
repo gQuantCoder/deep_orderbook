@@ -3,14 +3,14 @@ import asyncio
 import json
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from deep_orderbook.btc_experiment_config import (
     choose_training_device,
@@ -27,10 +27,10 @@ from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.event_selection import rank_eventful_windows, select_eventful_window_indices
 from deep_orderbook.experiment_tracking import register_experiment_run
 from deep_orderbook.pipeline_guards import assert_image_meaningful
-from deep_orderbook.scientist_experiment import apply_prediction_cap, choose_walkforward_parquets, richness_gate
+from deep_orderbook.scientist_experiment import apply_prediction_cap, richness_gate
 from deep_orderbook.shaper import iter_shapes_t2l
 from deep_orderbook.strategy import Strategy
-
+from deep_orderbook.learn.tcn import OrderBook2DTCN, assert_min_receptive_field_2d
 
 DEFAULT_SHAPER_CONFIG_2026 = ShaperConfig(
     only_full_arrays=True,
@@ -44,38 +44,6 @@ DEFAULT_SHAPER_CONFIG_2026 = ShaperConfig(
     use_cache=True,
     save_cache=True,
 )
-
-
-class CausalConv1d(nn.Module):
-    def __init__(self, in_ch: int, out_ch: int, k: int = 3, dilation: int = 1):
-        super().__init__()
-        self.pad = (k - 1) * dilation
-        self.conv = nn.Conv1d(in_ch, out_ch, kernel_size=k, dilation=dilation)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = F.pad(x, (self.pad, 0))
-        return self.conv(x)
-
-
-class TinyTCN(nn.Module):
-    def __init__(self, in_ch: int = 48, hid: int = 96, out_ch: int = 8, trunk_dropout: float = 0.0):
-        super().__init__()
-        self.b1 = nn.Sequential(CausalConv1d(in_ch, hid, 3, 1), nn.GELU())
-        self.b2 = nn.Sequential(CausalConv1d(hid, hid, 3, 2), nn.GELU())
-        self.b3 = nn.Sequential(CausalConv1d(hid, hid, 3, 4), nn.GELU())
-        self.trunk_dropout = nn.Dropout(trunk_dropout)
-        self.reg_head = CausalConv1d(hid, out_ch, 1, 1)
-        self.cls_head = CausalConv1d(hid, out_ch, 1, 1)
-
-    def forward(self, x_bt_f: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        x = x_bt_f.transpose(1, 2)
-        h = self.trunk_dropout(self.b1(x))
-        h = h + self.trunk_dropout(self.b2(h))
-        h = h + self.trunk_dropout(self.b3(h))
-        reg_raw = self.reg_head(h).transpose(1, 2)
-        cls_logits = self.cls_head(h).transpose(1, 2)
-        reg = F.softplus(reg_raw)
-        return reg, cls_logits
 
 
 def current_git_commit() -> str | None:
@@ -197,6 +165,37 @@ def save_precheck(precheck_path: Path, prices: np.ndarray, books: np.ndarray, ta
     plt.close(fig)
 
 
+def _books_for_display(books_array: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Mirror visu.py:Visualizer.for_image_display — returns (heatmap, buy_yx, sell_yx).
+
+    Heatmap: mean(0.5*ch0_net_depth, ch1_buy_trades, ch2_sell_trades).T → (bins, time)
+    buy_yx:  (time_idx, bin_idx) of nonzero buy-trade ticks (ch1)
+    sell_yx: (time_idx, bin_idx) of nonzero sell-trade ticks (ch2)
+
+    Matches exactly the notebook's visual: RdBu background blending all 3 channels,
+    plus triangle-up markers for buys and triangle-down for sells overlaid on the same panel.
+    """
+    tmp = books_array.astype(np.float32).copy()
+    tmp[:, :, 0] *= 0.5
+    heatmap = np.clip(tmp.mean(axis=2).T, -1.0, 1.0)          # (bins, time)
+    buy_yx = np.nonzero(books_array[:, :, 1] != 0)             # (time_idx, bin_idx)
+    sell_yx = np.nonzero(books_array[:, :, 2] != 0)
+    return heatmap, buy_yx, sell_yx
+
+
+def _plot_books_panel(ax: "plt.Axes", books_array: np.ndarray) -> None:  # type: ignore[name-defined]
+    """Plot the books heatmap + trade scatter markers on `ax`, matching the notebook."""
+    heatmap, buy_yx, sell_yx = _books_for_display(books_array)
+    lim = max(float(np.percentile(np.abs(heatmap), 99.0)), 1e-6)
+    ax.imshow(heatmap, aspect="auto", origin="lower", cmap="RdBu_r", vmin=-lim, vmax=lim)
+    if buy_yx[0].size:
+        ax.scatter(buy_yx[0], buy_yx[1], marker="^", color="black", s=6, alpha=0.7, linewidths=0, label="buy trade")
+    if sell_yx[0].size:
+        ax.scatter(sell_yx[0], sell_yx[1], marker="v", color="black", s=6, alpha=0.7, linewidths=0, label="sell trade")
+    ax.set_title("Books: net depth (RdBu) + buy trades ▲ + sell trades ▼  (EMA-relative bins)")
+    ax.legend(loc="upper right", fontsize=7, markerscale=2)
+
+
 def save_dashboard(
     out_path: Path,
     prices: np.ndarray,
@@ -211,6 +210,12 @@ def save_dashboard(
     pred_pos: np.ndarray,
     title_suffix: str,
 ) -> None:
+    """Show ONE rolling-window snapshot: useful for inspecting book/t2l quality.
+
+    For a continuous sliding-inference view across the whole test period use
+    ``save_sliding_inference_dashboard`` which takes the full stacked
+    non-overlapping window arrays.
+    """
     fig, axes = plt.subplots(6, 1, figsize=(14, 14), sharex=False)
     x = np.arange(prices.shape[0])
     mid = prices.mean(axis=1)
@@ -229,21 +234,18 @@ def save_dashboard(
         axes[0].scatter(pr_enter, prices[pr_enter, 1], marker="^", color="blue", s=25, label="Prediction Entry")
     if pr_exit.size:
         axes[0].scatter(pr_exit, prices[pr_exit, 0], marker="v", color="red", s=25, label="Prediction Exit")
-    axes[0].set_title(f"Bid and Ask Price Levels — {title_suffix}")
+    axes[0].set_title(f"Bid and Ask Price Levels — {title_suffix}\n(ONE frozen rolling window, NOT sliding inference — see *_slide_*.png for the real view)")
     axes[0].legend(loc="upper left", ncol=4, fontsize=8)
 
-    books_show = books_array[:, :, 0].T
-    lim = max(float(np.percentile(np.abs(books_show), 99.0)), 1e-6)
-    axes[1].imshow(books_show, aspect="auto", origin="lower", cmap="RdBu_r", vmin=-lim, vmax=lim)
-    axes[1].set_title("Books")
+    _plot_books_panel(axes[1], books_array)
 
     true_show = np.sqrt(np.clip(true_map.T, 0.0, None))
     pred_show = np.sqrt(np.clip(pred_map.T, 0.0, None))
     vmax = max(float(np.percentile(true_show, 99.5)), float(np.percentile(pred_show, 99.5)), 1e-3)
     axes[2].imshow(true_show, aspect="auto", origin="lower", cmap="turbo", vmin=0.0, vmax=vmax)
-    axes[2].set_title("Level Proximity")
+    axes[2].set_title("Level Proximity (true)")
     axes[3].imshow(pred_show, aspect="auto", origin="lower", cmap="turbo", vmin=0.0, vmax=vmax)
-    axes[3].set_title("Prediction")
+    axes[3].set_title("Level Proximity (predicted)")
 
     axes[4].plot(np.arange(1, len(train_losses) + 1), train_losses, color="blue", label="Training Loss")
     axes[4].plot(np.arange(1, len(test_losses) + 1), test_losses, color="red", label="Test Loss")
@@ -261,6 +263,91 @@ def save_dashboard(
     plt.close(fig)
 
 
+def save_sliding_inference_dashboard(
+    out_path: Path,
+    px_windows: np.ndarray,
+    books_windows: np.ndarray,
+    true_windows: np.ndarray,
+    pred_windows: np.ndarray,
+    train_losses: list[float],
+    test_losses: list[float],
+    gt_pnl: np.ndarray,
+    pred_pnl: np.ndarray,
+    title_suffix: str,
+) -> None:
+    """Continuous sliding-inference view across the whole test period.
+
+    Takes STACKED non-overlapping windows (each of shape N × W × ...) and
+    concatenates them along the time axis.  Because non-overlapping windows
+    are exactly adjacent (no gap, no overlap) the result is a TRUE continuous
+    timeline where each tick appears exactly once.
+
+    The books panel now shows the real evolving order-book over time instead
+    of one frozen EMA-relative snapshot.  The prediction panel shows the
+    model's prediction at every tick.
+
+    Args:
+        px_windows:    (N, W, 2)      non-overlapping bid/ask windows
+        books_windows: (N, W, bins, 3) non-overlapping books windows
+        true_windows:  (N, W, levels)  true t2l
+        pred_windows:  (N, W, levels)  model predictions
+    """
+    N, W = px_windows.shape[:2]
+
+    # Flatten N windows × W ticks → one continuous timeline
+    prices = px_windows.reshape(-1, 2)              # (N*W, 2)
+    # Flatten N windows × W ticks into one continuous timeline
+    books_cont = books_windows.reshape(-1, books_windows.shape[2], books_windows.shape[3])  # (N*W, bins, 3)
+    true_flat = true_windows.reshape(-1, true_windows.shape[-1])                             # (N*W, levels)
+    pred_flat = pred_windows.reshape(-1, pred_windows.shape[-1])                             # (N*W, levels)
+
+    # Mark window boundaries so the viewer knows where context resets
+    boundary_x = [w * W for w in range(1, N)]
+
+    T = prices.shape[0]
+    mid = prices.mean(axis=1)
+
+    fig, axes = plt.subplots(5, 1, figsize=(max(16, T // 40), 16), sharex=True)
+
+    axes[0].plot(mid, color="orange", linewidth=0.7, label="Mid price")
+    axes[0].plot(prices[:, 0], color="green", linewidth=0.5, alpha=0.6, label="Bid")
+    axes[0].plot(prices[:, 1], color="red", linewidth=0.5, alpha=0.6, label="Ask")
+    for bx in boundary_x:
+        axes[0].axvline(bx, color="gray", lw=0.4, alpha=0.4)
+    axes[0].set_title(f"Continuous sliding inference — {title_suffix}\n({N} non-overlapping windows × {W} ticks each, boundaries marked)")
+    axes[0].legend(loc="upper left", ncol=3, fontsize=7)
+
+    _plot_books_panel(axes[1], books_cont)
+    for bx in boundary_x:
+        axes[1].axvline(bx, color="white", lw=0.4, alpha=0.5)
+
+    true_show = np.sqrt(np.clip(true_flat.T, 0.0, None))
+    pred_show = np.sqrt(np.clip(pred_flat.T, 0.0, None))
+    vmax = max(float(np.percentile(true_show, 99.5)), float(np.percentile(pred_show, 99.5)), 1e-3)
+    axes[2].imshow(true_show, aspect="auto", origin="lower", cmap="turbo", vmin=0.0, vmax=vmax)
+    for bx in boundary_x:
+        axes[2].axvline(bx, color="white", lw=0.4, alpha=0.5)
+    axes[2].set_title("True t2l (continuous)")
+
+    axes[3].imshow(pred_show, aspect="auto", origin="lower", cmap="turbo", vmin=0.0, vmax=vmax)
+    for bx in boundary_x:
+        axes[3].axvline(bx, color="white", lw=0.4, alpha=0.5)
+    axes[3].set_title("Predicted t2l (continuous) — compare row-by-row with true above")
+
+    axes[4].plot(gt_pnl, color="green", linewidth=0.8, label="Omniscient PnL")
+    axes[4].plot(pred_pnl, color="red", linewidth=0.8, label="Prediction PnL")
+    for bx in boundary_x:
+        axes[4].axvline(bx, color="gray", lw=0.4, alpha=0.4)
+    axes[4].set_title("PnL (aggregated across windows)")
+    axes[4].legend(loc="upper left", fontsize=8)
+    axes[4].set_xlabel("Ticks (continuous real time, boundaries = context resets)")
+
+    fig.tight_layout(h_pad=0.4)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=130)
+    plt.close(fig)
+
+
 def filter_event_windows(
     X_windows: list[np.ndarray],
     Y_windows: list[np.ndarray],
@@ -270,7 +357,9 @@ def filter_event_windows(
     min_count: int,
     max_count: int | None = None,
 ) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray], dict]:
-    selected = select_eventful_window_indices(PX_windows, X_windows, top_fraction=top_fraction, min_count=min_count, max_count=max_count)
+    selected = select_eventful_window_indices(
+        PX_windows, X_windows, top_fraction=top_fraction, min_count=min_count, max_count=max_count
+    )
     ranking = rank_eventful_windows(PX_windows, X_windows)
     summary = {
         "top_fraction": top_fraction,
@@ -285,7 +374,6 @@ def filter_event_windows(
         [PX_windows[idx] for idx in selected],
         summary,
     )
-
 
 
 def regression_loss(pred: torch.Tensor, target: torch.Tensor, mode: str, active_reg_weight: float, tau: float) -> torch.Tensor:
@@ -332,13 +420,27 @@ def train_one_variant(
     if device.type == "cuda":
         torch.cuda.manual_seed_all(seed)
 
+    # X_train shape: (N, T, bins=16, ch=3) — 2D spatial structure preserved
+    # Normalise per (bin, channel) dimension — keepdims on (N, T) axes
     mu = X_train.mean(axis=(0, 1), keepdims=True)
     sd = X_train.std(axis=(0, 1), keepdims=True) + 1e-6
     X_train_n = (X_train - mu) / sd
     X_test_n = (X_test - mu) / sd
 
+    bins = X_train_n.shape[2]   # 16
+    in_ch = X_train_n.shape[3]  # 3
+    out_levels = Y_train.shape[-1]  # 8
+
     variant_start = time.perf_counter()
-    model = TinyTCN(in_ch=X_train_n.shape[-1], hid=cfg["hidden_dim"], out_ch=Y_train.shape[-1]).to(device)
+    model = OrderBook2DTCN(
+        bins=bins,
+        in_ch=in_ch,
+        hid=cfg["hidden_dim"],
+        out_levels=out_levels,
+        trunk_dropout=cfg.get("trunk_dropout", 0.0),
+        num_levels=cfg.get("n_blocks", 10),
+    ).to(device)
+    assert_min_receptive_field_2d(model)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
     bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(cfg["pos_weight"], device=device))
 
@@ -443,21 +545,25 @@ def train_one_variant(
         f"Best-slice pnl: omniscient={float(gt_pnl_best[-1]):.5f}, prediction={float(pred_pnl_best[-1]):.5f}",
         f"Fixed-slice pnl: omniscient={float(gt_pnl_fixed[-1]):.5f}, prediction={float(pred_pnl_fixed[-1]):.5f}",
     ]
-    notes = "# exp16 batch variant\n\n" + "\n".join([
-        f"- timestamp: {timestamp_utc}",
-        f"- variant: `{variant_name}`",
-        f"- train files:",
-        *[f"  - `{p.name}`" for p in train_files],
-        f"- test file: `{test_file.name}`",
-        f"- config: `{json.dumps(cfg, sort_keys=True)}`",
-        f"- precheck image: `{precheck_path}`",
-        f"- fixed dashboard: `{out_png}`",
-        f"- best dashboard: `{best_png}`",
-        f"- result json: `{result_path}`",
-        f"- observations:",
-        *[f"  - {obs}" for obs in observations],
-        f"- decision: {decision}",
-    ]) + "\n"
+    notes = (
+        "# exp16 batch variant\n\n"
+        + "\n".join([
+            f"- timestamp: {timestamp_utc}",
+            f"- variant: `{variant_name}`",
+            "- train files:",
+            *[f"  - `{p.name}`" for p in train_files],
+            f"- test file: `{test_file.name}`",
+            f"- config: `{json.dumps(cfg, sort_keys=True)}`",
+            f"- precheck image: `{precheck_path}`",
+            f"- fixed dashboard: `{out_png}`",
+            f"- best dashboard: `{best_png}`",
+            f"- result json: `{result_path}`",
+            "- observations:",
+            *[f"  - {obs}" for obs in observations],
+            f"- decision: {decision}",
+        ])
+        + "\n"
+    )
     notes_path.parent.mkdir(parents=True, exist_ok=True)
     notes_path.write_text(notes)
 
@@ -502,7 +608,7 @@ def train_one_variant(
         symbol="BTC-USD",
         cadence="100ms",
         look_ahead=64,
-        model="TinyTCN",
+        model=f"2D_TCN_b{cfg.get('n_blocks', 10)}_h{cfg['hidden_dim']}",
         result_json_path=result_path,
         picture_path=out_png,
         metrics={**metrics, "route_score_hint": 0.0, "fixed_slice_prediction_final_pnl": float(pred_pnl_fixed[-1])},
@@ -524,7 +630,7 @@ async def main(
     explicit_test_files: list[Path] | None = None,
     prefer_cuda: bool = True,
 ) -> None:
-    ts = datetime.now(timezone.utc)
+    ts = datetime.now(UTC)
     stamp = ts.strftime("%Y%m%dT%H%M%SZ")
     timestamp_utc = ts.strftime("%Y-%m-%d %H:%M:%SZ")
     git_commit = current_git_commit()
@@ -541,7 +647,9 @@ async def main(
     )
     test_file = test_files[0]
 
-    replay_conf_test, shaper_config, X_test_w, Y_test_w, Px_test_w = await load_file_windows(test_file, "BTC-USD", n_samples=n_samples_per_file)
+    replay_conf_test, shaper_config, X_test_w, Y_test_w, Px_test_w = await load_file_windows(
+        test_file, "BTC-USD", n_samples=n_samples_per_file
+    )
     test_windows_before_filter = len(X_test_w)
     if len(X_test_w) < min_test_windows:
         raise RuntimeError(f"Too few test windows loaded from {test_file}: {len(X_test_w)}")
@@ -630,9 +738,11 @@ async def main(
     )
     device = torch.device(choose_training_device(prefer_cuda=prefer_cuda, cuda_available=torch.cuda.is_available()))
 
-    X_train = np.stack([x.reshape(x.shape[0], -1) for x in X_train_w], axis=0)
+    # Keep full 2-D spatial structure (T, bins, channels) — NEVER flatten.
+    # Shape: (N, T, bins=16, ch=3).  OrderBook2DTCN permutes internally.
+    X_train = np.stack(X_train_w, axis=0)
     Y_train = np.stack(Y_train_w, axis=0)
-    X_test = np.stack([x.reshape(x.shape[0], -1) for x in X_test_w], axis=0)
+    X_test = np.stack(X_test_w, axis=0)
     Y_test = np.stack(Y_test_w, axis=0)
     PX_test = np.stack(Px_test_w, axis=0)
     books_test = np.stack(X_test_w, axis=0)
@@ -669,7 +779,9 @@ async def main(
             result_path = Path(f"experiments/results/{experiment_label}_{variant_name}_{stamp}.json")
             result_path.write_text(json.dumps(payload, indent=2))
         results.append(payload)
-        print(f"DONE {variant_name} precision={payload['metrics']['precision']:.4f} f1={payload['metrics']['f1']:.4f} rmse={payload['metrics']['rmse']:.5f}")
+        print(
+            f"DONE {variant_name} precision={payload['metrics']['precision']:.4f} f1={payload['metrics']['f1']:.4f} rmse={payload['metrics']['rmse']:.5f}"
+        )
 
     ranked = rank_variant_results(results)
     top = ranked[0]
@@ -733,17 +845,32 @@ async def main(
     notes_path = Path(f"experiments/notes/{experiment_label}_{stamp}.md")
     notes_path.write_text("\n".join(md_lines) + "\n")
 
-    print(json.dumps({"summary_json": str(summary_path), "summary_md": str(notes_path), "best_variant": top['variant_name']}, indent=2))
+    print(
+        json.dumps(
+            {"summary_json": str(summary_path), "summary_md": str(notes_path), "best_variant": top["variant_name"]}, indent=2
+        )
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--variants", nargs="*", default=None, help="subset of batch variant names to run")
     parser.add_argument("--label", default="exp16_batch_h64_tcn", help="artifact prefix / experiment label")
-    parser.add_argument("--eventful-top-fraction", type=float, default=None, help="keep only the most eventful windows by realized move/activity score")
+    parser.add_argument(
+        "--eventful-top-fraction",
+        type=float,
+        default=None,
+        help="keep only the most eventful windows by realized move/activity score",
+    )
     parser.add_argument("--min-train-windows", type=int, default=24, help="minimum train windows after filtering")
     parser.add_argument("--min-test-windows", type=int, default=12, help="minimum test windows after filtering")
-    parser.add_argument("--n-samples-per-file", type=int, default=48, dest="n_samples_per_file", help="max rolling-frame samples per parquet file; 0 = unlimited")
+    parser.add_argument(
+        "--n-samples-per-file",
+        type=int,
+        default=48,
+        dest="n_samples_per_file",
+        help="max rolling-frame samples per parquet file; 0 = unlimited",
+    )
     parser.add_argument("--train-files", nargs="*", default=None, help="explicit train parquet file paths")
     parser.add_argument("--test-files", nargs="*", default=None, help="explicit test parquet file paths")
     parser.add_argument("--cpu", action="store_true", help="force CPU even if CUDA is available")

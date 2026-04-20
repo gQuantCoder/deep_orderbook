@@ -105,7 +105,7 @@ Ch 2: arcsinh(−sell_trade_volume)       ← sell-initiated trades (stored as n
 The ask sizes are negated before binning (`dfa = asks.with_columns(-size)`), so bids and asks are combined
 into a single signed channel. Price bins above the mid-price carry ask-side (negative) depth; bins below carry bid-side (positive) depth.
 
-**Book state resets correctly between parquet files.** Each file starts with a Coinbase `type="snapshot"` event which calls `DepthCachePlus.reset(snapshot)`, wiping the previous file's stale book state before applying the new file's delta stream.
+**Book state resets correctly at every snapshot event.** Each parquet file starts with a Coinbase `type="snapshot"` (full L2 snapshot) which calls `DepthCachePlus.reset(snapshot)`, wiping any stale book state. Mid-file WebSocket reconnects produce additional mid-hour snapshots (confirmed: a 1-hour file may contain 2–5 snapshot events at different timestamps, each carrying a full L2 book reset). The `process_message` match block in `CoinbaseFeed` handles all of them identically, so order book integrity is maintained after reconnects.
 
 ---
 
@@ -172,7 +172,9 @@ cache/
   'time_levels':  shape (N_ticks,  8, 1),   # precomputed t2l targets
   'prices_array': shape (N_ticks,  2),      # (bid, ask) per tick
 }
-# N_ticks ≈ 32,000–36,000 for a full hourly file at 100ms cadence
+# N_ticks ≈ 20,000–27,000 for a full hourly file at 100ms cadence
+# (not 36,000: the replayer only emits windows that contain actual data;
+#  sparse periods produce fewer 100ms buckets)
 # file size: ~50–80 MB uncompressed, ~5–15 MB .npz compressed
 ```
 
@@ -210,6 +212,38 @@ Each frame: `rolling_window_size × 16 bins × 3 channels × 4 bytes` = **0.39 M
 > OOM risk is GPU VRAM, not RAM. A full unrestricted hour lands ~2 GB of tensors on the GPU before the model, gradients, or optimizer state even exist. On a 4–8 GB card that's the whole budget.
 
 > `DataLoaderWorker` (in `data_loader.py`) does exist and is used by `Trainer` in `learn/trainer.py` (and by `pure_attention.py`, `attention_tcn.py`). However, the active experiment scripts (`exp16`/`exp22`/`exp23`) bypass it entirely — they do the load-everything-upfront pattern. If you switch to `Trainer`-based training, the streaming path exists and the OOM risk disappears.
+
+---
+
+## Design Notes & Known Concerns
+
+### TinyTCN flattens spatial structure
+
+`exp16`/`exp22`/`exp23` use `TinyTCN`, a **1D causal TCN** on a flat 48-feature vector (`books.reshape(T, 16*3)`). The bid/ask price-level layout is destroyed before the model ever sees it. The `TCNModel` (2D causal conv) exists and would preserve spatial relationships, but is not used in the active experiment chain.
+
+### TinyTCN receptive field is only 15 ticks
+
+```
+b1 (k=3, d=1):  +2  → RF = 3
+b2 (k=3, d=2):  +4  → RF = 7   (residual with b1)
+b3 (k=3, d=4):  +8  → RF = 15  (residual with b2)
+```
+
+At `every=100ms`: **15 ticks = 1.5 seconds** of actual temporal context per output tick.
+Even with `rolling_window_size=2048` (204 seconds of data in the window), the model only uses the most recent 1.5 seconds of context for any given prediction. The large window is mostly wasted.
+
+### t2l threshold-scaling creates a non-uniform "no-crossing" baseline
+
+`t2l = 5 / (time_steps / thresh) = 5 × thresh / time_steps`
+
+When a level is **not crossed** within `look_ahead` steps, `time_steps = 1e9` (capped) and:
+
+```
+t2l_outer = 5 × 76 / 1e9 = 3.8e-7   (outer level, thresh=76)
+t2l_inner = 5 × 19 / 1e9 = 9.5e-8   (inner level, thresh=19)
+```
+
+In the never-crossing case outer levels show **4× higher t2l than inner levels** — the opposite of the physical intuition "closer levels cross sooner." The `StructuredT2LLoss` monotonicity term penalizes the model for predictions that increase toward outer levels, but the **target itself violates this constraint in quiet markets**. If >80% of training ticks show no crossing (common in stable periods), the monotonicity gradient teaches the model to predict "outer levels are more imminent" which is backwards. The fix would be to use `t2l = FUTURE / time_steps` (normalized to [0,1]) or to not divide by `thresh` in the scaling.
 
 ---
 

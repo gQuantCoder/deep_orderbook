@@ -1446,3 +1446,24 @@ This is not a dead branch, but it is also not a pass on the queue's main criteri
 Proceed to `exp26_horizon_la32` next.
 The next thing to test is whether shortening the horizon / target geometry improves timing/localization enough to reduce the remaining train/test drift.
 
+
+---
+
+## exp30_2d_model_ms1000_slow — 2026-04-19 UTC
+
+**Single mutation**: model architecture 1D TinyTCN → 2D OrderBook2DTCN (hid=8, RF=2047 ticks).  
+Geometry unchanged from exp29_ms1000_slow: every=1000ms, rolling=1024, look_ahead=64.
+
+**Key result**:
+- rmse_ratio: 0.980 (1D) → **0.844** (2D) — first time substantially beating zero baseline
+- Best route: `regonly_l1_2d_h8 / long / q80_p3_hold48` pnl=+127.22, 3 trades, survives cost=10/trade
+- L1 loss > Huber for 2D map geometry (sparsity-promoting matches the sparse t2l structure)
+- **ALL 30 routes positive PnL** — unprecedented
+
+**Decision**: very_promising, needs neighbor holdout (only 3 trades on primary test file).
+
+### Next mutation
+
+Validate `regonly_l1_2d_h8` mapper on adjacent holdout files (`2026-04-16T18`, `2026-04-16T19`).
+If both pass at cost=3/trade, also try `hid=16` for more 2D capacity.
+
