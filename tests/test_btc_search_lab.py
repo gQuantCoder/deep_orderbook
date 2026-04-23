@@ -66,6 +66,16 @@ def test_exp24_smallnet_variants_are_registered_with_expected_training_knobs() -
     assert get_batch_variant("regonly_huber_thr010_h32")["weight_decay"] == 1e-3
 
 
+def test_l1_2d_h16_variant_is_registered_as_single_factor_capacity_bump() -> None:
+    cfg = get_batch_variant("regonly_l1_2d_h16")
+
+    assert cfg["hidden_dim"] == 16
+    assert cfg["epochs"] == 4
+    assert cfg["reg_loss"] == "l1"
+    assert cfg["event_loss_weight"] == 0.0
+    assert cfg["weight_decay"] == 1e-4
+
+
 def test_compute_png_quality_stats_flags_usable_nonflat_image(tmp_path: Path) -> None:
     image = np.zeros((32, 32, 3), dtype=np.uint8)
     image[:16, :16, 0] = 255

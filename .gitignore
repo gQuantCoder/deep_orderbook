@@ -16,3 +16,4 @@ checkpoints*
 /experiments/pictures/
 /experiments/notes/
 /experiments/results/
+/experiments/experiment_runs.sqlite3

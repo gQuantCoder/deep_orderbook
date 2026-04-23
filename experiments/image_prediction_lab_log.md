@@ -548,6 +548,19 @@ Visual verdict from precheck:
 - Keep the new protocol.
 - Next run should try the same flow on another fresh rolled parquet and compare symbols / thresholds, while continuing to require precheck images before training.
 
+### Practical conclusion from the 2026-04-22 exp46/exp47 pair
+- The recent 24-file stress-conditioned short branch is still the current best practical candidate, but only as a **signal-quality branch**, not a settled execution recipe.
+- exp46 (`2026-04-21T22-00-00` holdout) strengthened the branch by showing that the winning execution family could shift from persistence-heavy to faster `q90_p1_hold48` while remaining positive even under heavy friction.
+- exp47 (`2026-04-21T23-00-00` holdout) then falsified the stronger execution claim one hour later:
+  - dense/map quality actually improved a bit (`precision≈0.4829`, `f1≈0.6023`, `rmse_ratio≈0.9660`),
+  - but `q95_*` fast routes produced **zero trades**,
+  - and relaxing back toward `q90_p1_hold48` yielded a single losing trade (`-60.30`).
+- Interpretation: the mapper still looks honest enough to keep, but the strategy layer is more fragile than exp46 alone suggested. This is no longer a simple “fast family works” story; it is a regime-within-regime execution fragility story.
+- Scientist consequence:
+  - do **not** retrain the mapper yet,
+  - do **not** promote the current fast execution branch,
+  - next mutation should broaden execution falsification across multiple later evening holdouts and explicitly separate (a) no-trade over-selectivity from (b) bad-fill / one-trade failure.
+
 ## 2026-04-13 exp11 second one-shot scientist run (BTC mutation)
 
 Status: DONE
@@ -1467,3 +1480,887 @@ Geometry unchanged from exp29_ms1000_slow: every=1000ms, rolling=1024, look_ahea
 Validate `regonly_l1_2d_h8` mapper on adjacent holdout files (`2026-04-16T18`, `2026-04-16T19`).
 If both pass at cost=3/trade, also try `hid=16` for more 2D capacity.
 
+---
+
+## exp38 / exp39 evening short-side continuation — 2026-04-20 UTC
+
+Simple idea:
+- stop retraining blindly
+- keep the honest 2D mapper (`regonly_l1_2d_h8`)
+- use several uncapped full evening files
+- test whether the branch is directionally inverted / evening-liquidity biased by flipping execution to short
+
+This was a market-structure hypothesis, not a metric trick:
+- thinner evening liquidity may produce cleaner downside reactions
+- the mapper may already be learning bearish pressure / imbalance structure
+- long-only extraction may have been suppressing the signal
+
+### exp38 — holdout20 short probe
+- train files: 9 uncapped evening files across `2026-04-14` to `2026-04-16T19`
+- test holdout: `2026-04-16T20-00-10.parquet`
+- train windows: `4208 -> 1473` after event filter
+- test windows: `249 -> 88`
+- best route by score/raw pnl: `regonly_l1_2d_h8 / short / q95_p2_hold96`
+- pnl `+41.13`, trades `2`, pnl/trade `20.57`
+- precision `0.5365`, f1 `0.6565`, rmse_ratio `0.9471`
+- friction table: `+39.13 @1`, `+37.13 @2`, `+31.13 @5`, `+21.13 @10`
+- key comparison: prior long-side same-regime candidate was dead (`0 trades`, `0 pnl`)
+- decision: promising adjacent-holdout continuation, but still fragile because only 2 trades
+
+Artifacts:
+- `experiments/results/exp38_evening_regime_fullfiles_l1_2d_h8_holdout20_shortprobe_20260420T113832Z.json`
+- `experiments/notes/exp38_evening_regime_fullfiles_l1_2d_h8_holdout20_shortprobe_20260420T113832Z.md`
+
+### exp39 — immediate adjacent holdout21 short probe
+- same frozen mapper and same several-day evening regime framing
+- test holdout: `2026-04-16T21-00-10.parquet`
+- best route by score/raw pnl: `regonly_l1_2d_h8 / short / q80_p2_hold48`
+- pnl `+247.32`, trades `26`, pnl/trade `9.51`
+- precision `0.5616`, f1 `0.6652`, rmse_ratio `0.9338`
+- friction table: `+221.32 @1`, `+195.32 @2`, `+117.32 @5`, `-12.68 @10`
+- this is materially stronger than exp38 and survives meaningful friction
+
+Artifacts:
+- `experiments/results/exp39_evening_regime_fullfiles_l1_2d_h8_holdout21_shortprobe_20260420T114321Z.json`
+- `experiments/notes/exp39_evening_regime_fullfiles_l1_2d_h8_holdout21_shortprobe_20260420T114321Z.md`
+
+### What this says
+Good:
+- screenshots are from holdout test data, not train data
+- several-day uncapped evening training + short-side execution is the first branch that turned the honest 2D mapper into a live-looking candidate
+- rmse stayed honest on both holdouts
+- adjacent holdout behavior improved rather than collapsing immediately
+
+Bad / caution:
+- visual map fit is still coarse, not tightly event-aligned
+- train loss vs test loss still suggests overfit risk
+- two holdouts is encouraging, not enough for promotion
+
+### Decision
+Call this branch `promising_short_evening_candidate_not_promoted`.
+It is the best current idea/trick: freeze the mapper, exploit directional inversion in thinner evening liquidity, and validate on adjacent holdouts before touching architecture again.
+
+### Exact next mutation
+Do NOT retrain a new architecture yet.
+Keep `regonly_l1_2d_h8` frozen, keep the evening-regime slice, keep short-only execution, and run the next adjacent holdouts:
+- `2026-04-16T22-00-00.parquet`
+- `2026-04-16T23-00-02.parquet`
+using the same friction table (`1/2/5/10`).
+Only if those fail do we change the extraction/training recipe.
+
+---
+
+## exp40 / exp41 adjacent evening short-side confirmation — 2026-04-20 UTC
+
+### Idea iterated
+Do not touch architecture yet.
+Pressure-test the same frozen short evening branch on the next adjacent holdouts before claiming anything.
+
+### exp40 — holdout22
+- test holdout: `2026-04-16T22-00-00.parquet`
+- train files: expanded uncapped evening train set through `2026-04-16T21`
+- best route by score: `regonly_l1_2d_h8 / short / q90_p2_hold96`
+- pnl `+144.40`, trades `7`, pnl/trade `20.63`
+- best raw pnl: `q80_p3_hold48` -> `+161.68`
+- precision `0.5459`, f1 `0.5860`, rmse_ratio `0.9962`
+- friction for score winner: `+137.40 @1`, `+130.40 @2`, `+109.40 @5`, `+74.40 @10`
+- verdict: still alive and robust. Metrics softened vs holdout21, but the branch clearly did not collapse.
+
+Artifacts:
+- `experiments/results/exp40_evening_regime_fullfiles_l1_2d_h8_holdout22_shortprobe_20260420T182439Z.json`
+- `experiments/notes/exp40_evening_regime_fullfiles_l1_2d_h8_holdout22_shortprobe_20260420T182439Z.md`
+
+### exp41 — holdout23
+- initial GPU run hit `torch.OutOfMemoryError` after expanding the uncapped train span again
+- correct response was NOT to reintroduce hidden data caps; reran on CPU with the same uncapped train/test setup
+- test holdout: `2026-04-16T23-00-02.parquet`
+- best route by score/raw pnl: `regonly_l1_2d_h8 / short / q90_p2_hold96`
+- pnl `+45.07`, trades `6`, pnl/trade `7.51`
+- precision `0.4535`, f1 `0.5289`, rmse_ratio `0.9748`
+- friction for score winner: `+39.07 @1`, `+33.07 @2`, `+15.07 @5`, `-14.93 @10`
+- verdict: weaker, but still positive and still alive at cost 5. The branch degraded, but it did not snap.
+
+Artifacts:
+- `experiments/results/exp41_evening_regime_fullfiles_l1_2d_h8_holdout23_shortprobe_cpu_20260420T183059Z.json`
+- `experiments/notes/exp41_evening_regime_fullfiles_l1_2d_h8_holdout23_shortprobe_cpu_20260420T183059Z.md`
+
+### What this new confirmation pass says
+Good:
+- the short evening branch is now positive on four adjacent holdouts (`T20`, `T21`, `T22`, `T23`)
+- it stayed honest on RMSE throughout (`rmse_ratio` stayed below 1.0 on all four)
+- it survived friction at cost 5 on all four holdouts
+- the branch is therefore more than a cherry-picked screenshot
+
+Caution:
+- strength is uneven: `T21` and `T22` are much stronger than `T20` and especially `T23`
+- precision/f1 drifted down on `T23`
+- the branch still looks regime-sensitive rather than universally strong
+- growing the uncapped train span can exceed 8 GB VRAM, so future confirmation runs may need CPU or a lower-memory execution path
+
+### Decision
+Upgrade the branch from `promising_short_evening_candidate_not_promoted` to `promising_regime_specific_short_candidate`.
+Still not a universal signal. But now it has enough adjacent-holdout support to justify one new idea/trick before any architecture change.
+
+### Exact next improvement / idea / trick
+Freeze the mapper again.
+Do NOT retrain a new model yet.
+The next real mutation should be extraction-level and regime-aware:
+- keep `regonly_l1_2d_h8`
+- keep evening-only framing
+- keep short direction
+- narrow the trigger family around the winner `q90_p2_hold96`
+- add one single-factor execution mutation: longer persistence / hold logic around downside continuation versus fast re-entry churn
+
+Reason:
+- across `T22` and `T23`, `q90_p2_hold96` was the most stable score-winner
+- the branch already survives friction 5, so the smartest next test is to improve stability/churn, not change the map
+
+---
+
+## exp42 many-day April evening expansion — 2026-04-20 UTC
+
+You were right to push on data scale.
+This run stopped babying the branch and used much more April 2026 history.
+
+### Setup
+- train files: 20 uncapped evening files across `2026-04-14` through `2026-04-18`, hours `20:00` to `23:00`
+- test holdout: `2026-04-19T20-00-00.parquet`
+- mapper unchanged: `regonly_l1_2d_h8`
+- direction unchanged: `short`
+- no hidden sample caps
+- CPU run (to preserve full span instead of shrinking data after GPU/VRAM issues)
+
+### Data scale
+- train windows: `11265 -> 3943` after event filter
+- test windows: `643 -> 226`
+- train timesteps: `4,037,632`
+- test timesteps: `231,424`
+- runtime: `1091.09s`
+
+### Result
+Best route:
+- `regonly_l1_2d_h8 / short / q80_p1_hold48`
+- pnl `+8.57`
+- trades `1`
+- precision `0.2113`
+- f1 `0.0001`
+- rmse_ratio `1.0000`
+
+Friction:
+- `+7.57 @1`
+- `+6.57 @2`
+- `+3.57 @5`
+- `-1.43 @10`
+
+### What this means
+This broader April expansion mostly killed the branch.
+The earlier evening short effect was real enough to show up on the local neighboring holdouts, but it does NOT look stable when scaled to much more April evening history in the same recipe.
+
+So the correct conclusion is not “use less data.”
+It is:
+- more data exposed that the current evening-only short recipe is too local / brittle
+- the branch should be demoted
+- the next idea must change framing, not just add even more of the same regime slice
+
+### Decision
+Demote the branch from `promising_regime_specific_short_candidate` to `interesting_local_regime_effect_not_stable_under_broad_april_expansion`.
+
+### Exact next mutation
+Use much more April data again, but stop restricting to evening-only.
+Next run should broaden the framing itself:
+- all-hours or much wider-hours April train set
+- April holdout test
+- same frozen mapper first
+- only then decide whether the mapper has any structural short edge left once regime overfitting is removed
+
+---
+
+## exp44 broad April stress-filter replay — 2026-04-22 UTC
+
+This run executed the queued stress-filter follow-up without changing the mapper family.
+Instead of slicing by clock hour, it trained on a broader April pool spanning midnight, morning, midday, and evening, then kept only present-time high-stress windows using the existing eventfulness score (abs return + range + realized vol + book std + book impulse).
+
+### Setup
+- train files: 20 uncapped April 2026 files across `2026-04-14` through `2026-04-18`
+- intraday phases per day: roughly `00:00`, `06:00`, `12/13:00`, `18:00`
+- test holdout: `2026-04-19T20-00-00.parquet`
+- mapper family unchanged: `regonly_l1_2d_h8`
+- direction unchanged: `short`
+- cadence / geometry unchanged: `1000ms`, `rolling=1024`, `look_ahead=64`
+- filter: top 35% by present-time stress/eventfulness, no hidden per-file caps
+- CPU run
+
+### Data scale
+- 2026 coverage: all 21 files were April 2026 (`20` train + `1` holdout), no older backfill needed
+- exact train days used: `2026-04-14` through `2026-04-18`
+- exact holdout day used: `2026-04-19`
+- total file count: `21`
+- train windows: `12398 -> 4340` after stress filter
+- test windows: `643 -> 226` after stress filter
+- train timesteps: `4,444,160`
+- test timesteps: `231,424`
+- capped vs uncapped: uncapped
+- run class: serious training / evaluation, not screening
+- runtime: `336.05s`
+- device: `cpu`
+
+### Result
+Best route:
+- `regonly_l1_2d_h8 / short / q80_p1_hold48`
+- pnl `+143.38`
+- trades `10`
+- pnl/trade `14.34`
+- precision `0.5041`
+- recall `0.7169`
+- f1 `0.5920`
+- rmse_ratio `0.9679`
+- zero-baseline rmse `7.47357`
+- model rmse `7.23399`
+
+Friction:
+- `+133.38 @1`
+- `+123.38 @2`
+- `+93.38 @5`
+- `+43.38 @10`
+
+### What this means
+This is the strongest result since the local evening branch and it matters because the edge reappeared only after switching from hour-of-day slicing to observable stress conditioning.
+That is a much more believable mechanism: short continuation appears when the book is already stressed, not merely because the clock says “evening”.
+
+Still, do not overclaim.
+This is one holdout, and the candidate still needs confirmation on later chronological April files before promotion. But unlike exp42/exp43, this branch has real recall, real trade count, positive dense metrics, and meaningful friction survival.
+
+### Decision
+`promising`, but not yet promoted to robust strategy.
+
+### Exact next mutation
+Keep the mapper frozen again. Do not do architecture churn.
+Advance to the next later April holdouts (`2026-04-19T21-00-00.parquet`, then `2026-04-19T22-00-00.parquet`) with the SAME broad train pool + stress filter + short execution to see whether this survives adjacent chronology rather than just one evening file.
+
+---
+
+## exp43 overnight 4-phase April falsification — 2026-04-22 UTC
+
+This executed the exact broad-framing follow-up from exp42 without changing the mapper.
+The question was simple: was the short branch structural, or was it just hiding inside one cozy hour-of-day pocket?
+
+### Setup
+- train files: 20 uncapped April 2026 files across `2026-04-14` through `2026-04-18`, hours `00:00` to `03:00`
+- test holdout: `2026-04-19T00-00-00.parquet`
+- mapper unchanged: `regonly_l1_2d_h8`
+- direction unchanged: `short`
+- cadence / geometry unchanged: `1000ms`, `rolling=1024`, `look_ahead=64`
+- event filter unchanged: top 35% of windows by present-time eventfulness, no hidden per-file caps
+- CPU run
+
+### Data scale
+- 2026 coverage: all 21 files were April 2026 (`20` train + `1` holdout), no older backfill needed
+- exact train days used: `2026-04-14`, `2026-04-15`, `2026-04-16`, `2026-04-17`, `2026-04-18`
+- exact holdout day used: `2026-04-19`
+- total file count: `21`
+- train windows: `12821 -> 4488` after event filter
+- test windows: `643 -> 226`
+- train timesteps: `4,595,712`
+- test timesteps: `231,424`
+- capped vs uncapped: uncapped
+- run class: serious training / evaluation, not screening
+- runtime: `494.56s`
+- device: `cpu`
+
+### Result
+Best route:
+- `regonly_l1_2d_h8 / short / q80_p1_hold48`
+- pnl `-0.00781`
+- trades `1`
+- pnl/trade `-0.00781`
+- precision `0.0867`
+- recall `0.0000238`
+- f1 `0.0000476`
+- rmse_ratio `1.0000`
+- zero-baseline rmse `4.82557`
+- model rmse `4.82557`
+
+Friction:
+- `-1.00781 @1`
+- `-2.00781 @2`
+- `-5.00781 @5`
+- `-10.00781 @10`
+
+### What this means
+This overnight 4-phase falsification is dead.
+The mapper stayed honest on dense error, but the strategy layer was effectively absent: one trade, near-zero recall, and negative pnl before friction.
+
+That is useful information.
+It means the earlier short-side branch was not a general April short edge that simply needed broader time coverage.
+The signal appears tied to a narrower local regime, most plausibly thin-liquidity evening downside continuation, not to a robust all-hours / wider-hours short map.
+
+### Decision
+`not promising yet`.
+Really: this specific broadened-framing branch is close to dead.
+Do not promote it.
+
+### Exact next mutation
+Do not do architecture churn.
+Do not keep sweeping hour-of-day slices blindly.
+The next grounded mutation should keep April breadth and the frozen mapper, but change the filter from clock time to observable stress:
+- broad April train pool
+- present-time realized-vol / intrawindow range / book-impulse filter
+- short-side replay on a later April holdout
+
+That tests a mechanism a trader would actually say out loud:
+short continuation may exist only when the book is stressed, not merely because it is a certain hour.
+If that still gives near-zero recall and dead pnl, stop treating this mapper as a viable short-strategy branch.
+
+---
+
+## exp45 adjacent-holdout confirmation of the broad April stress short branch — 2026-04-22 UTC
+
+This executed the exact queued confirmation after exp44.
+No mapper retrain, no architecture churn, no new regime slicing trick.
+The only mutation was chronological confirmation: run the same frozen broad-April stress-conditioned short replay on the next adjacent holdouts.
+
+### Setup
+- train files: same 20 uncapped April 2026 files used in exp44, spanning `2026-04-14` through `2026-04-18` across roughly `00:00`, `06:00`, `12/13:00`, and `18:00`
+- holdouts: `2026-04-19T21-00-00.parquet` and `2026-04-19T22-00-00.parquet`
+- mapper unchanged: `regonly_l1_2d_h8`
+- direction unchanged: `short`
+- cadence / geometry unchanged: `1000ms`, `rolling=1024`, `look_ahead=64`
+- event filter unchanged: top 35% of windows by present-time stress score, uncapped loading
+- CPU run
+
+### Data scale
+- 2026 coverage: all files were 2026; no older backfill needed
+- exact train days used: `2026-04-14`, `2026-04-15`, `2026-04-16`, `2026-04-17`, `2026-04-18`
+- exact holdout day used: `2026-04-19`
+- total file count per serious run: `21` (`20` train + `1` holdout)
+- train windows: `12398 -> 4340` after stress filter
+- each holdout windows: `644 -> 226`
+- train timesteps: `4,444,160`
+- each holdout timesteps: `231,424`
+- capped vs uncapped: uncapped
+- run class: serious training / evaluation, not screening
+- runtimes: `408.968s` for `21:00`, `438.006s` for `22:00`
+- device: `cpu`
+
+### Results
+Holdout `21:00` best route:
+- `regonly_l1_2d_h8 / short / q80_p1_hold48`
+- pnl `+93.57`
+- trades `11`
+- pnl/trade `8.51`
+- precision `0.5179`
+- recall `0.7089`
+- f1 `0.5985`
+- rmse_ratio `0.9577`
+- friction: `+82.57 @1`, `+71.57 @2`, `+38.57 @5`, `-16.43 @10`
+
+Holdout `22:00` best route:
+- `regonly_l1_2d_h8 / short / q90_p2_hold96`
+- pnl `+95.41`
+- trades `7`
+- pnl/trade `13.63`
+- precision `0.6089`
+- recall `0.7974`
+- f1 `0.6905`
+- rmse_ratio `0.9528`
+- friction: `+88.41 @1`, `+81.41 @2`, `+60.41 @5`, `+25.41 @10`
+
+### What this means
+This is the first honest adjacent-holdout confirmation that the exp44 branch was not just one lucky file.
+The same frozen mapper survived the next two chronological evening holdouts with positive short PnL and honest dense-map quality.
+
+That matters scientifically.
+It upgrades the interpretation from `interesting one-holdout stress replay` to `credible regime-specific short branch`.
+The mechanism story is now more believable: downside continuation is being captured when the book is already stressed, and that effect persists across multiple neighboring holdouts.
+
+But there is still a real caution line.
+This is not yet a robust all-regime strategy. Execution quality is clearly weaker than signal quality:
+- the `21:00` holdout turns negative at `10` ticks friction,
+- the `22:00` holdout still contains overtrading trigger families that lose despite the same underlying mapper metrics.
+
+So the next bottleneck is not obviously representation learning. It is extraction / execution discipline.
+
+### Decision
+`promising`.
+Not ready for live deployment, but clearly stronger than exp44 alone and strong enough to justify another frozen-mapper confirmation/broadening cycle before any retrain.
+
+### Exact next mutation
+Keep the mapper frozen again.
+Do not do architecture churn yet.
+Broaden the same stress-conditioned regime across more 2026 dates and test a later chronological evening holdout beyond `2026-04-19`, while lightly mutating execution around the surviving trigger family (`q80_p1_hold48` vs `q90_p2_hold96`) to reduce friction fragility.
+
+## 2026-04-22 exp46 recent-24 later-holdout scale check
+
+Status: DONE
+
+### Why this run existed
+The exp45 adjacent-holdout confirmation upgraded the stress-conditioned short branch from a curiosity to a credible regime-specific candidate.
+The right next scientific question was not "can we make the mapper fancier?" but "does the same frozen mapper survive a later chronological evening holdout when trained on materially more recent 2026 data?"
+
+### Mutation from prior run
+- Kept the mapper frozen: `regonly_l1_2d_h8`
+- Kept direction short-only
+- Kept cadence / geometry fixed: `1000ms`, `rolling=1024`, `look_ahead=64`
+- Kept the same present-time stress filter (top 35% by observable stress)
+- Changed one practical factor only: broadened the train pool from 20 files (`2026-04-14`..`2026-04-18`) to 24 more recent files (`2026-04-16`..`2026-04-21`) and advanced the holdout to `2026-04-21T22-00-00`
+
+Practical execution note:
+- The originally planned 32-file uncapped scale-up was too large for this machine and died before artifact creation.
+- Rather than fake success or silently downshift to a tiny cap, the completed run used the largest uncapped recent-2026 slice that finished honestly on CPU.
+
+### Hypothesis
+If the branch is structurally stress-conditioned and not just an April 19 pocket, then a later evening holdout on a broader recent-2026 train pool should still yield positive short PnL with `rmse_ratio < 1`, even if the best extraction policy shifts away from the prior persistence-heavy winner.
+
+### Artifacts
+- Summary JSON: `experiments/results/exp46_recent24_stress_short_scale_check_20260421T220000_20260422T171817Z.json`
+- Best-route JSON: `experiments/results/exp46_recent24_stress_short_scale_check_20260421T220000_regonly_l1_2d_h8__short__q90_p1_hold48_20260422T171817Z.json`
+- Summary note: `experiments/notes/exp46_recent24_stress_short_scale_check_20260421T220000_20260422T171817Z.md`
+- Aligned continuity image: `experiments/pictures/exp46_recent24_stress_short_scale_check_20260421T220000_regonly_l1_2d_h8__short_slide_20260422T171817Z.png`
+- Diagnostic fixed image: `experiments/pictures/exp46_recent24_stress_short_scale_check_20260421T220000_regonly_l1_2d_h8__short__q90_p1_hold48_fixed_20260422T171817Z.png`
+- Diagnostic best image: `experiments/pictures/exp46_recent24_stress_short_scale_check_20260421T220000_regonly_l1_2d_h8__short__q90_p1_hold48_best_20260422T171817Z.png`
+- DB rows: `experiment_runs.id = 782..791`
+
+### Data scale
+- 2026 coverage used: 24 train files from `2026-04-16T00-00-00` through `2026-04-21T18-00-10`; holdout `2026-04-21T22-00-00`
+- Total file count: `25` (`24` train + `1` holdout), all from 2026
+- Capped vs uncapped: uncapped (`max_windows_per_file=null`)
+- Train windows: `14957 -> 5235` after stress filter
+- Test windows: `642 -> 225` after stress filter
+- Train timesteps: `5,360,640`
+- Test timesteps: `230,400`
+- Runtime: `480.998s` total wall-clock (`372.118s` for the best-route artifact)
+- Device: `cpu`
+
+### Results
+Best route by score and raw PnL:
+- `regonly_l1_2d_h8 / short / q90_p1_hold48`
+- pnl `+138.27`
+- trades `6`
+- pnl/trade `23.05`
+- precision `0.4588`
+- recall `0.7418`
+- f1 `0.5670`
+- rmse_ratio `0.9563`
+- friction: `+132.27 @1`, `+126.27 @2`, `+108.27 @5`, `+78.27 @10`
+
+Execution sweep readout:
+- Fast routes dominated: `q90_p1_hold48`, `q80_p2_hold48`, and `q80_p3_hold48` all stayed strongly positive.
+- The old persistence-heavy family degraded badly here: `q90_p2_hold96` and neighbors turned negative despite the same mapper metrics.
+- That means the representation may still be valid, but regime-specific execution extraction is changing over time.
+
+### Interpretation
+This is a meaningful confirmation, not a victory lap.
+
+What held up:
+- The branch survived a later chronological evening holdout.
+- Dense-map quality stayed honest (`rmse_ratio < 1`).
+- Best-route PnL exceeded the earlier Apr 19 22:00 confirmation in raw dollars and stayed positive even at `10` ticks friction.
+
+What weakened:
+- Precision and F1 were lower than exp45's strongest Apr 19 22:00 route.
+- The previously strongest persistence-heavy trigger family failed here.
+
+Scientific read:
+- The mapper still appears to contain a real stress-conditioned downside signal.
+- The bottleneck is increasingly extraction policy, not obviously representation learning.
+- The surviving edge now looks more like a faster downside continuation / liquidation follow-through branch than a slower persistence-hold branch.
+
+### Decision
+`promising`.
+Still regime-specific, still not live-ready, but the branch is now harder to dismiss as a local April 19 artifact.
+
+### Exact next mutation
+Keep the mapper frozen.
+Do not retrain yet.
+Run the same recent stress-conditioned framing on the next chronological evening holdout (`2026-04-21T23-00-00` or the next available comparable evening holdout) and mutate only fast execution around the new winner:
+- `q90_p1_hold48`
+- nearby higher-threshold fast-entry variants
+- slightly wider side margins / fast exits
+
+---
+
+## exp48 post-23:00 multi-holdout execution falsification — 2026-04-22 UTC
+
+This executed the exact queued follow-up from exp47 without changing the mapper.
+The question was no longer whether the map was honest — exp47 already suggested it was.
+The question was whether the execution failure at `2026-04-21T23:00:00` meant the branch was dead, or whether execution selectivity had simply become hour-sensitive inside the same stress regime.
+
+### Setup
+- train files: same 24 uncapped recent-2026 files used in exp46/exp47, spanning `2026-04-16` through `2026-04-21` across `00:00`, `06:00`, `12:00`, and `18:00`
+- holdouts: `2026-04-22T00-00-00.parquet` and `2026-04-22T01-00-00.parquet`
+- mapper unchanged: `regonly_l1_2d_h8`
+- direction unchanged: `short`
+- cadence / geometry unchanged: `1000ms`, `rolling=1024`, `look_ahead=64`
+- event filter unchanged: top 35% of windows by present-time observable stress, uncapped loading
+- CPU run
+
+### Data scale
+- 2026 coverage: all files were 2026; no older backfill needed
+- exact train days used: `2026-04-16`, `2026-04-17`, `2026-04-18`, `2026-04-19`, `2026-04-20`, `2026-04-21`
+- exact holdout day used: `2026-04-22`
+- total unique file count across the mutation: `26` (`24` train + `2` holdouts)
+- per serious run file count: `25` (`24` train + `1` holdout)
+- train windows per run: `14957 -> 5235` after stress filter
+- test windows: `641 -> 225` for `00:00`; `618 -> 217` for `01:00`
+- train timesteps per run: `5,360,640`
+- test timesteps: `230,400` for `00:00`; `222,208` for `01:00`
+- capped vs uncapped: uncapped
+- run class: serious training / evaluation, not screening
+- runtime: `484.910s` for `00:00`, `485.471s` for `01:00`, about `970.381s` combined
+- device: `cpu`
+
+### Results
+Holdout `00:00` best route:
+- `regonly_l1_2d_h8 / short / q95_p1_hold48`
+- pnl `+62.34`
+- trades `2`
+- pnl/trade `31.17`
+- precision `0.4875`
+- recall `0.7166`
+- f1 `0.5802`
+- rmse_ratio `0.9585`
+
+Execution split on `00:00`:
+- stricter fast family recovered: `q95_p1_hold48=+62.34`, `q95_p2_hold96=+58.97`
+- persistence/side-margin routes were also positive but smaller
+- relaxed fast family still failed: `q90_p1_hold48=-24.14`, `q90_p2_hold48=-15.23`
+
+Holdout `01:00` best route:
+- `regonly_l1_2d_h8 / short / q90_p1_hold48`
+- pnl `+113.54`
+- trades `6`
+- pnl/trade `18.92`
+- precision `0.4931`
+- recall `0.7444`
+- f1 `0.5932`
+- rmse_ratio `0.9679`
+
+Execution split on `01:00`:
+- relaxed fast family came back strongly: `q90_p1_hold48=+113.54`
+- stricter fast family weakened: `q95_p1_hold48=+13.05`, `q95_p2_hold96=-6.97`
+- several neighbors remained positive, so this was not a one-route fluke
+
+### What this means
+This is the key scientific update from the run:
+exp47 was not mapper death.
+The short branch reactivated immediately on the next two chronological post-23:00 holdouts while keeping honest dense/map quality.
+
+But the run also says something equally important:
+there is still no single stable extraction family.
+The optimal trigger flipped by hour:
+- `00:00` preferred stricter high-threshold fast entries,
+- `01:00` preferred the previously failing relaxed fast route.
+
+That is exactly the kind of behavior that argues for conditional execution selection rather than immediate mapper retraining.
+The representation still looks live; the extraction policy is the fragile layer.
+
+### Decision
+`promising` as a mapper + stress-regime branch.
+Still not a fixed-policy strategy candidate.
+Do not promote a universal `q90` or universal `q95` rule from this run.
+
+### Exact next mutation
+Keep the mapper frozen again.
+Do not retrain yet.
+Mutate only execution-policy selection:
+- build a simple present-time observable gate that chooses between strict fast (`q95_p1_hold48`) and relaxed fast (`q90_p1_hold48`)
+- use current-window stress / impulse intensity only
+- validate that selector on the next later chronological holdout(s)
+
+If that selector fails, *then* consider broader execution-family falsification or mapper refresh.
+
+The goal is to test whether the fast extraction family, not just the mapper, survives multiple later holdouts with positive high-friction PnL.
+
+
+
+## 2026-04-22 21:11:49Z exp49 selector validation
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short branch fixed.
+- Changed one practical layer only: execution selection between `q95_p1_hold48` and `q90_p1_hold48` using a single present-time observable (`top5 mean book_impulse` on the holdout event-filter ranking).
+- Calibration reused exp48 holdouts `00:00` and `01:00`; serious validation moved to `02:00` and `03:00`.
+
+### Hypothesis
+- The post-23:00 execution flip is partly explainable by current-window stress intensity, so a simple book-impulse gate can choose the better fast short policy without retraining the mapper.
+
+### Artifacts
+- JSON: `experiments/results/exp49_recent24_stress_short_selector_validation_20260422T211149Z.json`
+- Summary picture: `experiments/pictures/exp49_recent24_stress_short_selector_validation_selector_summary_20260422T211149Z.png`
+- Notes: `experiments/notes/exp49_recent24_stress_short_selector_validation_20260422T211149Z.md`
+- DB row: `experiment_runs.id = 842`
+
+### Outcome
+- Selector threshold: `0.448849`
+- Selector total pnl on validation: `-105.66406`
+- Fixed q95 total pnl: `-105.66406`
+- Fixed q90 total pnl: `45.16406`
+- Correct route selections: `1/2`
+- Decision: `not promising yet`
+
+### Interpretation
+- The selector did not generalize cleanly enough on the next holdouts, so execution drift remains the blocker and the mapper should stay frozen while the execution layer is falsified further.
+
+## 2026-04-22 22:34:51Z exp50 two-feature execution selector
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short branch fixed.
+- Changed one practical layer only: execution selection. The failed 1-feature selector was replaced by a 2-feature nearest-centroid gate using `top5 mean book_impulse` + `top5 mean range_bps`.
+- Calibration reused existing holdouts `00:00`, `01:00`, `02:00`, `03:00`; serious validation moved to `04:00` and `05:00`.
+
+### Hypothesis
+- The frozen short branch maps different execution winners onto a coarse present-time stress geometry, so a simple observable 2-feature selector can choose among strict fast, relaxed fast, and persistence-fast-exit routes without changing the mapper.
+
+### Artifacts
+- JSON: `experiments/results/exp50_recent24_stress_short_two_feature_route_selector_20260422T223451Z.json`
+- Summary picture: `experiments/pictures/exp50_recent24_stress_short_two_feature_route_selector_selector_summary_20260422T223451Z.png`
+- Notes: `experiments/notes/exp50_recent24_stress_short_two_feature_route_selector_20260422T223451Z.md`
+- DB row: `experiment_runs.id = 863`
+
+### Outcome
+- Selector total pnl on validation: `119.80469`
+- Fixed route totals: `q95_p1_hold48=43.46, q90_p1_hold48=119.80, q90_persistence2_fast_exit=109.07`
+- Correct route selections: `2/2`
+- Decision: `promising`
+
+### Interpretation
+- The selector adds evidence that execution drift is at least partly observable in present-time stress geometry and may be addressable without mapper retraining.
+
+## 2026-04-22 23:56:33Z exp51 frozen two-feature selector follow-up
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short branch fixed.
+- Kept the exp50 2-feature selector frozen as well: same scaler, same centroids, same candidate routes, same calibration holdouts `00:00`..`03:00`.
+- Changed one practical layer only: validation scope. Serious validation moved forward to later chronological holdouts `06:00` and `07:00`.
+
+### Hypothesis
+- If the exp50 selector was real rather than a local tie with the best fixed route on one active holdout, it should continue to match or beat the best fixed route on later chronological holdouts without any refit.
+
+### Artifacts
+- JSON: `experiments/results/exp51_recent24_stress_short_two_feature_route_selector_followup_20260422T235633Z.json`
+- Summary picture: `experiments/pictures/exp51_recent24_stress_short_two_feature_route_selector_followup_selector_summary_20260422T235633Z.png`
+- Notes: `experiments/notes/exp51_recent24_stress_short_two_feature_route_selector_followup_20260422T235633Z.md`
+- DB row: `experiment_runs.id = 884`
+
+### Outcome
+- Selector total pnl on validation: `-53.36719`
+- Fixed route totals: `q95_p1_hold48=-53.37, q90_p1_hold48=51.89, q90_persistence2_fast_exit=48.03`
+- Correct route selections: `0/2`
+- Decision: `not promising yet`
+
+### Interpretation
+- The frozen selector did not stay ahead of fixed routes on later holdouts, so exp50 should be treated as incomplete evidence and execution fragility remains the active blocker.
+
+## 2026-04-23 01:18:14Z exp52 frozen-route day/evening falsification
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short branch fixed.
+- Kept the exp50 2-feature selector frozen as well: same scaler, same centroids, same candidate routes, same calibration holdouts `00:00`..`03:00`.
+- Changed one practical layer only: validation scope. Serious validation broadened to later day/evening holdouts `08:00`, `09:00`, `18:00`, and `19:00`.
+
+### Hypothesis
+- If the selector is real rather than an early-morning local fit, it should remain competitive with the best fixed route on a materially broader later-2026 day/evening validation set without any refit.
+
+### Artifacts
+- JSON: `experiments/results/exp52_recent24_stress_short_route_falsification_day_evening_20260423T011814Z.json`
+- Summary picture: `experiments/pictures/exp52_recent24_stress_short_route_falsification_day_evening_selector_summary_20260423T011814Z.png`
+- Notes: `experiments/notes/exp52_recent24_stress_short_route_falsification_day_evening_20260423T011814Z.md`
+- DB row: `experiment_runs.id = 925`
+
+### Outcome
+- Selector total pnl on validation: `-73.95312`
+- Fixed route totals: `q95_p1_hold48=2.03, q90_p1_hold48=22.84, q90_persistence2_fast_exit=-78.23`
+- Correct route selections: `0/4`
+- Decision: `not promising yet`
+
+### Interpretation
+- The frozen selector still lagged the best fixed routes on broader later holdouts, so selector geometry remains overfit and execution fragility remains the active blocker.
+
+## 2026-04-23 02:45:30Z exp53 fixed-route later-evening robustness
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short branch fixed.
+- Stopped selector refits after exp52 failure.
+- Changed one practical layer only: compared fixed execution families on adjacent later-evening holdouts `20:00`, `21:00`, `22:00`, `23:00`.
+
+### Hypothesis
+- If selector geometry was the overfit layer rather than the mapper, adjacent later-evening holdouts should reveal one least-fragile fixed route family without retraining the mapper.
+
+### Artifacts
+- JSON: `experiments/results/exp53_recent24_stress_short_fixed_route_robustness_late_evening_20260423T024530Z.json`
+- Summary picture: `experiments/pictures/exp53_recent24_stress_short_fixed_route_robustness_late_evening_route_summary_20260423T024530Z.png`
+- Notes: `experiments/notes/exp53_recent24_stress_short_fixed_route_robustness_late_evening_20260423T024530Z.md`
+- DB row: `experiment_runs.id = 966`
+
+### Outcome
+- Route totals: `q95_p1_hold48=14.97, q90_p1_hold48=209.97, q90_persistence2_fast_exit=129.39, q95_p2_hold96=61.41, q90_p2_hold96=119.00`
+- Champion: `q90_p1_hold48` with pnl `209.96875`, wins `2/4`, trades `34`
+- Decision: `promising`
+
+### Interpretation
+- A fixed route family emerged as the least-fragile execution candidate on adjacent later-evening holdouts.
+## 2026-04-23 04:18:17Z exp54 next-date friction retest
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short branch fixed.
+- Kept fixed-route evaluation; no selector refit and no mapper retrain.
+- Changed one practical layer only: moved validation to the next chronological date block (`00:00`, `01:00`, `02:00`, `03:00`) and aggregated explicit higher-friction PnL.
+
+### Hypothesis
+- If late-evening `q90_p1_hold48` captured a real thin-book short branch, it should remain competitive on the next date block and stay positive under meaningful friction.
+
+### Artifacts
+- JSON: `experiments/results/exp54_recent24_stress_short_next_date_friction_retest_20260423T041817Z.json`
+- Summary picture: `experiments/pictures/exp54_recent24_stress_short_next_date_friction_retest_route_and_friction_summary_20260423T041817Z.png`
+- Notes: `experiments/notes/exp54_recent24_stress_short_next_date_friction_retest_20260423T041817Z.md`
+- DB row: `experiment_runs.id = 1007`
+
+### Outcome
+- Raw route totals: `q95_p1_hold48=163.41, q90_p1_hold48=144.20, q90_persistence2_fast_exit=232.18, q95_p2_hold96=174.43, q90_p2_hold96=181.11`
+- Friction totals: `q95_p1_hold48: c1=163.41, c2=163.41, c5=163.41, c10=163.41; q90_p1_hold48: c1=144.20, c2=144.20, c5=144.20, c10=144.20; q90_persistence2_fast_exit: c1=232.18, c2=232.18, c5=232.18, c10=232.18; q95_p2_hold96: c1=174.43, c2=174.43, c5=174.43, c10=174.43; q90_p2_hold96: c1=181.11, c2=181.11, c5=181.11, c10=181.11`
+- Champion: `q90_persistence2_fast_exit` with raw pnl `232.17969`, cost-5 pnl `232.17969`, wins `2/4`, trades `24`
+- Decision: `promising`
+
+### Interpretation
+- The fixed-route branch survived the date-roll and higher-friction retest well enough to stay in the serious-candidate set.
+## 2026-04-23 05:47:22Z exp55 freshest 04:00 route broadening with corrected friction
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short mapper fixed.
+- Kept short-only fixed-route evaluation; no selector refit and no mapper retrain.
+- Changed one research layer only: broadened the execution family on the freshest available new 04:00 holdout and corrected friction accounting locally after exp54's route-file lookup was shown to miss per-route friction payloads.
+
+### Hypothesis
+- If the branch is real, persistence-oriented routes should remain competitive after corrected friction even if looser q80 fast routes win raw pnl.
+
+### Artifacts
+- JSON: `experiments/results/exp55_recent24_stress_short_0400_route_broadening_corrected_friction_20260423T054722Z.json`
+- Summary picture: `experiments/pictures/exp55_recent24_stress_short_0400_route_broadening_corrected_friction_route_and_friction_summary_20260423T054722Z.png`
+- Notes: `experiments/notes/exp55_recent24_stress_short_0400_route_broadening_corrected_friction_20260423T054722Z.md`
+- DB row: `experiment_runs.id = 1018`
+
+### Outcome
+- Raw route totals: `q80_p1_hold48=-36.56, q95_p1_hold48=0.00, q90_p1_hold48=-30.81, q90_persistence2_fast_exit=4.97, q95_p2_hold96=0.00, q90_p2_hold96=6.19, q80_persistence2_wide_margin=0.00`
+- Corrected friction totals: `q80_p1_hold48: c1=-44.56, c2=-52.56, c5=-76.56, c10=-116.56; q95_p1_hold48: c1=0.00, c2=0.00, c5=0.00, c10=0.00; q90_p1_hold48: c1=-33.81, c2=-36.81, c5=-45.81, c10=-60.81; q90_persistence2_fast_exit: c1=3.97, c2=2.97, c5=-0.03, c10=-5.03; q95_p2_hold96: c1=0.00, c2=0.00, c5=0.00, c10=0.00; q90_p2_hold96: c1=5.19, c2=4.19, c5=1.19, c10=-3.81; q80_persistence2_wide_margin: c1=0.00, c2=0.00, c5=0.00, c10=0.00`
+- Champion: `q90_p2_hold96` with raw pnl `6.18750`, cost-5 pnl `1.18750`, trades `1`
+- Decision: `not promising yet`
+
+### Interpretation
+- This run is a freshness/falsification checkpoint, not promotion evidence. It only matters insofar as it tells us which execution families remain alive on the newest available 2026 hour.
+## 2026-04-23 07:04:38Z exp56 freshest 05:00 route continuation with corrected friction
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short mapper fixed.
+- Kept short-only fixed-route evaluation and corrected-friction accounting fixed.
+- Changed one research layer only: advanced the freshest available holdout from 04:00 to 05:00 with the same broadened route family.
+
+### Hypothesis
+- If the branch is real, one of the persistence2 routes should remain competitive after corrected friction on the next chronological holdout rather than reverting to empty/negative behavior.
+
+### Artifacts
+- JSON: `experiments/results/exp56_recent24_stress_short_0500_route_continuation_corrected_friction_20260423T070438Z.json`
+- Summary picture: `experiments/pictures/exp56_recent24_stress_short_0500_route_continuation_corrected_friction_route_and_friction_summary_20260423T070438Z.png`
+- Notes: `experiments/notes/exp56_recent24_stress_short_0500_route_continuation_corrected_friction_20260423T070438Z.md`
+- DB row: `experiment_runs.id = 1029`
+
+### Outcome
+- Raw route totals: `q80_p1_hold48=-50.48, q95_p1_hold48=-10.70, q90_p1_hold48=-8.08, q90_persistence2_fast_exit=-19.48, q95_p2_hold96=-34.05, q90_p2_hold96=-41.48, q80_persistence2_wide_margin=-10.70`
+- Corrected friction totals: `q80_p1_hold48: c1=-55.48, c2=-60.48, c5=-75.48, c10=-100.48; q95_p1_hold48: c1=-12.70, c2=-14.70, c5=-20.70, c10=-30.70; q90_p1_hold48: c1=-10.08, c2=-12.08, c5=-18.08, c10=-28.08; q90_persistence2_fast_exit: c1=-22.48, c2=-25.48, c5=-34.48, c10=-49.48; q95_p2_hold96: c1=-36.05, c2=-38.05, c5=-44.05, c10=-54.05; q90_p2_hold96: c1=-43.48, c2=-45.48, c5=-51.48, c10=-61.48; q80_persistence2_wide_margin: c1=-12.70, c2=-14.70, c5=-20.70, c10=-30.70`
+- Champion: `q90_p1_hold48` with raw pnl `-8.07812`, cost-5 pnl `-18.07812`, trades `2`
+- Decision: `not promising yet`
+
+### Interpretation
+- This is another freshness/falsification checkpoint. It matters only insofar as it shows whether the frozen execution family still expresses any tradable short branch on the very next 2026 hour.
+## 2026-04-23 08:30:35Z exp57 fresh 06:00/07:00 route falsification with corrected friction
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short mapper fixed.
+- Kept short-only fixed-route evaluation and corrected-friction accounting fixed.
+- Changed one research layer only: advanced the freshest available holdout set from 05:00 to the next two chronological fresh files (06:00 and 07:00) with the same broadened route family.
+
+### Hypothesis
+- If the branch is real, the 05:00 fast-route stabilization should survive across the next two chronological fresh holdouts under corrected friction rather than collapsing back into route drift or all-negative cost-adjusted PnL.
+
+### Artifacts
+- JSON: `experiments/results/exp57_recent24_stress_short_0600_0700_route_falsification_corrected_friction_20260423T083035Z.json`
+- Summary picture: `experiments/pictures/exp57_recent24_stress_short_0600_0700_route_falsification_corrected_friction_route_and_friction_summary_20260423T083035Z.png`
+- Notes: `experiments/notes/exp57_recent24_stress_short_0600_0700_route_falsification_corrected_friction_20260423T083035Z.md`
+- DB row: `experiment_runs.id = 1060`
+
+### Outcome
+- Raw route totals: `q80_p1_hold48=43.73, q95_p1_hold48=91.04, q90_p1_hold48=68.68, q90_persistence2_fast_exit=115.75, q95_p2_hold96=88.22, q90_p2_hold96=118.21, q80_persistence2_wide_margin=96.49`
+- Corrected friction totals: `q80_p1_hold48: c1=26.73, c2=9.73, c5=-41.27, c10=-126.27; q95_p1_hold48: c1=88.04, c2=85.04, c5=76.04, c10=61.04; q90_p1_hold48: c1=59.68, c2=50.68, c5=23.68, c10=-21.32; q90_persistence2_fast_exit: c1=111.75, c2=107.75, c5=95.75, c10=75.75; q95_p2_hold96: c1=85.22, c2=82.22, c5=73.22, c10=58.22; q90_p2_hold96: c1=114.21, c2=110.21, c5=98.21, c10=78.21; q80_persistence2_wide_margin: c1=93.49, c2=90.49, c5=81.49, c10=66.49`
+- Champion: `q90_p2_hold96` with raw pnl `118.21094`, cost-5 pnl `98.21094`, trades `4`
+- Decision: `not promising yet`
+
+### Interpretation
+- This is another freshness/falsification checkpoint. It matters only insofar as it shows whether the frozen execution family still expresses any tradable short branch on the very next 2026 hour.
+## 2026-04-23 09:55:03Z exp58 fresh 08:00 route continuation with corrected friction
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short mapper fixed.
+- Kept short-only fixed-route evaluation and corrected-friction accounting fixed.
+- Changed one research layer only: advanced the freshest available holdout from the 06:00/07:00 pair to the next chronological fresh file (08:00) with the same broadened route family.
+
+### Hypothesis
+- If the branch is real, the exp57 rebound should continue to express cost-adjusted short edge on the next chronological fresh holdout rather than collapsing back into zero-trade or all-negative cost-adjusted behavior.
+
+### Artifacts
+- JSON: `experiments/results/exp58_recent24_stress_short_0800_route_continuation_corrected_friction_20260423T095503Z.json`
+- Summary picture: `experiments/pictures/exp58_recent24_stress_short_0800_route_continuation_corrected_friction_route_and_friction_summary_20260423T095503Z.png`
+- Notes: `experiments/notes/exp58_recent24_stress_short_0800_route_continuation_corrected_friction_20260423T095503Z.md`
+- DB row: `experiment_runs.id = 1071`
+
+### Outcome
+- Raw route totals: `q80_p1_hold48=74.23, q95_p1_hold48=7.48, q90_p1_hold48=-1.61, q90_persistence2_fast_exit=13.12, q95_p2_hold96=-5.19, q90_p2_hold96=-22.58, q80_persistence2_wide_margin=-37.04`
+- Corrected friction totals: `q80_p1_hold48: c1=54.23, c2=34.23, c5=-25.77, c10=-125.77; q95_p1_hold48: c1=0.48, c2=-6.52, c5=-27.52, c10=-62.52; q90_p1_hold48: c1=-10.61, c2=-19.61, c5=-46.61, c10=-91.61; q90_persistence2_fast_exit: c1=3.12, c2=-6.88, c5=-36.88, c10=-86.88; q95_p2_hold96: c1=-10.19, c2=-15.19, c5=-30.19, c10=-55.19; q90_p2_hold96: c1=-30.58, c2=-38.58, c5=-62.58, c10=-102.58; q80_persistence2_wide_margin: c1=-44.04, c2=-51.04, c5=-72.04, c10=-107.04`
+- Champion: `q80_p1_hold48` with raw pnl `74.23438`, cost-5 pnl `-25.76562`, trades `20`
+- Decision: `not promising yet`
+
+### Interpretation
+- This is another freshness/falsification checkpoint. It matters only insofar as it shows whether the frozen execution family still expresses any tradable short branch on the very next 2026 hour.
+## 2026-04-23 11:15:05Z exp59 fresh 09:00/10:00 route continuation with corrected friction
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short mapper fixed.
+- Kept short-only fixed-route evaluation and corrected-friction accounting fixed.
+- Changed one research layer only: advanced the freshest available holdout set from the 08:00 checkpoint to the next two chronological fresh files (09:00 and 10:00) with the same broadened route family.
+
+### Hypothesis
+- If the branch is real, it should reactivate on the next two chronological fresh holdouts rather than staying friction-dead after the weak 08:00 checkpoint.
+
+### Artifacts
+- JSON: `experiments/results/exp59_recent24_stress_short_0910_route_continuation_corrected_friction_20260423T111505Z.json`
+- Summary picture: `experiments/pictures/exp59_recent24_stress_short_0910_route_continuation_corrected_friction_route_and_friction_summary_20260423T111505Z.png`
+- Notes: `experiments/notes/exp59_recent24_stress_short_0910_route_continuation_corrected_friction_20260423T111505Z.md`
+- DB row: `experiment_runs.id = 1092`
+
+### Outcome
+- Raw route totals: `q80_p1_hold48=-89.46, q95_p1_hold48=63.93, q90_p1_hold48=-32.96, q90_persistence2_fast_exit=42.13, q95_p2_hold96=-73.03, q90_p2_hold96=-39.94, q80_persistence2_wide_margin=-71.93`
+- Corrected friction totals: `q80_p1_hold48: c1=-141.46, c2=-193.46, c5=-349.46, c10=-609.46; q95_p1_hold48: c1=42.93, c2=21.93, c5=-41.07, c10=-146.07; q90_p1_hold48: c1=-66.96, c2=-100.96, c5=-202.96, c10=-372.96; q90_persistence2_fast_exit: c1=12.13, c2=-17.87, c5=-107.87, c10=-257.87; q95_p2_hold96: c1=-85.03, c2=-97.03, c5=-133.03, c10=-193.03; q90_p2_hold96: c1=-58.94, c2=-77.94, c5=-134.94, c10=-229.94; q80_persistence2_wide_margin: c1=-90.93, c2=-109.93, c5=-166.93, c10=-261.93`
+- Champion: `q95_p1_hold48` with raw pnl `63.92969`, cost-5 pnl `-41.07031`, trades `21`
+- Decision: `not promising yet`
+
+### Interpretation
+- This is another freshness/falsification checkpoint. It matters only insofar as it shows whether the frozen execution family still expresses any tradable short branch across the next two fresh 2026 hours.
