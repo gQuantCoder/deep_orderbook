@@ -4,6 +4,7 @@ from collections.abc import Iterable
 
 import numpy as np
 
+from deep_orderbook.research_core import ACTIVE_SHORT_ROUTE_NAMES
 from deep_orderbook.strategy_search import build_signal_features
 
 
@@ -13,7 +14,10 @@ def _quantile(arr: np.ndarray, q: float, fallback: float) -> float:
     return float(np.quantile(arr, q))
 
 
-def build_train_calibrated_strategy_grid(train_pred_map: np.ndarray) -> list[dict]:
+def build_train_calibrated_strategy_grid(
+    train_pred_map: np.ndarray,
+    route_names: Iterable[str] | None = None,
+) -> list[dict]:
     feats = build_signal_features(train_pred_map)
     up = feats["up_max"]
     margin = feats["margin"]
@@ -24,7 +28,7 @@ def build_train_calibrated_strategy_grid(train_pred_map: np.ndarray) -> list[dic
     m60 = _quantile(positive_margin, 0.60, 0.0)
     m80 = _quantile(positive_margin, 0.80, m60)
     m90 = _quantile(positive_margin, 0.90, m80)
-    return [
+    configs = [
         {"name": "q80_p1_hold48", "entry_threshold": q80, "exit_threshold": q80, "side_margin": m60, "persistence": 1, "cooldown": 4, "max_hold": 48},
         {"name": "q80_p2_hold48", "entry_threshold": q80, "exit_threshold": q80, "side_margin": m60, "persistence": 2, "cooldown": 4, "max_hold": 48},
         {"name": "q80_p3_hold48", "entry_threshold": q80, "exit_threshold": q80, "side_margin": m60, "persistence": 3, "cooldown": 4, "max_hold": 48},
@@ -36,6 +40,18 @@ def build_train_calibrated_strategy_grid(train_pred_map: np.ndarray) -> list[dic
         {"name": "q90_persistence2_fast_exit", "entry_threshold": q90, "exit_threshold": q80, "side_margin": m80, "persistence": 2, "cooldown": 6, "max_hold": 24},
         {"name": "q80_persistence2_wide_margin", "entry_threshold": q80, "exit_threshold": q80, "side_margin": m90, "persistence": 2, "cooldown": 6, "max_hold": 48},
     ]
+    if route_names is None:
+        return configs
+    route_names = list(route_names)
+    by_name = {cfg["name"]: cfg for cfg in configs}
+    missing = [name for name in route_names if name not in by_name]
+    if missing:
+        raise ValueError(f"Unknown route_names: {missing}")
+    return [by_name[name] for name in route_names]
+
+
+def active_short_strategy_names() -> tuple[str, ...]:
+    return ACTIVE_SHORT_ROUTE_NAMES
 
 
 def score_strategy_result(route: dict, *, precision: float, f1: float, rmse_ratio: float) -> float:

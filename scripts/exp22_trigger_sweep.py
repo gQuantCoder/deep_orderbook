@@ -26,6 +26,7 @@ from deep_orderbook.scientist_experiment import richness_gate
 from deep_orderbook.strategy import Strategy
 from deep_orderbook.strategy_search import evaluate_long_strategy, evaluate_short_strategy
 from deep_orderbook.trigger_search import (
+    active_short_strategy_names,
     build_friction_table,
     build_train_calibrated_strategy_grid,
     format_trigger_sweep_summary,
@@ -74,6 +75,7 @@ async def main(
     load_every: str = "100ms",
     shaper_config_override=None,
     allow_microburst: bool = False,
+    strategy_names: list[str] | None = None,
 ) -> None:
     ts = datetime.now(UTC)
     stamp = ts.strftime("%Y%m%dT%H%M%SZ")
@@ -245,7 +247,7 @@ async def main(
             gt_pnl_cont_parts.append(_gpnl)
         gt_pnl_cont = np.concatenate(gt_pnl_cont_parts) if gt_pnl_cont_parts else np.zeros(0)
 
-        strategy_grid = build_train_calibrated_strategy_grid(train_seq)
+        strategy_grid = build_train_calibrated_strategy_grid(train_seq, route_names=strategy_names)
         for direction in directions:
             strategy_fn = evaluate_long_strategy if direction == "long" else evaluate_short_strategy
 

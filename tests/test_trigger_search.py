@@ -25,6 +25,42 @@ def test_build_train_calibrated_strategy_grid_returns_multiple_distinct_configs(
     assert any(cfg["persistence"] > 1 for cfg in grid)
 
 
+def test_build_train_calibrated_strategy_grid_can_filter_to_active_subset() -> None:
+    pred = np.array(
+        [
+            [0.1, 0.2, 0.6, 0.7],
+            [0.2, 0.1, 0.8, 0.9],
+            [0.1, 0.1, 0.4, 0.5],
+            [0.3, 0.2, 0.9, 1.1],
+        ],
+        dtype=np.float32,
+    )
+    grid = build_train_calibrated_strategy_grid(pred, route_names=["q95_p1_hold48", "q90_p2_hold96"])
+
+    assert [cfg["name"] for cfg in grid] == ["q95_p1_hold48", "q90_p2_hold96"]
+    assert grid[0]["persistence"] == 1
+    assert grid[1]["max_hold"] == 96
+
+
+def test_build_train_calibrated_strategy_grid_rejects_unknown_route_name() -> None:
+    pred = np.array(
+        [
+            [0.1, 0.2, 0.6, 0.7],
+            [0.2, 0.1, 0.8, 0.9],
+            [0.1, 0.1, 0.4, 0.5],
+            [0.3, 0.2, 0.9, 1.1],
+        ],
+        dtype=np.float32,
+    )
+
+    try:
+        build_train_calibrated_strategy_grid(pred, route_names=["not_a_route"])
+    except ValueError as exc:
+        assert "Unknown route_names" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for unknown route")
+
+
 def test_score_strategy_result_rewards_positive_pnl_and_penalizes_churn() -> None:
     strong = score_strategy_result({"final_pnl": 10.0, "trade_count": 5, "market_time_fraction": 0.2}, precision=0.3, f1=0.4, rmse_ratio=1.0)
     weak = score_strategy_result({"final_pnl": -5.0, "trade_count": 20, "market_time_fraction": 0.8}, precision=0.3, f1=0.4, rmse_ratio=1.0)

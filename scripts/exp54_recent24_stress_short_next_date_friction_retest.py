@@ -198,6 +198,7 @@ async def _run_one_holdout(holdout: Path) -> dict[str, Any]:
         n_samples_per_file=None,
         load_every="1000ms",
         shaper_config_override=SHAPER,
+        strategy_names=ROUTES,
     )
     route_payloads: dict[str, dict[str, Any]] = {}
     feature_impulse = None
