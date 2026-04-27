@@ -2364,3 +2364,55 @@ Status: DONE
 
 ### Interpretation
 - This is another freshness/falsification checkpoint. It matters only insofar as it shows whether the frozen execution family still expresses any tradable short branch across the next two fresh 2026 hours.
+## 2026-04-26 23:21:03Z exp60 fresh 11:00/12:00 route continuation with corrected friction
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short mapper fixed.
+- Kept short-only fixed-route evaluation and corrected-friction accounting fixed.
+- Changed one research layer only: advanced the freshest available holdout set from the 09:00/10:00 checkpoint to the next two chronological fresh files (11:00 and 12:00) with the same broadened route family.
+
+### Hypothesis
+- If the branch is real, it should reactivate on the next two chronological fresh holdouts rather than staying friction-dead after the raw-positive but cost-5-dead 09:00/10:00 checkpoint.
+
+### Artifacts
+- JSON: `experiments/results/exp60_recent24_stress_short_1112_route_continuation_corrected_friction_20260426T232103Z.json`
+- Summary picture: `experiments/pictures/exp60_recent24_stress_short_1112_route_continuation_corrected_friction_route_and_friction_summary_20260426T232103Z.png`
+- Notes: `experiments/notes/exp60_recent24_stress_short_1112_route_continuation_corrected_friction_20260426T232103Z.md`
+- DB row: `experiment_runs.id = 1113`
+
+### Outcome
+- Raw route totals: `q80_p1_hold48=76.15, q95_p1_hold48=-37.20, q90_p1_hold48=137.14, q90_persistence2_fast_exit=-68.19, q95_p2_hold96=-26.60, q90_p2_hold96=-28.60, q80_persistence2_wide_margin=-58.49`
+- Corrected friction totals: `q80_p1_hold48: c1=63.15, c2=50.15, c5=11.15, c10=-53.85; q95_p1_hold48: c1=-43.20, c2=-49.20, c5=-67.20, c10=-97.20; q90_p1_hold48: c1=126.14, c2=115.14, c5=82.14, c10=27.14; q90_persistence2_fast_exit: c1=-74.19, c2=-80.19, c5=-98.19, c10=-128.19; q95_p2_hold96: c1=-29.60, c2=-32.60, c5=-41.60, c10=-56.60; q90_p2_hold96: c1=-32.60, c2=-36.60, c5=-48.60, c10=-68.60; q80_persistence2_wide_margin: c1=-61.49, c2=-64.49, c5=-73.49, c10=-88.49`
+- Champion: `q90_p1_hold48` with raw pnl `137.14062`, cost-5 pnl `82.14062`, trades `11`
+- Decision: `not promising yet`
+
+### Interpretation
+- This is another freshness/falsification checkpoint. It matters only insofar as it shows whether the frozen execution family still expresses any tradable short branch across the next two fresh 2026 hours.
+## 2026-04-26 23:38:04Z exp62 fresh 13:00/14:00 route continuation with corrected friction
+
+Status: DONE
+
+### Mutation from prior run
+- Kept the recent 24-file 2026 stress-conditioned short mapper fixed.
+- Kept short-only fixed-route evaluation and corrected-friction accounting fixed.
+- Changed one research layer only: advanced the freshest available holdout set from the 11:00/12:00 checkpoint to the next two chronological fresh files (13:00 and 14:00) with the same broadened route family.
+
+### Hypothesis
+- If the branch is real, it should stay alive on the next two chronological fresh holdouts rather than collapsing immediately after the positive-on-11:00/12:00 checkpoint.
+
+### Artifacts
+- JSON: `experiments/results/exp62_recent24_stress_short_1314_route_continuation_corrected_friction_20260426T233804Z.json`
+- Summary picture: `experiments/pictures/exp62_recent24_stress_short_1314_route_continuation_corrected_friction_route_and_friction_summary_20260426T233804Z.png`
+- Notes: `experiments/notes/exp62_recent24_stress_short_1314_route_continuation_corrected_friction_20260426T233804Z.md`
+- DB row: `experiment_runs.id = 1134`
+
+### Outcome
+- Raw route totals: `q80_p1_hold48=-199.06, q95_p1_hold48=-148.30, q90_p1_hold48=-255.96, q90_persistence2_fast_exit=-172.74, q95_p2_hold96=-45.09, q90_p2_hold96=-189.96, q80_persistence2_wide_margin=-146.50`
+- Corrected friction totals: `q80_p1_hold48: c1=-245.06, c2=-291.06, c5=-429.06, c10=-659.06; q95_p1_hold48: c1=-165.30, c2=-182.30, c5=-233.30, c10=-318.30; q90_p1_hold48: c1=-289.96, c2=-323.96, c5=-425.96, c10=-595.96; q90_persistence2_fast_exit: c1=-193.74, c2=-214.74, c5=-277.74, c10=-382.74; q95_p2_hold96: c1=-54.09, c2=-63.09, c5=-90.09, c10=-135.09; q90_p2_hold96: c1=-209.96, c2=-229.96, c5=-289.96, c10=-389.96; q80_persistence2_wide_margin: c1=-158.50, c2=-170.50, c5=-206.50, c10=-266.50`
+- Champion: `q95_p2_hold96` with raw pnl `-45.09375`, cost-5 pnl `-90.09375`, trades `9`
+- Decision: `not promising yet`
+
+### Interpretation
+- This is another freshness/falsification checkpoint. It matters only insofar as it shows whether the frozen execution family still expresses any tradable short branch across the next two fresh 2026 hours.
