@@ -1,19 +1,16 @@
+import asyncio
+from pathlib import Path
+from typing import AsyncGenerator, Optional, Tuple
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.learn.positional_encoding import PositionalEncoding
-from deep_orderbook.utils import logger
-import asyncio
-from pathlib import Path
-from tqdm.auto import tqdm
-from deep_orderbook.utils import make_handlers
-from deep_orderbook.visu import Visualizer
-from deep_orderbook.strategy import Strategy
-from deep_orderbook.config import TrainConfig, ReplayConfig, ShaperConfig
-import torch.optim as optim
-from typing import AsyncGenerator, Tuple, Optional
-import numpy as np
 from deep_orderbook.learn.trainer import Trainer
+from deep_orderbook.utils import logger
 
 
 class TimeSeriesTransformer(nn.Module):

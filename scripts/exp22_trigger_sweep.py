@@ -15,6 +15,7 @@ from deep_orderbook.btc_experiment_config import (
     summarize_dataset_scale,
 )
 from deep_orderbook.btc_search_lab import compute_png_quality_stats, get_batch_variant
+from deep_orderbook.config import ShaperConfig
 from deep_orderbook.experiment_tracking import register_experiment_run
 from deep_orderbook.pipeline_guards import (
     aggregate_per_window_strategy_result,
@@ -26,7 +27,6 @@ from deep_orderbook.scientist_experiment import richness_gate
 from deep_orderbook.strategy import Strategy
 from deep_orderbook.strategy_search import evaluate_long_strategy, evaluate_short_strategy
 from deep_orderbook.trigger_search import (
-    active_short_strategy_names,
     build_friction_table,
     build_train_calibrated_strategy_grid,
     format_trigger_sweep_summary,
@@ -73,7 +73,7 @@ async def main(
     n_samples_per_file: int | None = None,
     *,
     load_every: str = "100ms",
-    shaper_config_override=None,
+    shaper_config_override: ShaperConfig | None = None,
     allow_microburst: bool = False,
     strategy_names: list[str] | None = None,
     train_n_samples_per_file: int | None = None,
@@ -183,14 +183,14 @@ async def main(
         model = OrderBook2DTCN(
             bins=X_train_n.shape[2],
             in_ch=X_train_n.shape[3],
-            hid=cfg["hidden_dim"],
+            hid=cfg.hidden_dim,
             out_levels=Y_train.shape[-1],
-            trunk_dropout=cfg.get("trunk_dropout", 0.0),
-            num_levels=cfg.get("n_blocks", 10),
+            trunk_dropout=cfg.trunk_dropout,
+            num_levels=cfg.n_blocks,
         ).to(device)
         assert_min_receptive_field_2d(model)
-        opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
-        bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(cfg["pos_weight"], device=device))
+        opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+        bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(cfg.pos_weight, device=device))
         xtr = torch.from_numpy(X_train_n).to(device)
         ytr = torch.from_numpy(Y_train).to(device)
         xte = torch.from_numpy(X_test_n).to(device)
@@ -199,7 +199,7 @@ async def main(
         bs = 16
         train_losses, test_losses = [], []
         start_variant = time.perf_counter()
-        for _ in range(cfg["epochs"]):
+        for _ in range(cfg.epochs):
             perm = torch.randperm(xtr.shape[0], device=device)
             model.train()
             total = 0.0
@@ -209,9 +209,9 @@ async def main(
                 yb = ytr[idx]
                 reg, cls_logits = model(xb)
                 evt_target = (yb > tau).float()
-                loss_reg = regression_loss(reg, yb, cfg["reg_loss"], cfg["active_reg_weight"], tau)
-                loss_evt = bce(cls_logits, evt_target) if cfg["event_loss_weight"] > 0 else torch.zeros((), device=device)
-                loss = loss_reg + cfg["event_loss_weight"] * loss_evt
+                loss_reg = regression_loss(reg, yb, cfg.reg_loss, cfg.active_reg_weight, tau)
+                loss_evt = bce(cls_logits, evt_target) if cfg.event_loss_weight > 0 else torch.zeros((), device=device)
+                loss = loss_reg + cfg.event_loss_weight * loss_evt
                 opt.zero_grad(set_to_none=True)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -222,14 +222,14 @@ async def main(
             with torch.no_grad():
                 pred_te, cls_te = model(xte)
                 evt_target = (yte > tau).float()
-                loss_reg = regression_loss(pred_te, yte, cfg["reg_loss"], cfg["active_reg_weight"], tau)
-                loss_evt = bce(cls_te, evt_target) if cfg["event_loss_weight"] > 0 else torch.zeros((), device=device)
-                test_losses.append(float((loss_reg + cfg["event_loss_weight"] * loss_evt).item()))
+                loss_reg = regression_loss(pred_te, yte, cfg.reg_loss, cfg.active_reg_weight, tau)
+                loss_evt = bce(cls_te, evt_target) if cfg.event_loss_weight > 0 else torch.zeros((), device=device)
+                test_losses.append(float((loss_reg + cfg.event_loss_weight * loss_evt).item()))
 
         with torch.no_grad():
             pred_train = model(xtr)[0].detach().cpu().numpy()
             pred_test = model(xte)[0].detach().cpu().numpy()
-        cap = float(np.percentile(Y_train, cfg["prediction_cap_quantile"]))
+        cap = float(np.percentile(Y_train, cfg.prediction_cap_quantile))
         pred_train = np.clip(pred_train, 0.0, cap)
         pred_test = np.clip(pred_test, 0.0, cap)
 
@@ -371,7 +371,7 @@ async def main(
                     "device": str(device),
                     "train_files": [str(p) for p in train_files],
                     "test_file": str(test_file),
-                    "config": cfg,
+                    "config": cfg.model_dump(),
                     "strategy_config": strat_cfg,
                     "data_scale": data_scale,
                     "event_filter": event_filter,

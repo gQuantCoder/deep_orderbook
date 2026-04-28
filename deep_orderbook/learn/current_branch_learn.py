@@ -6,10 +6,12 @@ import numpy as np
 import torch
 from torch import nn
 
-from deep_orderbook.btc_search_lab import get_batch_variant
+from deep_orderbook.btc_search_lab import BatchVariantConfig, get_batch_variant
+from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
 from deep_orderbook.learn.tcn import OrderBook2DTCN, assert_min_receptive_field_2d
 from deep_orderbook.research_core import ACTIVE_SHORT_ROUTE_NAMES
 from deep_orderbook.trigger_search import build_train_calibrated_strategy_grid
+from deep_orderbook.visu import set_window_label
 from scripts.exp16_batch_h64_tcn import (
     DEFAULT_SHAPER_CONFIG_2026,
     filter_event_windows,
@@ -30,12 +32,11 @@ def _pick_watch_index(y_test: np.ndarray) -> int:
 
 
 async def train_and_predict(
-    config,
-    replay_config,
-    shaper_config,
-    test_config,
+    config: TrainConfig,
+    replay_config: ReplayConfig,
+    shaper_config: ShaperConfig,
+    test_config: ReplayConfig,
     variant_name: str = "regonly_l1_2d_h8",
-    market: str = "BTC-USD",
     train_top_fraction: float = 0.35,
     test_top_fraction: float = 0.35,
     train_n_samples_per_file: int | None = None,
@@ -43,7 +44,8 @@ async def train_and_predict(
     display_every_batches: int = 10,
     move_test_window: bool = True,
 ) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float], None]:
-    cfg = get_batch_variant(variant_name)
+    cfg: BatchVariantConfig = get_batch_variant(variant_name)
+    market = replay_config.only_first_market()[0]
 
     train_files = replay_config.file_list()
     if not train_files:
@@ -53,7 +55,6 @@ async def train_and_predict(
     test_files = test_config.file_list()
     if not test_files:
         raise RuntimeError(f"No test files resolved from {test_config}")
-    test_file = test_files[0]
 
     x_train_w, y_train_w, px_train_w = [], [], []
     for train_file in train_files:
@@ -69,14 +70,24 @@ async def train_and_predict(
         y_train_w.extend(yw)
         px_train_w.extend(pxw)
 
-    _rc_test, _sc_test, x_test_w, y_test_w, px_test_w = await load_file_windows(
-        test_file,
-        market,
-        n_samples=test_n_samples_per_file,
-        shaper_config=shaper_config,
-        every=test_config.every,
-        allow_microburst=False,
-    )
+    # Pick the first test file that actually produces windows — the very first file
+    # in a date range can be truncated (e.g. only 489 ticks) and yield nothing when
+    # rolling_window_size > tick count.
+    x_test_w, y_test_w, px_test_w = [], [], []
+    test_file = test_files[0]
+    for test_file in test_files:
+        _rc_test, _sc_test, x_test_w, y_test_w, px_test_w = await load_file_windows(
+            test_file,
+            market,
+            n_samples=test_n_samples_per_file,
+            shaper_config=shaper_config,
+            every=test_config.every,
+            allow_microburst=False,
+        )
+        if x_test_w:
+            break
+    if not x_test_w:
+        raise RuntimeError(f"No test windows produced from any of {len(test_files)} test files")
 
     x_test_w, y_test_w, px_test_w, _ = filter_event_windows(
         x_test_w, y_test_w, px_test_w, top_fraction=test_top_fraction, min_count=32
@@ -123,7 +134,10 @@ async def train_and_predict(
     def _display_index() -> int:
         if not move_test_window:
             return watch_idx
-        return int((watch_idx + update_count) % len(y_test))
+        # Chronological walk through the already time-sorted filtered test windows.
+        # Start at the beginning instead of the most-eventful slice to avoid the
+        # visual impression of bouncing/wrapping around a random midpoint.
+        return int(update_count % len(y_test))
 
     def _eval_test() -> tuple[np.ndarray, float]:
         """Fast: only test-set inference. Called every display_every_batches."""
@@ -151,6 +165,7 @@ async def train_and_predict(
         nonlocal update_count
         idx = _display_index()
         update_count += 1
+        set_window_label(f"{test_file.stem}   win {idx + 1}/{len(y_test)}")
         return (
             x_test[idx],
             y_test[idx][..., None],

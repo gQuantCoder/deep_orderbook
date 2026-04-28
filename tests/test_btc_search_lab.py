@@ -56,24 +56,24 @@ def test_exp24_smallnet_variants_are_registered_with_expected_training_knobs() -
         "regonly_huber_thr010_h32",
     ]:
         cfg = get_batch_variant(name)
-        assert cfg["hidden_dim"] == 32
-        assert cfg["epochs"] == 2
-        assert cfg["trunk_dropout"] == 0.2
+        assert cfg.hidden_dim == 32
+        assert cfg.epochs == 2
+        assert cfg.trunk_dropout == 0.2
 
-    assert get_batch_variant("regonly_wd1e3_h32")["weight_decay"] == 1e-3
-    assert get_batch_variant("l1_evt005_pw2_h32")["weight_decay"] == 1e-3
-    assert get_batch_variant("precision_evt005_pw2_thr010_h32")["weight_decay"] == 1e-3
-    assert get_batch_variant("regonly_huber_thr010_h32")["weight_decay"] == 1e-3
+    assert get_batch_variant("regonly_wd1e3_h32").weight_decay == 1e-3
+    assert get_batch_variant("l1_evt005_pw2_h32").weight_decay == 1e-3
+    assert get_batch_variant("precision_evt005_pw2_thr010_h32").weight_decay == 1e-3
+    assert get_batch_variant("regonly_huber_thr010_h32").weight_decay == 1e-3
 
 
 def test_l1_2d_h16_variant_is_registered_as_single_factor_capacity_bump() -> None:
     cfg = get_batch_variant("regonly_l1_2d_h16")
 
-    assert cfg["hidden_dim"] == 16
-    assert cfg["epochs"] == 4
-    assert cfg["reg_loss"] == "l1"
-    assert cfg["event_loss_weight"] == 0.0
-    assert cfg["weight_decay"] == 1e-4
+    assert cfg.hidden_dim == 16
+    assert cfg.epochs == 4
+    assert cfg.reg_loss == "l1"
+    assert cfg.event_loss_weight == 0.0
+    assert cfg.weight_decay == 1e-4
 
 
 def test_compute_png_quality_stats_flags_usable_nonflat_image(tmp_path: Path) -> None:

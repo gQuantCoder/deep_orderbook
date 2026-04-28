@@ -15,6 +15,15 @@ def _widget_env() -> bool:
     return not any(k.startswith("VSCODE_") for k in os.environ)
 
 
+# Module-level label set by the training loop; read by Visualizer.update().
+_window_label: str = ""
+
+
+def set_window_label(label: str) -> None:
+    global _window_label
+    _window_label = label
+
+
 class Visualizer:
     """Live-updating order-book visualiser.
 
@@ -52,132 +61,42 @@ class Visualizer:
     def _create_figure(self) -> go.FigureWidget | go.Figure:
         """Creates and returns a Plotly FigureWidget with subplots."""
         fig = make_subplots(
-            rows=6,  # Added one more row for PnL
+            rows=6,
             cols=1,
             subplot_titles=(
                 "Bid and Ask Price Levels",
                 "Books",
                 "Level Proximity",
                 "Prediction",
-                "Training Loss vs Test Loss",
-                "Omniscient PnL vs Prediction PnL",
+                "Loss",
+                "PnL",
             ),
-            vertical_spacing=0.05,
-            row_heights=[0.16] * 6,  # Adjusted heights for 6 subplots
+            vertical_spacing=0.04,
+            row_heights=[0.22, 0.18, 0.18, 0.18, 0.12, 0.12],
         )
-
         fig.update_layout(
-            height=1000,  # Increased height to accommodate new subplot
+            height=1100,
             width=1200,
-            margin=dict(t=50, b=50, l=50, r=50),
+            margin=dict(t=50, b=30, l=50, r=50),
             showlegend=True,
-            legend=dict(
-                orientation="h",  # horizontal legend
-                yanchor="bottom",
-                y=1.02,  # position above the plot
-                xanchor="center",
-                x=0.5,  # center horizontally
-            ),
-            # Configure all x-axes
-            xaxis=dict(
-                domain=[0, 1],
-                showgrid=True,
-                gridwidth=1,
-                gridcolor="lightgrey",
-                zeroline=False,
-                fixedrange=True,
-                dtick=100,
-                showticklabels=True,
-                range=[0, 1000],
-            ),
-            xaxis2=dict(
-                domain=[0, 1],
-                showgrid=True,
-                gridwidth=1,
-                gridcolor="lightgrey",
-                zeroline=False,
-                fixedrange=True,
-                # showticklabels=False,  # Hide labels for other subplots
-            ),
-            xaxis3=dict(
-                domain=[0, 1],
-                showgrid=True,
-                gridwidth=1,
-                gridcolor="lightgrey",
-                zeroline=False,
-                fixedrange=True,
-                # showticklabels=False,
-            ),
-            xaxis4=dict(
-                domain=[0, 1],
-                showgrid=True,
-                gridwidth=1,
-                gridcolor="lightgrey",
-                zeroline=False,
-                fixedrange=True,
-                showticklabels=False,
-            ),
-            xaxis5=dict(
-                domain=[0, 1],
-                showgrid=True,
-                gridwidth=1,
-                gridcolor="lightgrey",
-                zeroline=False,
-                fixedrange=True,
-                # showticklabels=False,
-            ),
-            xaxis6=dict(
-                domain=[0, 1],
-                showgrid=True,
-                gridwidth=1,
-                gridcolor="lightgrey",
-                zeroline=False,
-                fixedrange=True,
-                # showticklabels=False,
-            ),
-            # Configure y-axes
-            yaxis=dict(
-                title=dict(text="Price", font=dict(color="black")),
-                tickfont=dict(color="black"),
-                domain=[0.875, 1.0],
-                tickformat=".2f",
-                fixedrange=True,
-                showgrid=True,
-                gridwidth=1,
-                gridcolor="lightgrey",
-                zeroline=False,
-                autorange=True,
-            ),
-            # Add a secondary y-axis for test loss
-            yaxis5=dict(
-                title=dict(text="Training Loss", font=dict(color="blue")),
-                tickfont=dict(color="blue"),
-                domain=[0.175, 0.3],
-            ),
-            yaxis6=dict(
-                title=dict(text="Test Loss", font=dict(color="red")),
-                tickfont=dict(color="red"),
-                anchor="x5",
-                overlaying="y5",
-                side="right",
-            ),
-            yaxis7=dict(
-                title=dict(text="Omniscient PnL", font=dict(color="green")),
-                tickfont=dict(color="green"),
-                domain=[0.0, 0.16],
-                tickformat="02d",
-                fixedrange=True,
-            ),
-            yaxis8=dict(
-                title=dict(text="Prediction PnL", font=dict(color="red")),
-                tickfont=dict(color="red"),
-                anchor="x6",
-                overlaying="y7",
-                side="right",
-                tickformat="02d",
-                fixedrange=True,
-            ),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
         )
+        # Uniform x-axis style; row 1 starts fixed at [0, 1000] and is updated each frame.
+        fig.update_xaxes(showgrid=True, gridcolor="lightgrey", zeroline=False, fixedrange=True)
+        fig.update_xaxes(range=[0, 1000], row=1, col=1)
+        # Window label annotation — top-right corner, updated each frame.
+        fig.add_annotation(
+            text="",
+            xref="paper", yref="paper",
+            x=1.0, y=1.0,
+            xanchor="right", yanchor="bottom",
+            showarrow=False,
+            font={"size": 11, "color": "dimgray"},
+        )
+        # Y-axis labels
+        fig.update_yaxes(title_text="Price", tickformat=".2f", row=1, col=1)
+        fig.update_yaxes(title_text="Loss", row=5, col=1)
+        fig.update_yaxes(title_text="PnL", row=6, col=1)
 
         return go.FigureWidget(fig) if self._widgets else go.Figure(fig)
 
@@ -279,7 +198,7 @@ class Visualizer:
             showscale=False,
         )
 
-        # Line trace for Training Loss (left y-axis)
+        # Line trace for Training Loss
         self.loss_trace = go.Scatter(
             x=[],
             y=[],
@@ -287,10 +206,9 @@ class Visualizer:
             line=dict(color="blue", width=2),
             name="Training Loss",
             showlegend=True,
-            yaxis="y5",
         )
 
-        # Line trace for Test Loss (right y-axis)
+        # Line trace for Test Loss
         self.test_loss_trace = go.Scatter(
             x=[],
             y=[],
@@ -298,10 +216,9 @@ class Visualizer:
             line=dict(color="red", width=2),
             name="Test Loss",
             showlegend=True,
-            yaxis="y6",
         )
 
-        # Line trace for Omniscient PnL (left y-axis)
+        # Line trace for Omniscient PnL
         self.gt_pnl_trace = go.Scatter(
             x=[],
             y=[],
@@ -309,10 +226,9 @@ class Visualizer:
             line=dict(color="green", width=2),
             name="Omniscient PnL",
             showlegend=True,
-            yaxis="y7",
         )
 
-        # Line trace for Prediction PnL (right y-axis)
+        # Line trace for Prediction PnL
         self.pred_pnl_trace = go.Scatter(
             x=[],
             y=[],
@@ -320,7 +236,6 @@ class Visualizer:
             line=dict(color="red", width=2),
             name="Prediction PnL",
             showlegend=True,
-            yaxis="y8",
         )
 
         # Line traces for up/down proximity signals
@@ -331,7 +246,6 @@ class Visualizer:
             line=dict(color="red", width=2),
             name="Up Proximity",
             showlegend=True,
-            yaxis="y4",  # Same y-axis as prediction heatmap
         )
         self.down_proximity_trace = go.Scatter(
             x=[],
@@ -340,7 +254,6 @@ class Visualizer:
             line=dict(color="green", width=2),
             name="Down Proximity",
             showlegend=True,
-            yaxis="y4",  # Same y-axis as prediction heatmap
         )
 
         # Ground truth position entry markers (triangles up)
@@ -415,6 +328,29 @@ class Visualizer:
         self.fig.add_trace(self.gt_pnl_trace, row=6, col=1)
         self.fig.add_trace(self.pred_pnl_trace, row=6, col=1)
 
+        # Rebind named attributes to the live figure trace objects.
+        # fig.add_trace() copies data into the figure's internal store;
+        # only fig.data[i] is the live reference that batch_update() can push.
+        (
+            self.bid_trace,
+            self.ask_trace,
+            self.gt_entry_trace,
+            self.gt_exit_trace,
+            self.pred_entry_trace,
+            self.pred_exit_trace,
+            self.im_trace,
+            self.feature2_trace,
+            self.feature3_trace,
+            self.t2l_trace,
+            self.pred_trace,
+            self.up_proximity_trace,
+            self.down_proximity_trace,
+            self.loss_trace,
+            self.test_loss_trace,
+            self.gt_pnl_trace,
+            self.pred_pnl_trace,
+        ) = self.fig.data
+
     def update(
         self,
         books_z_data: np.ndarray | None,
@@ -433,6 +369,8 @@ class Visualizer:
         """Updates the figure with new data."""
         try:
             with self.fig.batch_update():
+                if _window_label:
+                    self.fig.layout.annotations[-1].text = _window_label
                 # Transform and clip all image data
                 books_z_data, level_reach_display, bidask, feature_points = self.for_image_display(
                     books_z_data,
@@ -465,15 +403,16 @@ class Visualizer:
                     bid_data = bidask[-self._max_points :, 0] if bidask.shape[0] > self._max_points else bidask[:, 0]
                     ask_data = bidask[-self._max_points :, 1] if bidask.shape[0] > self._max_points else bidask[:, 1]
 
-                    # Update x-axis range to match the data for all subplots
+                    # Update x-axis range for the data subplots (rows 1–4).
+                    # Row 1 uses "xaxis" (no suffix); rows 2–4 use "xaxis2"–"xaxis4".
                     x_range = [times[0], times[-1]]
-                    for i in range(1, 5):  # Update all 6 x-axes
-                        self.fig.layout[f"xaxis{i}"].range = x_range
+                    for ax_name in ("xaxis", "xaxis2", "xaxis3", "xaxis4"):
+                        self.fig.layout[ax_name].range = x_range
 
-                    self.fig.data[0].x = times
-                    self.fig.data[0].y = bid_data
-                    self.fig.data[1].x = times
-                    self.fig.data[1].y = ask_data
+                    self.bid_trace.x = times
+                    self.bid_trace.y = bid_data
+                    self.ask_trace.x = times
+                    self.ask_trace.y = ask_data
 
                     # Update ground truth position markers
                     if positions is not None:
@@ -482,10 +421,10 @@ class Visualizer:
                         entry_indices = np.where((pos_data[:-1] == 0) & (pos_data[1:] != 0))[0] + 1
                         exit_indices = np.where((pos_data[:-1] != 0) & (pos_data[1:] == 0))[0] + 1
 
-                        self.fig.data[2].x = times[entry_indices]
-                        self.fig.data[2].y = ask_data[entry_indices]
-                        self.fig.data[3].x = times[exit_indices]
-                        self.fig.data[3].y = bid_data[exit_indices]
+                        self.gt_entry_trace.x = times[entry_indices]
+                        self.gt_entry_trace.y = ask_data[entry_indices]
+                        self.gt_exit_trace.x = times[exit_indices]
+                        self.gt_exit_trace.y = bid_data[exit_indices]
 
                     # Update predicted position markers
                     if pred_positions is not None:
@@ -497,103 +436,84 @@ class Visualizer:
                         pred_exit_indices = np.where((pred_pos_data[:-1] != 0) & (pred_pos_data[1:] == 0))[0] + 1
 
                         # Short entry: sell at bid; short exit: buy back at ask
-                        self.fig.data[4].x = times[pred_entry_indices]
-                        self.fig.data[4].y = bid_data[pred_entry_indices]
-                        self.fig.data[5].x = times[pred_exit_indices]
-                        self.fig.data[5].y = ask_data[pred_exit_indices]
+                        self.pred_entry_trace.x = times[pred_entry_indices]
+                        self.pred_entry_trace.y = bid_data[pred_entry_indices]
+                        self.pred_exit_trace.x = times[pred_exit_indices]
+                        self.pred_exit_trace.y = ask_data[pred_exit_indices]
 
                 # Update heatmaps
                 if books_z_data is not None:
-                    self.fig.data[6].z = books_z_data
+                    self.im_trace.z = books_z_data
 
                     # Update feature markers if available
                     if feature_points is not None:
                         feature2_points, feature3_points = feature_points
 
-                        # Update feature 2 markers (up triangles)
-                        self.fig.data[7].x = feature2_points[0]  # time dimension
-                        self.fig.data[7].y = feature2_points[1]  # price level dimension
-
-                        # Update feature 3 markers (down triangles)
-                        self.fig.data[8].x = feature3_points[0]  # time dimension
-                        self.fig.data[8].y = feature3_points[1]  # price level dimension
+                        self.feature2_trace.x = feature2_points[0]
+                        self.feature2_trace.y = feature2_points[1]
+                        self.feature3_trace.x = feature3_points[0]
+                        self.feature3_trace.y = feature3_points[1]
 
                 if level_reach_display is not None:
-                    self.fig.data[9].z = level_reach_display
+                    self.t2l_trace.z = level_reach_display
                     if proximity_vmax is not None:
-                        self.fig.data[9].zmin = 0
-                        self.fig.data[9].zmax = proximity_vmax
+                        self.t2l_trace.zmin = 0
+                        self.t2l_trace.zmax = proximity_vmax
                 if pred_t2l_display is not None:
-                    self.fig.data[10].z = pred_t2l_display
+                    self.pred_trace.z = pred_t2l_display
                     if proximity_vmax is not None:
-                        self.fig.data[10].zmin = 0
-                        self.fig.data[10].zmax = proximity_vmax
+                        self.pred_trace.zmin = 0
+                        self.pred_trace.zmax = proximity_vmax
 
                     # Update ground truth proximity traces if available
                     if up_proximity is not None and down_proximity is not None:
                         times = np.arange(len(up_proximity))[: self._max_points]
                         up_prox_data = up_proximity[-self._max_points :]
                         down_prox_data = down_proximity[-self._max_points :]
-                        self.fig.data[11].x = times
-                        self.fig.data[11].y = np.clip(up_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
-                        self.fig.data[12].x = times
-                        self.fig.data[12].y = np.clip(down_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
+                        self.up_proximity_trace.x = times
+                        self.up_proximity_trace.y = np.clip(up_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
+                        self.down_proximity_trace.x = times
+                        self.down_proximity_trace.y = np.clip(down_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
 
                     # Update predicted proximity traces if available
                     if pred_up_proximity is not None and pred_down_proximity is not None:
                         times = np.arange(len(pred_up_proximity))[: self._max_points]
                         pred_up_prox_data = pred_up_proximity[-self._max_points :]
                         pred_down_prox_data = pred_down_proximity[-self._max_points :]
-                        self.fig.data[11].x = times
-                        self.fig.data[11].y = np.clip(pred_up_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
-                        self.fig.data[12].x = times
-                        self.fig.data[12].y = np.clip(pred_down_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
+                        self.up_proximity_trace.x = times
+                        self.up_proximity_trace.y = np.clip(pred_up_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
+                        self.down_proximity_trace.x = times
+                        self.down_proximity_trace.y = np.clip(pred_down_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
 
-                # Update loss traces
-                if self.losses:
-                    loss_times = np.arange(len(self.losses))[-self._loss_max_points :]
-                    self.fig.data[13].x = loss_times
-                    self.fig.data[13].y = self.losses[-self._loss_max_points :]
+                # Loss traces share x so both y-axes stay aligned.
+                n_loss = min(len(self.losses), len(self.test_losses), self._loss_max_points)
+                if n_loss:
+                    loss_xs = list(range(n_loss))
+                    self.loss_trace.x = loss_xs
+                    self.loss_trace.y = self.losses[-n_loss:]
+                    self.test_loss_trace.x = loss_xs
+                    self.test_loss_trace.y = self.test_losses[-n_loss:]
 
-                if self.test_losses:
-                    test_loss_times = np.arange(len(self.test_losses))[-self._loss_max_points :]
-                    self.fig.data[14].x = test_loss_times
-                    self.fig.data[14].y = self.test_losses[-self._loss_max_points :]
-
-                # Update PnL traces
-                if gt_pnl is not None:
-                    pnl_times = np.arange(len(gt_pnl))
-                    self.fig.data[15].x = pnl_times
-                    self.fig.data[15].y = gt_pnl[-self._max_points :]
-                    self.fig.data[15].yaxis = "y7"
-
-                if pred_pnl is not None:
-                    pred_pnl_times = np.arange(len(pred_pnl))
-                    self.fig.data[16].x = pred_pnl_times
-                    self.fig.data[16].y = pred_pnl[-self._max_points :]
-                    self.fig.data[16].yaxis = "y8"
+                # PnL traces share x.
+                if gt_pnl is not None and pred_pnl is not None:
+                    n_pnl = min(len(gt_pnl), len(pred_pnl), self._max_points)
+                    pnl_xs = list(range(n_pnl))
+                    self.gt_pnl_trace.x = pnl_xs
+                    self.gt_pnl_trace.y = list(gt_pnl[-n_pnl:])
+                    self.pred_pnl_trace.x = pnl_xs
+                    self.pred_pnl_trace.y = list(pred_pnl[-n_pnl:])
 
             self._refresh()
 
         except Exception as e:
             print(f"Error updating plot: {e}")
 
-    def add_loss(self, train_loss: float | None, test_loss: float) -> None:
-        """Adds loss values to the loss history.
-
-        Args:
-            train_loss: Training loss value, can be None if only test loss is available
-            test_loss: Test loss value
-        """
-        if train_loss is not None:
-            self.losses.append(float(train_loss))  # Convert to float to ensure no reference holding
-            # Keep only recent history
-            if len(self.losses) > self._max_points:
-                self.losses = self.losses[-self._max_points :]
-
+    def add_loss(self, train_loss: float, test_loss: float) -> None:
+        """Append one (train_loss, test_loss) pair. Both lists are always the same length."""
+        self.losses.append(float(train_loss))
         self.test_losses.append(float(test_loss))
-        # Keep only recent history
-        if len(self.test_losses) > self._max_points:
+        if len(self.losses) > self._max_points:
+            self.losses = self.losses[-self._max_points :]
             self.test_losses = self.test_losses[-self._max_points :]
 
     @staticmethod
