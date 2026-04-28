@@ -76,6 +76,8 @@ async def main(
     shaper_config_override=None,
     allow_microburst: bool = False,
     strategy_names: list[str] | None = None,
+    train_n_samples_per_file: int | None = None,
+    test_n_samples_per_file: int | None = None,
 ) -> None:
     ts = datetime.now(UTC)
     stamp = ts.strftime("%Y%m%dT%H%M%SZ")
@@ -93,10 +95,13 @@ async def main(
     )
     test_file = test_files[0]
 
+    train_cap = n_samples_per_file if train_n_samples_per_file is None else train_n_samples_per_file
+    test_cap = n_samples_per_file if test_n_samples_per_file is None else test_n_samples_per_file
+
     replay_conf_test, shaper_config, X_test_w, Y_test_w, Px_test_w = await load_file_windows(
         test_file,
         "BTC-USD",
-        n_samples=n_samples_per_file,
+        n_samples=test_cap,
         shaper_config=shaper_config_override,
         every=load_every,
         allow_microburst=allow_microburst,
@@ -107,7 +112,7 @@ async def main(
         _rc, _sc, Xw, Yw, Pxw = await load_file_windows(
             train_file,
             "BTC-USD",
-            n_samples=n_samples_per_file,
+            n_samples=train_cap,
             shaper_config=shaper_config_override,
             every=load_every,
             allow_microburst=allow_microburst,

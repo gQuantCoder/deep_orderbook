@@ -2424,3 +2424,11 @@ Status: DONE
 - Validation holdouts: `['/mnt/data/repos/gaelreinaudi/crypto/2026-04-23T15-00-10.parquet', '/mnt/data/repos/gaelreinaudi/crypto/2026-04-23T16-00-11.parquet']`
 - Champion: `q90_persistence2_fast_exit` cost5 `91.17188`
 - Decision: `not promising yet`
+## 2026-04-28 00:57:29Z exp63 active-core continuation
+
+Status: DONE
+
+- Active routes: `['q95_p1_hold48', 'q90_p1_hold48', 'q90_p2_hold96', 'q90_persistence2_fast_exit']`
+- Validation holdouts: `['/mnt/data/repos/gaelreinaudi/crypto/2026-04-23T17-00-01.parquet', '/mnt/data/repos/gaelreinaudi/crypto/2026-04-23T18-00-11.parquet']`
+- Champion: `q90_p2_hold96` cost5 `-241.46875`
+- Decision: `not promising yet`

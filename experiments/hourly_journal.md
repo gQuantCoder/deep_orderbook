@@ -950,3 +950,10 @@
 - **Main result**: corrected champion `q90_persistence2_fast_exit` raw pnl `131.17`, cost-5 `91.17`, trades `8`, precision `0.5618`, f1 `0.6797`, rmse_ratio `0.9199`.
 - **Decision**: `not promising yet`.
 - **Exact next mutation**: if more fresh `2026-04-23` files exist, continue the same active-core fixed-route falsification forward chronologically again before any selector or mapper change.
+## 2026-04-28 00:57:29Z
+- **Continuity**: active-core cleanup cut route surface from 7 to 4 and switched to auto-selected next holdouts after completed tags `['20260423T060000', '20260423T070000', '20260423T080000', '20260423T090000', '20260423T100011', '20260423T110001', '20260423T120010', '20260423T130001', '20260423T140010', '20260423T150010', '20260423T160011']`.
+- **Hypothesis**: if route bloat was obscuring the real execution picture, the reduced active-core set should preserve signal truth on the next pair while making route leadership easier to interpret.
+- **What changed**: cleaned the active research path only; kept mapper/train pool/stress filter fixed and validated only `2026-04-23T17-00-01.parquet` and `2026-04-23T18-00-11.parquet`.
+- **Main result**: corrected champion `q90_p2_hold96` raw pnl `-176.47`, cost-5 `-241.47`, trades `13`, precision `0.6250`, f1 `0.7312`, rmse_ratio `0.9319`.
+- **Decision**: `not promising yet`.
+- **Exact next mutation**: if more fresh `2026-04-23` files exist, continue the same active-core fixed-route falsification forward chronologically again before any selector or mapper change.

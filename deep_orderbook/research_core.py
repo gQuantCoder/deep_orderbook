@@ -28,6 +28,16 @@ def next_chronological_holdouts(
     return fresh[:count]
 
 
+def select_files_for_date_range(
+    available_paths: Iterable[Path],
+    *,
+    start_date: str,
+    end_date: str,
+) -> list[Path]:
+    ordered = sorted(Path(p) for p in available_paths)
+    return [path for path in ordered if start_date <= path.name[:10] <= end_date]
+
+
 def completed_holdout_tags_from_summary_jsons(summary_paths: Iterable[Path]) -> set[str]:
     tags: set[str] = set()
     for path in summary_paths:
