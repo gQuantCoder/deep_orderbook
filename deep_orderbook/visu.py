@@ -5,8 +5,8 @@ import time
 
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from IPython.display import clear_output, display
+from plotly.subplots import make_subplots
 
 
 def _widget_env() -> bool:
@@ -83,7 +83,7 @@ class Visualizer:
                 domain=[0, 1],
                 showgrid=True,
                 gridwidth=1,
-                gridcolor='lightgrey',
+                gridcolor="lightgrey",
                 zeroline=False,
                 fixedrange=True,
                 dtick=100,
@@ -94,7 +94,7 @@ class Visualizer:
                 domain=[0, 1],
                 showgrid=True,
                 gridwidth=1,
-                gridcolor='lightgrey',
+                gridcolor="lightgrey",
                 zeroline=False,
                 fixedrange=True,
                 # showticklabels=False,  # Hide labels for other subplots
@@ -103,7 +103,7 @@ class Visualizer:
                 domain=[0, 1],
                 showgrid=True,
                 gridwidth=1,
-                gridcolor='lightgrey',
+                gridcolor="lightgrey",
                 zeroline=False,
                 fixedrange=True,
                 # showticklabels=False,
@@ -112,7 +112,7 @@ class Visualizer:
                 domain=[0, 1],
                 showgrid=True,
                 gridwidth=1,
-                gridcolor='lightgrey',
+                gridcolor="lightgrey",
                 zeroline=False,
                 fixedrange=True,
                 showticklabels=False,
@@ -121,7 +121,7 @@ class Visualizer:
                 domain=[0, 1],
                 showgrid=True,
                 gridwidth=1,
-                gridcolor='lightgrey',
+                gridcolor="lightgrey",
                 zeroline=False,
                 fixedrange=True,
                 # showticklabels=False,
@@ -130,7 +130,7 @@ class Visualizer:
                 domain=[0, 1],
                 showgrid=True,
                 gridwidth=1,
-                gridcolor='lightgrey',
+                gridcolor="lightgrey",
                 zeroline=False,
                 fixedrange=True,
                 # showticklabels=False,
@@ -144,7 +144,7 @@ class Visualizer:
                 fixedrange=True,
                 showgrid=True,
                 gridwidth=1,
-                gridcolor='lightgrey',
+                gridcolor="lightgrey",
                 zeroline=False,
                 autorange=True,
             ),
@@ -369,26 +369,26 @@ class Visualizer:
             name="Omniscient Exit",
             showlegend=True,
         )
-        # Predicted position entry markers (triangles up)
+        # Predicted position entry markers: short → triangle-down (selling)
         self.pred_entry_trace = go.Scatter(
             x=[],
             y=[],
             mode="markers",
             marker=dict(
-                symbol="triangle-up",
+                symbol="triangle-down",
                 size=12,
                 color="red",
             ),
             name="Prediction Entry",
             showlegend=True,
         )
-        # Predicted position exit markers (triangles down)
+        # Predicted position exit markers: short → triangle-up (covering)
         self.pred_exit_trace = go.Scatter(
             x=[],
             y=[],
             mode="markers",
             marker=dict(
-                symbol="triangle-down",
+                symbol="triangle-up",
                 size=12,
                 color="darkred",
             ),
@@ -434,41 +434,41 @@ class Visualizer:
         try:
             with self.fig.batch_update():
                 # Transform and clip all image data
-                books_z_data, level_reach_display, bidask, feature_points = (
-                    self.for_image_display(
-                        books_z_data,
-                        level_reach_z_data,
-                        bidask,
-                        max_points=self._max_points,
-                    )
+                books_z_data, level_reach_display, bidask, feature_points = self.for_image_display(
+                    books_z_data,
+                    level_reach_z_data,
+                    bidask,
+                    max_points=self._max_points,
                 )
                 # Transform prediction data in the same way
                 _, pred_t2l_display, _, _ = (
-                    self.for_image_display(
-                        None, pred_t2l, None, max_points=self._max_points
-                    )
+                    self.for_image_display(None, pred_t2l, None, max_points=self._max_points)
                     if pred_t2l is not None
                     else (None, None, None, None)
                 )
 
+                # Use robust shared scaling for true/pred proximity maps so the
+                # live notebook view matches the saved experiment dashboards more
+                # closely and does not collapse into black/red saturation.
+                proximity_vmax = None
+                if level_reach_display is not None or pred_t2l_display is not None:
+                    candidates = []
+                    if level_reach_display is not None and level_reach_display.size:
+                        candidates.append(float(np.percentile(level_reach_display, 99.5)))
+                    if pred_t2l_display is not None and pred_t2l_display.size:
+                        candidates.append(float(np.percentile(pred_t2l_display, 99.5)))
+                    proximity_vmax = max(candidates + [1e-3])
+
                 # Update bid and ask price traces with limited history
                 if bidask is not None:
                     times = np.arange(min(bidask.shape[0], self._max_points))
-                    bid_data = (
-                        bidask[-self._max_points :, 0]
-                        if bidask.shape[0] > self._max_points
-                        else bidask[:, 0]
-                    )
-                    ask_data = (
-                        bidask[-self._max_points :, 1]
-                        if bidask.shape[0] > self._max_points
-                        else bidask[:, 1]
-                    )
+                    bid_data = bidask[-self._max_points :, 0] if bidask.shape[0] > self._max_points else bidask[:, 0]
+                    ask_data = bidask[-self._max_points :, 1] if bidask.shape[0] > self._max_points else bidask[:, 1]
 
                     # Update x-axis range to match the data for all subplots
                     x_range = [times[0], times[-1]]
                     for i in range(1, 5):  # Update all 6 x-axes
-                        self.fig.layout[f'xaxis{i}'].range = x_range
+                        self.fig.layout[f"xaxis{i}"].range = x_range
 
                     self.fig.data[0].x = times
                     self.fig.data[0].y = bid_data
@@ -477,53 +477,30 @@ class Visualizer:
 
                     # Update ground truth position markers
                     if positions is not None:
-                        pos_data = (
-                            positions[-self._max_points :]
-                            if len(positions) > self._max_points
-                            else positions
-                        )
-                        entry_indices = (
-                            np.where((pos_data[1:] == 1) & (pos_data[:-1] == 0))[0] + 1
-                        )
-                        exit_indices = (
-                            np.where((pos_data[1:] == 0) & (pos_data[:-1] == 1))[0] + 1
-                        )
+                        pos_data = positions[-self._max_points :] if len(positions) > self._max_points else positions
+                        # Works for both long (+1) and short (-1): any flat→in-pos transition
+                        entry_indices = np.where((pos_data[:-1] == 0) & (pos_data[1:] != 0))[0] + 1
+                        exit_indices = np.where((pos_data[:-1] != 0) & (pos_data[1:] == 0))[0] + 1
 
-                        # Update ground truth entry markers - place at ask price for buys
                         self.fig.data[2].x = times[entry_indices]
                         self.fig.data[2].y = ask_data[entry_indices]
-
-                        # Update ground truth exit markers - place at bid price for sells
                         self.fig.data[3].x = times[exit_indices]
                         self.fig.data[3].y = bid_data[exit_indices]
 
                     # Update predicted position markers
                     if pred_positions is not None:
                         pred_pos_data = (
-                            pred_positions[-self._max_points :]
-                            if len(pred_positions) > self._max_points
-                            else pred_positions
+                            pred_positions[-self._max_points :] if len(pred_positions) > self._max_points else pred_positions
                         )
-                        pred_entry_indices = (
-                            np.where(
-                                (pred_pos_data[1:] == 1) & (pred_pos_data[:-1] == 0)
-                            )[0]
-                            + 1
-                        )
-                        pred_exit_indices = (
-                            np.where(
-                                (pred_pos_data[1:] == 0) & (pred_pos_data[:-1] == 1)
-                            )[0]
-                            + 1
-                        )
+                        # Works for both long (+1) and short (-1): any flat→in-pos transition
+                        pred_entry_indices = np.where((pred_pos_data[:-1] == 0) & (pred_pos_data[1:] != 0))[0] + 1
+                        pred_exit_indices = np.where((pred_pos_data[:-1] != 0) & (pred_pos_data[1:] == 0))[0] + 1
 
-                        # Update predicted entry markers - place at ask price for buys
+                        # Short entry: sell at bid; short exit: buy back at ask
                         self.fig.data[4].x = times[pred_entry_indices]
-                        self.fig.data[4].y = ask_data[pred_entry_indices]
-
-                        # Update predicted exit markers - place at bid price for sells
+                        self.fig.data[4].y = bid_data[pred_entry_indices]
                         self.fig.data[5].x = times[pred_exit_indices]
-                        self.fig.data[5].y = bid_data[pred_exit_indices]
+                        self.fig.data[5].y = ask_data[pred_exit_indices]
 
                 # Update heatmaps
                 if books_z_data is not None:
@@ -535,20 +512,22 @@ class Visualizer:
 
                         # Update feature 2 markers (up triangles)
                         self.fig.data[7].x = feature2_points[0]  # time dimension
-                        self.fig.data[7].y = feature2_points[
-                            1
-                        ]  # price level dimension
+                        self.fig.data[7].y = feature2_points[1]  # price level dimension
 
                         # Update feature 3 markers (down triangles)
                         self.fig.data[8].x = feature3_points[0]  # time dimension
-                        self.fig.data[8].y = feature3_points[
-                            1
-                        ]  # price level dimension
+                        self.fig.data[8].y = feature3_points[1]  # price level dimension
 
                 if level_reach_display is not None:
                     self.fig.data[9].z = level_reach_display
+                    if proximity_vmax is not None:
+                        self.fig.data[9].zmin = 0
+                        self.fig.data[9].zmax = proximity_vmax
                 if pred_t2l_display is not None:
                     self.fig.data[10].z = pred_t2l_display
+                    if proximity_vmax is not None:
+                        self.fig.data[10].zmin = 0
+                        self.fig.data[10].zmax = proximity_vmax
 
                     # Update ground truth proximity traces if available
                     if up_proximity is not None and down_proximity is not None:
@@ -556,30 +535,19 @@ class Visualizer:
                         up_prox_data = up_proximity[-self._max_points :]
                         down_prox_data = down_proximity[-self._max_points :]
                         self.fig.data[11].x = times
-                        self.fig.data[11].y = np.clip(up_prox_data, 0, 1) * (
-                            pred_t2l_display.shape[0] - 1
-                        )
+                        self.fig.data[11].y = np.clip(up_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
                         self.fig.data[12].x = times
-                        self.fig.data[12].y = np.clip(down_prox_data, 0, 1) * (
-                            pred_t2l_display.shape[0] - 1
-                        )
+                        self.fig.data[12].y = np.clip(down_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
 
                     # Update predicted proximity traces if available
-                    if (
-                        pred_up_proximity is not None
-                        and pred_down_proximity is not None
-                    ):
+                    if pred_up_proximity is not None and pred_down_proximity is not None:
                         times = np.arange(len(pred_up_proximity))[: self._max_points]
                         pred_up_prox_data = pred_up_proximity[-self._max_points :]
                         pred_down_prox_data = pred_down_proximity[-self._max_points :]
                         self.fig.data[11].x = times
-                        self.fig.data[11].y = np.clip(
-                            pred_up_prox_data, 0, 1
-                        ) * (pred_t2l_display.shape[0] - 1)
+                        self.fig.data[11].y = np.clip(pred_up_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
                         self.fig.data[12].x = times
-                        self.fig.data[12].y = np.clip(
-                            pred_down_prox_data, 0, 1
-                        ) * (pred_t2l_display.shape[0] - 1)
+                        self.fig.data[12].y = np.clip(pred_down_prox_data, 0, 1) * (pred_t2l_display.shape[0] - 1)
 
                 # Update loss traces
                 if self.losses:
@@ -588,13 +556,9 @@ class Visualizer:
                     self.fig.data[13].y = self.losses[-self._loss_max_points :]
 
                 if self.test_losses:
-                    test_loss_times = np.arange(len(self.test_losses))[
-                        -self._loss_max_points :
-                    ]
+                    test_loss_times = np.arange(len(self.test_losses))[-self._loss_max_points :]
                     self.fig.data[14].x = test_loss_times
-                    self.fig.data[14].y = self.test_losses[
-                        -self._loss_max_points :
-                    ]
+                    self.fig.data[14].y = self.test_losses[-self._loss_max_points :]
 
                 # Update PnL traces
                 if gt_pnl is not None:
@@ -622,9 +586,7 @@ class Visualizer:
             test_loss: Test loss value
         """
         if train_loss is not None:
-            self.losses.append(
-                float(train_loss)
-            )  # Convert to float to ensure no reference holding
+            self.losses.append(float(train_loss))  # Convert to float to ensure no reference holding
             # Keep only recent history
             if len(self.losses) > self._max_points:
                 self.losses = self.losses[-self._max_points :]
@@ -671,13 +633,15 @@ class Visualizer:
             # Take last max_points if array is longer
             if t2l_array.shape[0] > max_points:
                 t2l_array = t2l_array[-max_points:]
-            t2l_data = t2l_array[:, :, 0].T
-            t2l_data = np.clip(t2l_data, -1, 1)
+            # Match the saved dashboard rendering logic more closely:
+            # non-negative clip + sqrt lift preserves sparse structure much
+            # better than hard clipping into [-1, 1].
+            t2l_data = np.sqrt(np.clip(t2l_array[:, :, 0].T, 0.0, None))
 
         return im_data, t2l_data, prices_array, feature_points
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     vis = Visualizer()
     rng = np.random.default_rng(456456)
     data_dict = {

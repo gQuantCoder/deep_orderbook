@@ -2,12 +2,31 @@ from __future__ import annotations
 
 from pathlib import Path
 import struct
+from typing import Literal
 import zlib
 
 import numpy as np
 
+from deep_orderbook.config import BaseConfig
 
-BATCH_VARIANTS: dict[str, dict] = {
+
+class BatchVariantConfig(BaseConfig):
+    hidden_dim: int
+    epochs: int
+    lr: float
+    weight_decay: float
+    reg_loss: Literal["huber", "mse", "l1"]
+    event_loss_weight: float
+    pos_weight: float
+    trade_threshold: float
+    prediction_cap_quantile: float
+    active_reg_weight: float
+    trunk_dropout: float = 0.0
+    n_blocks: int = 10
+    hypothesis: str = ""
+
+
+_RAW_VARIANTS: dict[str, dict] = {
     "baseline_evt025_pw8_lr2e3_h96_e6": {
         "hidden_dim": 96,
         "epochs": 6,
@@ -505,6 +524,16 @@ BATCH_VARIANTS: dict[str, dict] = {
     },
 }
 
+BATCH_VARIANTS: dict[str, BatchVariantConfig] = {
+    name: BatchVariantConfig.model_validate(data) for name, data in _RAW_VARIANTS.items()
+}
+
+
+def get_batch_variant(name: str) -> BatchVariantConfig:
+    if name not in BATCH_VARIANTS:
+        raise KeyError(f"Unknown batch variant: {name!r}. Available: {sorted(BATCH_VARIANTS)}")
+    return BATCH_VARIANTS[name]
+
 
 def list_batch_variant_names() -> list[str]:
     return sorted(BATCH_VARIANTS.keys())
@@ -545,10 +574,6 @@ def list_event_filtered_suite_25() -> list[str]:
 
 
 
-def get_batch_variant(name: str) -> dict:
-    if name not in BATCH_VARIANTS:
-        raise KeyError(f"Unknown batch variant: {name}")
-    return dict(BATCH_VARIANTS[name])
 
 
 def _read_chunks(raw: bytes) -> tuple[int, int, int, int, bytes]:

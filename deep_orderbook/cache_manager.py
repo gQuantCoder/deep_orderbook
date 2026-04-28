@@ -103,7 +103,7 @@ class ArrayCache:
         cache_subdir.mkdir(parents=True, exist_ok=True)
 
         cache_name = f"{data_file.stem}.npz"
-        logger.debug(f"Getting cache path for {data_file}: {cache_subdir}/{cache_name}")
+        # logger.debug(f"Getting cache path for {data_file}: {cache_subdir}/{cache_name}")
         return cache_subdir / cache_name
 
     def load_cached(
@@ -111,7 +111,7 @@ class ArrayCache:
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
         """Load cached arrays if they exist. Returns None on miss or corrupt file."""
         cache_path = self._get_cache_path(data_file, shaper_config, replay_config)
-        logger.debug(f"Looking for cached arrays in {cache_path}")
+        # logger.debug(f"Looking for cached arrays in {cache_path}")
         if not cache_path.exists():
             return None
 

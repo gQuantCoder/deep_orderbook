@@ -18,6 +18,7 @@ from deep_orderbook.btc_experiment_config import (
     summarize_dataset_scale,
 )
 from deep_orderbook.btc_search_lab import (
+    BatchVariantConfig,
     compute_png_quality_stats,
     get_batch_variant,
     list_batch_variant_names,
@@ -26,11 +27,11 @@ from deep_orderbook.btc_search_lab import (
 from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.event_selection import rank_eventful_windows, select_eventful_window_indices
 from deep_orderbook.experiment_tracking import register_experiment_run
+from deep_orderbook.learn.tcn import OrderBook2DTCN, assert_min_receptive_field_2d
 from deep_orderbook.pipeline_guards import assert_image_meaningful
 from deep_orderbook.scientist_experiment import apply_prediction_cap, richness_gate
 from deep_orderbook.shaper import iter_shapes_t2l
 from deep_orderbook.strategy import Strategy
-from deep_orderbook.learn.tcn import OrderBook2DTCN, assert_min_receptive_field_2d
 
 DEFAULT_SHAPER_CONFIG_2026 = ShaperConfig(
     only_full_arrays=True,
@@ -99,8 +100,6 @@ async def load_file_windows(
     market: str,
     n_samples: int | None = 48,
     *,
-    use_cache: bool = True,
-    save_cache: bool = True,
     shaper_config: ShaperConfig | None = None,
     every: str = "100ms",
     allow_microburst: bool = False,
@@ -113,11 +112,10 @@ async def load_file_windows(
 
     Default geometry: ``DEFAULT_SHAPER_CONFIG_2026`` (rolling=2048, look_ahead=128).
     Pass a custom ``shaper_config`` or set ``allow_microburst=True`` for shorter windows.
+    Cache behaviour is controlled by ``shaper_config.use_cache`` / ``shaper_config.save_cache``.
     """
     if shaper_config is None:
-        shaper_config = DEFAULT_SHAPER_CONFIG_2026.but(use_cache=use_cache, save_cache=save_cache)
-    else:
-        shaper_config = shaper_config.but(use_cache=use_cache, save_cache=save_cache)
+        shaper_config = DEFAULT_SHAPER_CONFIG_2026
 
     replay_conf = ReplayConfig(
         markets=[market],
@@ -177,8 +175,8 @@ def _books_for_display(books_array: np.ndarray) -> tuple[np.ndarray, np.ndarray,
     """
     tmp = books_array.astype(np.float32).copy()
     tmp[:, :, 0] *= 0.5
-    heatmap = np.clip(tmp.mean(axis=2).T, -1.0, 1.0)          # (bins, time)
-    buy_yx = np.nonzero(books_array[:, :, 1] != 0)             # (time_idx, bin_idx)
+    heatmap = np.clip(tmp.mean(axis=2).T, -1.0, 1.0)  # (bins, time)
+    buy_yx = np.nonzero(books_array[:, :, 1] != 0)  # (time_idx, bin_idx)
     sell_yx = np.nonzero(books_array[:, :, 2] != 0)
     return heatmap, buy_yx, sell_yx
 
@@ -234,7 +232,9 @@ def save_dashboard(
         axes[0].scatter(pr_enter, prices[pr_enter, 1], marker="^", color="blue", s=25, label="Prediction Entry")
     if pr_exit.size:
         axes[0].scatter(pr_exit, prices[pr_exit, 0], marker="v", color="red", s=25, label="Prediction Exit")
-    axes[0].set_title(f"Bid and Ask Price Levels — {title_suffix}\n(ONE frozen rolling window, NOT sliding inference — see *_slide_*.png for the real view)")
+    axes[0].set_title(
+        f"Bid and Ask Price Levels — {title_suffix}\n(ONE frozen rolling window, NOT sliding inference — see *_slide_*.png for the real view)"
+    )
     axes[0].legend(loc="upper left", ncol=4, fontsize=8)
 
     _plot_books_panel(axes[1], books_array)
@@ -295,11 +295,11 @@ def save_sliding_inference_dashboard(
     N, W = px_windows.shape[:2]
 
     # Flatten N windows × W ticks → one continuous timeline
-    prices = px_windows.reshape(-1, 2)              # (N*W, 2)
+    prices = px_windows.reshape(-1, 2)  # (N*W, 2)
     # Flatten N windows × W ticks into one continuous timeline
     books_cont = books_windows.reshape(-1, books_windows.shape[2], books_windows.shape[3])  # (N*W, bins, 3)
-    true_flat = true_windows.reshape(-1, true_windows.shape[-1])                             # (N*W, levels)
-    pred_flat = pred_windows.reshape(-1, pred_windows.shape[-1])                             # (N*W, levels)
+    true_flat = true_windows.reshape(-1, true_windows.shape[-1])  # (N*W, levels)
+    pred_flat = pred_windows.reshape(-1, pred_windows.shape[-1])  # (N*W, levels)
 
     # Mark window boundaries so the viewer knows where context resets
     boundary_x = [w * W for w in range(1, N)]
@@ -314,7 +314,9 @@ def save_sliding_inference_dashboard(
     axes[0].plot(prices[:, 1], color="red", linewidth=0.5, alpha=0.6, label="Ask")
     for bx in boundary_x:
         axes[0].axvline(bx, color="gray", lw=0.4, alpha=0.4)
-    axes[0].set_title(f"Continuous sliding inference — {title_suffix}\n({N} non-overlapping windows × {W} ticks each, boundaries marked)")
+    axes[0].set_title(
+        f"Continuous sliding inference — {title_suffix}\n({N} non-overlapping windows × {W} ticks each, boundaries marked)"
+    )
     axes[0].legend(loc="upper left", ncol=3, fontsize=7)
 
     _plot_books_panel(axes[1], books_cont)
@@ -368,10 +370,11 @@ def filter_event_windows(
         "selected_indices": selected,
         "top_ranked": ranking[: min(5, len(ranking))],
     }
+    selected_sorted = sorted(selected)  # preserve temporal order for smooth visualization
     return (
-        [X_windows[idx] for idx in selected],
-        [Y_windows[idx] for idx in selected],
-        [PX_windows[idx] for idx in selected],
+        [X_windows[idx] for idx in selected_sorted],
+        [Y_windows[idx] for idx in selected_sorted],
+        [PX_windows[idx] for idx in selected_sorted],
         summary,
     )
 
@@ -393,7 +396,7 @@ def regression_loss(pred: torch.Tensor, target: torch.Tensor, mode: str, active_
 
 def train_one_variant(
     variant_name: str,
-    cfg: dict,
+    cfg: BatchVariantConfig,
     X_train: np.ndarray,
     Y_train: np.ndarray,
     X_test: np.ndarray,
@@ -427,7 +430,7 @@ def train_one_variant(
     X_train_n = (X_train - mu) / sd
     X_test_n = (X_test - mu) / sd
 
-    bins = X_train_n.shape[2]   # 16
+    bins = X_train_n.shape[2]  # 16
     in_ch = X_train_n.shape[3]  # 3
     out_levels = Y_train.shape[-1]  # 8
 
@@ -435,14 +438,14 @@ def train_one_variant(
     model = OrderBook2DTCN(
         bins=bins,
         in_ch=in_ch,
-        hid=cfg["hidden_dim"],
+        hid=cfg.hidden_dim,
         out_levels=out_levels,
-        trunk_dropout=cfg.get("trunk_dropout", 0.0),
-        num_levels=cfg.get("n_blocks", 10),
+        trunk_dropout=cfg.trunk_dropout,
+        num_levels=cfg.n_blocks,
     ).to(device)
     assert_min_receptive_field_2d(model)
-    opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
-    bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(cfg["pos_weight"], device=device))
+    opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(cfg.pos_weight, device=device))
 
     xtr = torch.from_numpy(X_train_n).to(device)
     ytr = torch.from_numpy(Y_train).to(device)
@@ -451,7 +454,7 @@ def train_one_variant(
 
     train_losses, test_losses = [], []
     bs = 8
-    for _ep in range(cfg["epochs"]):
+    for _ep in range(cfg.epochs):
         perm = torch.randperm(xtr.shape[0])
         model.train()
         total = 0.0
@@ -461,9 +464,9 @@ def train_one_variant(
             yb = ytr[idx]
             reg, cls_logits = model(xb)
             evt_target = (yb > tau).float()
-            loss_reg = regression_loss(reg, yb, cfg["reg_loss"], cfg["active_reg_weight"], tau)
-            loss_evt = bce(cls_logits, evt_target) if cfg["event_loss_weight"] > 0 else torch.zeros((), device=device)
-            loss = loss_reg + cfg["event_loss_weight"] * loss_evt
+            loss_reg = regression_loss(reg, yb, cfg.reg_loss, cfg.active_reg_weight, tau)
+            loss_evt = bce(cls_logits, evt_target) if cfg.event_loss_weight > 0 else torch.zeros((), device=device)
+            loss = loss_reg + cfg.event_loss_weight * loss_evt
             opt.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -474,16 +477,16 @@ def train_one_variant(
         with torch.no_grad():
             pred_te, cls_te = model(xte)
             evt_target = (yte > tau).float()
-            loss_reg = regression_loss(pred_te, yte, cfg["reg_loss"], cfg["active_reg_weight"], tau)
-            loss_evt = bce(cls_te, evt_target) if cfg["event_loss_weight"] > 0 else torch.zeros((), device=device)
-            test_loss = float((loss_reg + cfg["event_loss_weight"] * loss_evt).item())
+            loss_reg = regression_loss(pred_te, yte, cfg.reg_loss, cfg.active_reg_weight, tau)
+            loss_evt = bce(cls_te, evt_target) if cfg.event_loss_weight > 0 else torch.zeros((), device=device)
+            test_loss = float((loss_reg + cfg.event_loss_weight * loss_evt).item())
         test_losses.append(test_loss)
 
     model.eval()
     with torch.no_grad():
         pred_test = model(xte)[0].cpu().numpy()
 
-    pred_cap_value = float(np.percentile(Y_train, cfg["prediction_cap_quantile"]))
+    pred_cap_value = float(np.percentile(Y_train, cfg.prediction_cap_quantile))
     pred_test = apply_prediction_cap(pred_test, cap_value=pred_cap_value)
 
     metrics = event_metrics(Y_test, pred_test, thr=tau)
@@ -507,7 +510,7 @@ def train_one_variant(
         px_slice = px_seq[start:end]
         books_slice = books_seq[start:end]
         gt_strategy = Strategy(threshold=0.2)
-        pred_strategy = Strategy(threshold=cfg["trade_threshold"])
+        pred_strategy = Strategy(threshold=cfg.trade_threshold)
         gt_pnl, gt_pos, _, _ = gt_strategy.compute_pnl(px_slice, true_slice[..., None])
         pred_pnl, pred_pos, _, _ = pred_strategy.compute_pnl(px_slice, pred_slice[..., None])
         save_dashboard(
@@ -575,8 +578,8 @@ def train_one_variant(
         "device": str(device),
         "train_files": [str(p) for p in train_files],
         "test_file": str(test_file),
-        "hypothesis": cfg["hypothesis"],
-        "config": cfg,
+        "hypothesis": cfg.hypothesis,
+        "config": cfg.model_dump(),
         "richness_gate": richness,
         "data_scale": data_scale,
         "metrics": metrics,
@@ -608,7 +611,7 @@ def train_one_variant(
         symbol="BTC-USD",
         cadence="100ms",
         look_ahead=64,
-        model=f"2D_TCN_b{cfg.get('n_blocks', 10)}_h{cfg['hidden_dim']}",
+        model=f"2D_TCN_b{cfg.n_blocks}_h{cfg.hidden_dim}",
         result_json_path=result_path,
         picture_path=out_png,
         metrics={**metrics, "route_score_hint": 0.0, "fixed_slice_prediction_final_pnl": float(pred_pnl_fixed[-1])},
