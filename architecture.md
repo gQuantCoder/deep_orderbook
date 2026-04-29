@@ -319,13 +319,28 @@ graph TB
   - `EVENT_FILTERED_SUITE_25` — curated 25-variant list for event-filtered runs
   - `get_batch_variant()` — retrieve a variant config by name
 
-- **`btc_experiment_config.py`** — shared BTC experiment setup (file lists, split definitions)
+- **`btc_experiment_config.py`** — shared BTC experiment setup helpers
+  - `resolve_train_test_files()` — enforce explicit train/test pairs or fall back to walkforward selection
+  - `summarize_dataset_scale()` — canonical dataset-scale payload for experiment artifacts
+  - `choose_training_device()` — simple device policy helper
+
+- **`research_core.py`** — current active-branch protocol helpers for continuation experiments
+  - `ACTIVE_SHORT_ROUTE_NAMES` — reduced active short-route family
+  - `next_chronological_holdouts()` — picks fresh ordered holdouts after prior completed tags
+  - `select_files_for_date_range()` — canonical contiguous day-block file selection
+  - `completed_holdout_tags_from_summary_jsons()` — extracts already-used holdout tags from prior summaries
 
 ---
 
 ### `scripts/` — numbered experiments
 
-Each script is a self-contained scientific experiment using `iter_shapes_t2l` shaped windows.
+Historically these were mostly self-contained scientific scripts. The newer branch is moving toward a layered pattern:
+- shared shaping/training primitives in `exp16_batch_h64_tcn.py`
+- shared evaluation runner in `exp22_trigger_sweep.py`
+- shared protocol helpers in `research_core.py` and `btc_experiment_config.py`
+- thin continuation scripts (`exp63`, `exp64`) that mutate one research variable at a time
+
+This is a real improvement. It cuts copy-paste and makes chronological continuation rules more explicit. But the migration is incomplete: a lot of scripts still hardcode file lists, route labels, and protocol constants instead of expressing the whole experiment through first-class config objects.
 
 - **`exp01`** — inspect target tensor structure from shaped windows
 - **`exp02`** — Ridge predictive power screen vs baselines
@@ -338,10 +353,82 @@ Each script is a self-contained scientific experiment using `iter_shapes_t2l` sh
 - **`exp08`** — purged train/test splits + hurdle analysis
 - **`exp10`** — one-shot scientist protocol: richness gate → train → dashboard → DB
 - **`exp16_batch_h64_tcn.py`** — 12-variant BTC TCN grid search with image QC
+- **`exp22_trigger_sweep.py`** — canonical shared runner for mapper training + route sweep + artifact generation
+- **`exp54_recent24_stress_short_next_date_friction_retest.py`** — first serious next-date/fixed-route robustness retest; important but still too hardcoded
+- **`exp63_active_core_recent24_short_continuation.py`** — cleaned continuation path using active-route core + automatic next chronological holdout selection
+- **`exp64_broad_day_recent2026_active_core_short.py`** — broadened contiguous-day train coverage while keeping validation chronological and route surface narrow
 - **`exp10_scientist_once.py`** — end-to-end scientist protocol runner
 - **`hourly_experiment_cycle.py`** — scheduled loop over horizons with sklearn metrics
 - **`soundness_audit_overlap.py`** — audit leakage between train/test window hashes
 - **`replay_readme_style_prediction.py`** / **`sim_data_prediction_snapshot.py`** — demo/README-style prediction plots
+
+---
+
+## Current Active Training / Validation Architecture (2026-04 branch)
+
+This is the part of the repo that currently matters most for live research quality.
+
+### What the recent scripts improved
+
+The recent branch shows a visible architectural shift:
+
+1. Geometry reuse is cleaner.
+   - `DEFAULT_SHAPER_CONFIG_2026` in `exp16_batch_h64_tcn.py` is treated as the base geometry.
+   - Scripts mutate it with `ShaperConfig.but(...)` instead of rebuilding raw geometry by hand.
+
+2. The expensive training/evaluation loop is more centralized.
+   - `exp22_trigger_sweep.py` now acts as the core runner for:
+     - loading shaped windows
+     - event filtering
+     - model training
+     - trigger-grid evaluation
+     - dashboard/JSON/DB artifact generation
+
+3. Continuation logic is less ad hoc.
+   - `research_core.py` centralizes active route names, date-range selection, and fresh chronological holdout picking.
+   - `exp63` uses prior summary JSONs to infer which holdouts were already consumed, then advances automatically.
+
+4. Train coverage selection is more honest.
+   - `exp64` stops pretending a few scattered hours are sufficient and instead selects contiguous day blocks via `select_files_for_date_range()`.
+   - This is closer to industrial research discipline: broader train coverage, chronological holdouts, narrow mutation scope.
+
+5. There is at least some test coverage for the new protocol helpers.
+   - `tests/test_research_core.py`
+   - `tests/test_trigger_search.py`
+
+### What is still weak
+
+This is better, but not fully clean.
+
+Main remaining debt:
+
+- `exp54` is still dominated by hardcoded `DEFAULT_TRAIN_FILES`, `VALIDATION_HOLDOUTS`, route labels, and friction constants.
+- `exp63` and `exp64` still inherit mutable globals from `exp54` (`base.ROUTES`, `base.ROUTE_LABELS`, `base.ROUTE_COLORS`, `base.LABEL_PREFIX`). That is transitional glue, not a clean framework boundary.
+- The repo has `ReplayConfig`, `ShaperConfig`, and `TrainConfig`, but the experiment layer still does not consistently express the full protocol as typed config objects.
+- Route metadata is still split across scripts instead of living in one canonical model.
+- `btc_variant_configs.py` remains dict-oriented rather than strongly modeled; useful, but below the architectural standard implied by `config.py`.
+
+Bluntly: the direction is right, but the migration is incomplete. The new scripts show framework leverage. They do not yet finish the job.
+
+### Practical interpretation
+
+The active architecture today is:
+
+```text
+ReplayConfig/ShaperConfig base models
+    -> exp16 shared shaping helpers
+    -> exp22 canonical train/eval runner
+    -> research_core protocol helpers
+    -> exp63/exp64 thin continuation experiments
+```
+
+That is meaningfully better than fully bespoke scripts.
+It is not yet the final industrial-grade form.
+
+The next quality step is obvious:
+- promote experiment protocol itself into typed config models
+- stop mutating `exp54` globals from child scripts
+- make route families and date-slice policies first-class objects, not scattered constants
 
 ---
 
