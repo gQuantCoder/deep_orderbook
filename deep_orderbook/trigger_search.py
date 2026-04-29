@@ -4,7 +4,7 @@ from collections.abc import Iterable
 
 import numpy as np
 
-from deep_orderbook.research_core import ACTIVE_SHORT_ROUTE_NAMES
+from deep_orderbook.research_core import ACTIVE_SHORT_ROUTE_NAMES, RouteSpec
 from deep_orderbook.strategy_search import build_signal_features
 
 
@@ -17,7 +17,19 @@ def _quantile(arr: np.ndarray, q: float, fallback: float) -> float:
 def build_train_calibrated_strategy_grid(
     train_pred_map: np.ndarray,
     route_names: Iterable[str] | None = None,
-) -> list[dict]:
+    *,
+    routes: list[RouteSpec] | None = None,
+) -> list[RouteSpec]:
+    """Calibrate the trading-rule grid against training-set prediction quantiles.
+
+    Each of the ten canonical routes encodes its quantile/persistence/hold recipe in its name
+    (``q90_p2_hold96`` = entry at q90, persistence 2, max_hold 96). This function fills in the
+    concrete thresholds + rules from the training distribution, returning ``list[RouteSpec]``.
+
+    Pass ``routes`` (preferred) to preserve display metadata (label, color, direction) from a
+    catalog entry through to the calibrated output. ``route_names`` is the legacy filter and is
+    equivalent to ``routes=[RouteSpec(name=n) for n in route_names]``.
+    """
     feats = build_signal_features(train_pred_map)
     up = feats["up_max"]
     margin = feats["margin"]
@@ -28,26 +40,104 @@ def build_train_calibrated_strategy_grid(
     m60 = _quantile(positive_margin, 0.60, 0.0)
     m80 = _quantile(positive_margin, 0.80, m60)
     m90 = _quantile(positive_margin, 0.90, m80)
-    configs = [
-        {"name": "q80_p1_hold48", "entry_threshold": q80, "exit_threshold": q80, "side_margin": m60, "persistence": 1, "cooldown": 4, "max_hold": 48},
-        {"name": "q80_p2_hold48", "entry_threshold": q80, "exit_threshold": q80, "side_margin": m60, "persistence": 2, "cooldown": 4, "max_hold": 48},
-        {"name": "q80_p3_hold48", "entry_threshold": q80, "exit_threshold": q80, "side_margin": m60, "persistence": 3, "cooldown": 4, "max_hold": 48},
-        {"name": "q90_p1_hold48", "entry_threshold": q90, "exit_threshold": q90, "side_margin": m60, "persistence": 1, "cooldown": 4, "max_hold": 48},
-        {"name": "q90_p2_hold48", "entry_threshold": q90, "exit_threshold": q90, "side_margin": m80, "persistence": 2, "cooldown": 6, "max_hold": 48},
-        {"name": "q90_p2_hold96", "entry_threshold": q90, "exit_threshold": q90, "side_margin": m80, "persistence": 2, "cooldown": 6, "max_hold": 96},
-        {"name": "q95_p1_hold48", "entry_threshold": q95, "exit_threshold": q90, "side_margin": m80, "persistence": 1, "cooldown": 8, "max_hold": 48},
-        {"name": "q95_p2_hold96", "entry_threshold": q95, "exit_threshold": q90, "side_margin": m90, "persistence": 2, "cooldown": 8, "max_hold": 96},
-        {"name": "q90_persistence2_fast_exit", "entry_threshold": q90, "exit_threshold": q80, "side_margin": m80, "persistence": 2, "cooldown": 6, "max_hold": 24},
-        {"name": "q80_persistence2_wide_margin", "entry_threshold": q80, "exit_threshold": q80, "side_margin": m90, "persistence": 2, "cooldown": 6, "max_hold": 48},
-    ]
-    if route_names is None:
-        return configs
-    route_names = list(route_names)
-    by_name = {cfg["name"]: cfg for cfg in configs}
-    missing = [name for name in route_names if name not in by_name]
+    recipes: dict[str, dict[str, float | int]] = {
+        "q80_p1_hold48": {
+            "entry_threshold": q80,
+            "exit_threshold": q80,
+            "side_margin": m60,
+            "persistence": 1,
+            "cooldown": 4,
+            "max_hold": 48,
+        },
+        "q80_p2_hold48": {
+            "entry_threshold": q80,
+            "exit_threshold": q80,
+            "side_margin": m60,
+            "persistence": 2,
+            "cooldown": 4,
+            "max_hold": 48,
+        },
+        "q80_p3_hold48": {
+            "entry_threshold": q80,
+            "exit_threshold": q80,
+            "side_margin": m60,
+            "persistence": 3,
+            "cooldown": 4,
+            "max_hold": 48,
+        },
+        "q90_p1_hold48": {
+            "entry_threshold": q90,
+            "exit_threshold": q90,
+            "side_margin": m60,
+            "persistence": 1,
+            "cooldown": 4,
+            "max_hold": 48,
+        },
+        "q90_p2_hold48": {
+            "entry_threshold": q90,
+            "exit_threshold": q90,
+            "side_margin": m80,
+            "persistence": 2,
+            "cooldown": 6,
+            "max_hold": 48,
+        },
+        "q90_p2_hold96": {
+            "entry_threshold": q90,
+            "exit_threshold": q90,
+            "side_margin": m80,
+            "persistence": 2,
+            "cooldown": 6,
+            "max_hold": 96,
+        },
+        "q95_p1_hold48": {
+            "entry_threshold": q95,
+            "exit_threshold": q90,
+            "side_margin": m80,
+            "persistence": 1,
+            "cooldown": 8,
+            "max_hold": 48,
+        },
+        "q95_p2_hold96": {
+            "entry_threshold": q95,
+            "exit_threshold": q90,
+            "side_margin": m90,
+            "persistence": 2,
+            "cooldown": 8,
+            "max_hold": 96,
+        },
+        "q90_persistence2_fast_exit": {
+            "entry_threshold": q90,
+            "exit_threshold": q80,
+            "side_margin": m80,
+            "persistence": 2,
+            "cooldown": 6,
+            "max_hold": 24,
+        },
+        "q80_persistence2_wide_margin": {
+            "entry_threshold": q80,
+            "exit_threshold": q80,
+            "side_margin": m90,
+            "persistence": 2,
+            "cooldown": 6,
+            "max_hold": 48,
+        },
+    }
+
+    if routes is None and route_names is None:
+        return [RouteSpec(name=name).but(**params) for name, params in recipes.items()]
+    if routes is None:
+        routes = [RouteSpec(name=name) for name in route_names or ()]
+
+    out: list[RouteSpec] = []
+    missing: list[str] = []
+    for route in routes:
+        if route.name not in recipes:
+            missing.append(route.name)
+            continue
+        out.append(route.but(**recipes[route.name]))
     if missing:
         raise ValueError(f"Unknown route_names: {missing}")
-    return [by_name[name] for name in route_names]
+    return out
 
 
 def active_short_strategy_names() -> tuple[str, ...]:
@@ -84,7 +174,9 @@ def summarize_route(route: dict) -> dict:
     }
 
 
-def build_friction_table(ranked: list[dict], *, per_trade_costs: Iterable[float] = (1.0, 2.0, 5.0, 10.0), top_n: int | None = None) -> list[dict]:
+def build_friction_table(
+    ranked: list[dict], *, per_trade_costs: Iterable[float] = (1.0, 2.0, 5.0, 10.0), top_n: int | None = None
+) -> list[dict]:
     rows = ranked[:top_n] if top_n is not None else ranked
     costs = tuple(float(c) for c in per_trade_costs)
     table = []
@@ -93,10 +185,7 @@ def build_friction_table(ranked: list[dict], *, per_trade_costs: Iterable[float]
         table.append(
             {
                 **summary,
-                "adjusted_pnl": {
-                    cost: summary["final_pnl"] - (summary["trade_count"] * cost)
-                    for cost in costs
-                },
+                "adjusted_pnl": {cost: summary["final_pnl"] - (summary["trade_count"] * cost) for cost in costs},
             }
         )
     return table

@@ -16,7 +16,7 @@ from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
 from deep_orderbook.event_selection import score_window_eventfulness
 from deep_orderbook.learn.data_loader import DataLoaderWorker
 from deep_orderbook.learn.tcn import OrderBook2DTCN, assert_min_receptive_field_2d
-from deep_orderbook.research_core import ACTIVE_SHORT_ROUTE_NAMES
+from deep_orderbook.research_core import ACTIVE_CORE_SHORT_ROUTES, RouteSpec
 from deep_orderbook.shaper import iter_shapes_t2l
 from deep_orderbook.trigger_search import build_train_calibrated_strategy_grid
 from deep_orderbook.utils import logger
@@ -93,7 +93,7 @@ async def train_and_predict(
     display_every_batches: int = 10,
     batches_per_epoch: int = 64,
     move_test_window: bool = True,
-) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float, list[dict]], None]:
+) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float, list[RouteSpec]], None]:
     """Stream training data via ``DataLoaderWorker`` — preserves the four pieces that make SGD work.
 
     Architecture:
@@ -155,7 +155,7 @@ async def train_and_predict(
     shuffle_buffer: deque[tuple[np.ndarray, np.ndarray]] = deque(maxlen=SHUFFLE_BUFFER_SIZE)
     recent_scores: deque[float] = deque(maxlen=EVENT_SCORE_WINDOW)
     train_pred_buffer: deque[np.ndarray] = deque(maxlen=512)
-    cached_routes: list[dict] = []
+    cached_routes: list[RouteSpec] = []
     display_idx_iter = itertools.cycle(range(len(y_test))) if move_test_window else itertools.repeat(0)
 
     def _ingest_one(timeout: float = 30.0) -> bool:
@@ -223,14 +223,15 @@ async def train_and_predict(
             test_loss = float((loss_reg + cfg.event_loss_weight * loss_evt).item())
         return np.clip(pred_te.detach().cpu().numpy(), 0.0, cap), test_loss
 
-    def _calibrate_routes() -> list[dict]:
+    def _calibrate_routes() -> list[RouteSpec]:
         if not train_pred_buffer:
             return []
         stacked = np.concatenate(list(train_pred_buffer), axis=0)
         train_seq = np.clip(stacked, 0.0, cap).reshape(-1, stacked.shape[-1])
-        return build_train_calibrated_strategy_grid(train_seq, route_names=ACTIVE_SHORT_ROUTE_NAMES)
+        # Pass the catalog so display_label/color/direction flow through to the notebook.
+        return build_train_calibrated_strategy_grid(train_seq, routes=ACTIVE_CORE_SHORT_ROUTES)
 
-    def _make_yield(pred_test: np.ndarray, train_loss: float, test_loss: float, route_configs: list[dict]) -> tuple:
+    def _make_yield(pred_test: np.ndarray, train_loss: float, test_loss: float, route_configs: list[RouteSpec]) -> tuple:
         idx = next(display_idx_iter)
         set_window_label(f"{test_file.stem}   win {idx + 1}/{len(y_test)}")
         return (
@@ -340,9 +341,11 @@ async def _smoke_run(n_yields: int = 30) -> dict:
         test_losses.append(test_loss)
         pred_maxes.append(float(pred.max()))
         pred_means.append(float(pred.mean()))
+        sample_route = routes[0].name if routes else "(uncalibrated)"
         print(
             f"[smoke {count:>3}/{n_yields}] train={train_loss:.5g} test={test_loss:.5g} "
-            f"pred_max={pred.max():.4g} pred_mean={pred.mean():.4g} routes={len(routes)}"
+            f"pred_max={pred.max():.4g} pred_mean={pred.mean():.4g} routes={len(routes)} "
+            f"first={sample_route}"
         )
         if count >= n_yields:
             break

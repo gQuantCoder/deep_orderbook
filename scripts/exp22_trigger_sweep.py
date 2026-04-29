@@ -149,7 +149,7 @@ async def main(
     event_filter = {"enabled": True, "top_fraction": 0.35, "train": train_event_summary, "test": test_event_summary}
 
     # Keep full 2-D spatial structure (T, bins, channels) — NEVER flatten.
-    X_train = np.stack(X_train_w, axis=0)   # (N, T, bins=16, ch=3)
+    X_train = np.stack(X_train_w, axis=0)  # (N, T, bins=16, ch=3)
     Y_train = np.stack(Y_train_w, axis=0)
     X_test = np.stack(X_test_w, axis=0)
     Y_test = np.stack(Y_test_w, axis=0)
@@ -257,10 +257,16 @@ async def main(
             strategy_fn = evaluate_long_strategy if direction == "long" else evaluate_short_strategy
 
             # --- Continuous sliding-inference dashboard (one per variant × direction) ---
-            _slide_route_0 = aggregate_per_window_strategy_result(
-                PX_test_nov, pred_test_nov, strategy_fn,
-                **{k: strategy_grid[0][k] for k in ["entry_threshold", "exit_threshold", "side_margin", "persistence", "cooldown", "max_hold"]},
-            ) if strategy_grid else {}
+            _slide_route_0 = (
+                aggregate_per_window_strategy_result(
+                    PX_test_nov,
+                    pred_test_nov,
+                    strategy_fn,
+                    **strategy_grid[0].strategy_kwargs(),
+                )
+                if strategy_grid
+                else {}
+            )
             _slide_pred_pnl = np.asarray(_slide_route_0.get("pnl", []))
             slide_png = pictures_dir / f"{label}_{variant_name}__{direction}_slide_{stamp}.png"
             save_sliding_inference_dashboard(
@@ -277,10 +283,7 @@ async def main(
             )
 
             for strat_cfg in strategy_grid:
-                strat_kwargs = {
-                    k: strat_cfg[k]
-                    for k in ["entry_threshold", "exit_threshold", "side_margin", "persistence", "cooldown", "max_hold"]
-                }
+                strat_kwargs = strat_cfg.strategy_kwargs()
                 route = aggregate_per_window_strategy_result(PX_test_nov, pred_test_nov, strategy_fn, **strat_kwargs)
 
                 per_window_activity = Y_test_nov.sum(axis=(1, 2))
@@ -316,7 +319,7 @@ async def main(
 
                 fixed = _slice_eval(fixed_win_local)
                 best = _slice_eval(best_win_local)
-                route_name = f"{variant_name}__{direction}__{strat_cfg['name']}"
+                route_name = f"{variant_name}__{direction}__{strat_cfg.name}"
                 fixed_png = pictures_dir / f"{label}_{route_name}_fixed_{stamp}.png"
                 best_png = pictures_dir / f"{label}_{route_name}_best_{stamp}.png"
                 save_dashboard(
@@ -365,14 +368,14 @@ async def main(
                     "experiment": label,
                     "variant_name": variant_name,
                     "direction": direction,
-                    "strategy_name": strat_cfg["name"],
+                    "strategy_name": strat_cfg.name,
                     "timestamp_utc": timestamp_utc,
                     "git_commit": git_commit,
                     "device": str(device),
                     "train_files": [str(p) for p in train_files],
                     "test_file": str(test_file),
                     "config": cfg.model_dump(),
-                    "strategy_config": strat_cfg,
+                    "strategy_config": strat_cfg.model_dump(),
                     "data_scale": data_scale,
                     "event_filter": event_filter,
                     "metrics": metrics,
@@ -407,20 +410,22 @@ async def main(
                 result_path = Path(f"experiments/results/{label}_{route_name}_{stamp}.json")
                 note_path = Path(f"experiments/notes/{label}_{route_name}_{stamp}.md")
                 note_path.write_text(
-                    "\n".join([
-                        f"# {label} / {route_name}",
-                        "",
-                        f"- timestamp: {timestamp_utc}",
-                        f"- device: `{device}`",
-                        f"- decision: `{decision}`",
-                        f"- final_pnl: {final_pnl:.5f}",
-                        f"- precision: {metrics['precision']:.4f}",
-                        f"- f1: {metrics['f1']:.4f}",
-                        f"- rmse_ratio: {rmse_ratio:.4f}",
-                        f"- trades: {trade_count}",
-                        f"- fixed_png: {fixed_png}",
-                        f"- best_png: {best_png}",
-                    ])
+                    "\n".join(
+                        [
+                            f"# {label} / {route_name}",
+                            "",
+                            f"- timestamp: {timestamp_utc}",
+                            f"- device: `{device}`",
+                            f"- decision: `{decision}`",
+                            f"- final_pnl: {final_pnl:.5f}",
+                            f"- precision: {metrics['precision']:.4f}",
+                            f"- f1: {metrics['f1']:.4f}",
+                            f"- rmse_ratio: {rmse_ratio:.4f}",
+                            f"- trades: {trade_count}",
+                            f"- fixed_png: {fixed_png}",
+                            f"- best_png: {best_png}",
+                        ]
+                    )
                     + "\n"
                 )
                 row_id = register_experiment_run(

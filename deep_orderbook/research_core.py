@@ -1,15 +1,60 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
+from typing import Literal
 
-ACTIVE_SHORT_ROUTE_NAMES: tuple[str, ...] = (
-    "q95_p1_hold48",
-    "q90_p1_hold48",
-    "q90_p2_hold96",
-    "q90_persistence2_fast_exit",
-)
+from deep_orderbook.config import BaseConfig
+
+
+class RouteSpec(BaseConfig):
+    """A single trading-strategy route — thresholds, persistence rules, display metadata, direction.
+
+    Used both as a *catalog* entry (display_label, color, direction stay constant per route name)
+    and as a *calibrated* spec where ``entry_threshold`` / ``exit_threshold`` / ``side_margin``
+    are filled in from training-set quantiles by ``build_train_calibrated_strategy_grid``.
+    Mutate via ``.but(...)`` like every other ``BaseConfig``.
+    """
+
+    name: str
+    direction: Literal["long", "short"] = "short"
+
+    entry_threshold: float = 0.0
+    exit_threshold: float = 0.0
+    side_margin: float = 0.0
+
+    persistence: int = 1
+    cooldown: int = 4
+    max_hold: int = 48
+
+    display_label: str = ""
+    color: str = "#888888"
+
+    def strategy_kwargs(self) -> dict[str, float | int]:
+        """The 6 keyword args consumed by ``evaluate_long_strategy`` / ``evaluate_short_strategy``."""
+        return {
+            "entry_threshold": self.entry_threshold,
+            "exit_threshold": self.exit_threshold,
+            "side_margin": self.side_margin,
+            "persistence": self.persistence,
+            "cooldown": self.cooldown,
+            "max_hold": self.max_hold,
+        }
+
+
+# Canonical catalog of "active core" short routes — display metadata only; thresholds and
+# trading rules are filled in at runtime by ``build_train_calibrated_strategy_grid``.
+ACTIVE_CORE_SHORT_ROUTES: list[RouteSpec] = [
+    RouteSpec(name="q95_p1_hold48", display_label="q95 fast", color="#4C78A8"),
+    RouteSpec(name="q90_p1_hold48", display_label="q90 fast", color="#F58518"),
+    RouteSpec(name="q90_p2_hold96", display_label="q90 persistence2 hold96", color="#72B7B2"),
+    RouteSpec(name="q90_persistence2_fast_exit", display_label="q90 persistence-fast-exit", color="#54A24B"),
+]
+
+# Backward-compat alias — the experiment scripts (exp22, exp54, exp63, exp64) still consume
+# the name tuple via ``strategy_names=ROUTES``. Source of truth is ACTIVE_CORE_SHORT_ROUTES above.
+ACTIVE_SHORT_ROUTE_NAMES: tuple[str, ...] = tuple(r.name for r in ACTIVE_CORE_SHORT_ROUTES)
 
 
 def holdout_tag_from_path(path: Path | str) -> str:
