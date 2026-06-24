@@ -13,7 +13,7 @@ dependencies = [
     "coinbase-advanced-py==1.4.3",
     "websockets==12.0",
     "pydantic>=2",
-    "pydantic-settings>=2",
+    "pydantic-settings>=2.14.2",
     "tqdm>=4.66",
     "aioitertools>=0.11",
     "aiofiles>=24.1",
