@@ -11,7 +11,7 @@ conf = Config()
 class NoNewLineFileHandler(logging.FileHandler):
     terminator = ''
 
-def make_handlers(filename='./replayer.log', filename_if_no_permission='./player.log'):
+def make_handlers(filename: str = './replayer.log', filename_if_no_permission: str = './player.log') -> tuple[logging.FileHandler, logging.FileHandler]:
     mode = 'a'
     encoding = 'utf-8'
     try:
@@ -35,10 +35,20 @@ def make_handlers(filename='./replayer.log', filename_if_no_permission='./player
 
 
 
-def make_logger(name='deep_orderbook', level=logging.INFO):
+def make_logger(name: str = 'deep_orderbook', level: int = logging.INFO) -> logging.Logger:
     line_handler, noline_handler = make_handlers()
+
+    # Add console handler for errors
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.ERROR)
+    datefmt = '%H:%M:%S'
+    fmt = f'''%(asctime)s.%(msecs)03d %(levelname)s {conf.RUN_WHERE} %(module)s - %(funcName)s: %(message)s'''
+    formatter = logging.Formatter(fmt, datefmt, '%')
+    console_handler.setFormatter(formatter)
+
     logger = logging.getLogger(name)
     logger.addHandler(line_handler)
+    logger.addHandler(console_handler)
     logger.setLevel(level)
 
     return logger

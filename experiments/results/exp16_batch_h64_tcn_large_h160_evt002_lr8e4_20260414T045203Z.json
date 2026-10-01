@@ -1,0 +1,107 @@
+{
+  "experiment": "exp16_batch_h64_tcn",
+  "variant_name": "large_h160_evt002_lr8e4",
+  "timestamp_utc": "2026-04-14 04:52:03Z",
+  "git_commit": "7027592",
+  "train_files": [
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+  ],
+  "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+  "hypothesis": "Larger TCN with gentler optimization might capture richer motifs without event spam.",
+  "config": {
+    "hidden_dim": 160,
+    "epochs": 8,
+    "lr": 0.0008,
+    "weight_decay": 0.0002,
+    "reg_loss": "huber",
+    "event_loss_weight": 0.02,
+    "pos_weight": 2.0,
+    "trade_threshold": 0.1,
+    "prediction_cap_quantile": 99.5,
+    "active_reg_weight": 1.0,
+    "hypothesis": "Larger TCN with gentler optimization might capture richer motifs without event spam."
+  },
+  "richness_gate": {
+    "usable": true,
+    "reason": "ok",
+    "books_std": 2.443171977996826,
+    "books_abs_peak": 13.38646411895752,
+    "target_active_ratio": 0.03662109375,
+    "target_peak": 30.975704193115234
+  },
+  "metrics": {
+    "rmse": 2.142547130584717,
+    "mae": 0.8818733096122742,
+    "precision": 0.06811954464563148,
+    "recall": 0.9999999999999998,
+    "f1": 0.12755041322302108,
+    "event_rate_true": 0.049062093098958336,
+    "event_rate_pred": 0.7202351888020834
+  },
+  "zero_baseline": {
+    "rmse": 0.4435252249240875,
+    "mae": 0.07224328070878983,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "event_rate_true": 0.049062093098958336,
+    "event_rate_pred": 0.0
+  },
+  "image_quality": {
+    "gray_mean": 0.7152076363563538,
+    "gray_std": 0.32142865657806396,
+    "near_black_fraction": 0.043598968999364454,
+    "near_white_fraction": 0.46383535767248074,
+    "edge_mean_abs_diff": 0.017565511167049408,
+    "usable": true,
+    "reason": "ok"
+  },
+  "pnl": {
+    "best_slice": {
+      "omniscient_final": 15.0625,
+      "prediction_final": 16.890625
+    },
+    "fixed_slice": {
+      "omniscient_final": 15.0625,
+      "prediction_final": 16.890625
+    }
+  },
+  "train_losses": [
+    0.3283146056863997,
+    0.2525152713060379,
+    0.20307955352796447,
+    0.17184944616423714,
+    0.15315905461708704,
+    0.13708211233218512,
+    0.11871951383848985,
+    0.10920061874720785
+  ],
+  "test_losses": [
+    0.052624884992837906,
+    0.0996662825345993,
+    0.16368748247623444,
+    0.2536987364292145,
+    0.39363014698028564,
+    0.5178477764129639,
+    0.6086180210113525,
+    0.7709499597549438
+  ],
+  "artifacts": {
+    "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+    "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_large_h160_evt002_lr8e4_fixed_20260414T045203Z.png",
+    "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_large_h160_evt002_lr8e4_best_20260414T045203Z.png",
+    "notes_md": "experiments/notes/exp16_batch_h64_tcn_large_h160_evt002_lr8e4_20260414T045203Z.md"
+  },
+  "observations": [
+    "Variant=large_h160_evt002_lr8e4",
+    "Holdout metrics: f1=0.1276, precision=0.0681, recall=1.0000, rmse=2.14255",
+    "Zero baseline rmse=0.44353",
+    "Image QC: usable=True, reason=ok, gray_std=0.3214, near_black=0.044, near_white=0.464",
+    "Best-slice pnl: omniscient=15.06250, prediction=16.89062",
+    "Fixed-slice pnl: omniscient=15.06250, prediction=16.89062"
+  ],
+  "decision": "not_promising_yet",
+  "experiment_db_row_id": 14
+}

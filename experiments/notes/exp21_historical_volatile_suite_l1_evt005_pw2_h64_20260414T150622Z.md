@@ -1,0 +1,27 @@
+# exp16 batch variant
+
+- timestamp: 2026-04-14 15:06:22Z
+- variant: `l1_evt005_pw2_h64`
+- train files:
+  - `2025-03-10T14-00-32.parquet`
+  - `2025-03-10T17-00-33.parquet`
+  - `2025-03-11T00-00-11.parquet`
+  - `2025-03-11T14-00-33.parquet`
+  - `2025-03-11T15-00-33.parquet`
+  - `2025-04-07T14-00-33.parquet`
+  - `2025-04-07T15-00-33.parquet`
+  - `2025-04-09T17-00-32.parquet`
+- test file: `2025-04-09T18-00-33.parquet`
+- config: `{"active_reg_weight": 1.0, "epochs": 6, "event_loss_weight": 0.05, "hidden_dim": 64, "hypothesis": "Smaller L1 TCN may generalize better on concentrated event windows.", "lr": 0.0015, "pos_weight": 2.0, "prediction_cap_quantile": 99.5, "reg_loss": "l1", "trade_threshold": 0.1, "weight_decay": 0.0001}`
+- precheck image: `experiments/pictures/exp21_historical_volatile_suite_holdout_precheck_20260414T150622Z.png`
+- fixed dashboard: `experiments/pictures/exp21_historical_volatile_suite_l1_evt005_pw2_h64_fixed_20260414T150622Z.png`
+- best dashboard: `experiments/pictures/exp21_historical_volatile_suite_l1_evt005_pw2_h64_best_20260414T150622Z.png`
+- result json: `experiments/results/exp21_historical_volatile_suite_l1_evt005_pw2_h64_20260414T150622Z.json`
+- observations:
+  - Variant=l1_evt005_pw2_h64
+  - Holdout metrics: f1=0.6133, precision=0.4823, recall=0.8420, rmse=6.51771
+  - Zero baseline rmse=6.68344
+  - Image QC: usable=True, reason=ok, gray_std=0.3061, near_black=0.013, near_white=0.499
+  - Best-slice pnl: omniscient=69.20312, prediction=-260.79688
+  - Fixed-slice pnl: omniscient=-57.03125, prediction=-201.07812
+- decision: not_promising_yet

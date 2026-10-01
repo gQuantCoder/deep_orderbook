@@ -1,0 +1,57 @@
+deep_orderbook/btc_search_lab.py:446:12: error[invalid-return-type] Return type does not match returned value: expected `tuple[int, int, int, int, bytes]`, found `tuple[None | int, None | int, None | int, None | int, bytes]`
+deep_orderbook/consumers/recorder.py:60:19: error[unresolved-attribute] Object of type `AsyncTextIOWrapper` has no attribute `close`
+deep_orderbook/consumers/recorder.py:96:23: error[unresolved-attribute] Object of type `AsyncTextIOWrapper` has no attribute `write`
+deep_orderbook/experiment_tracking.py:119:20: error[invalid-argument-type] Argument to function `__new__` is incorrect: Expected `str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc`, found `int | None`
+deep_orderbook/feeds/coinbase_feed.py:78:25: error[unresolved-attribute] Attribute `product_id` is not defined on `SubscriptionsEvent` in union `L2Event | TradeEvent | SubscriptionsEvent`
+deep_orderbook/feeds/coinbase_feed.py:81:16: error[unresolved-attribute] Attribute `product_id` is not defined on `SubscriptionsEvent` in union `L2Event | TradeEvent | SubscriptionsEvent`
+deep_orderbook/feeds/coinbase_feed.py:152:31: error[invalid-argument-type] Argument to bound method `put_nowait` is incorrect: Expected `CoinbaseMessage`, found `EndFeed`
+deep_orderbook/feeds/coinbase_feed.py:240:42: error[invalid-argument-type] Argument to bound method `put` is incorrect: Expected `MulitSymbolOneSecondEnds`, found `None`
+deep_orderbook/feeds/coinbase_feed.py:271:35: error[invalid-argument-type] Argument to bound method `put_nowait` is incorrect: Expected `CoinbaseMessage`, found `CoinbaseMessage | dict[str, Any]`
+deep_orderbook/feeds/coinbase_feed.py:275:18: error[unresolved-attribute] Attribute `timestamp` is not defined on `dict[str, Any]` in union `CoinbaseMessage | dict[str, Any]`
+deep_orderbook/feeds/coinbase_feed.py:285:26: error[unresolved-attribute] Attribute `timestamp` is not defined on `dict[str, Any]` in union `CoinbaseMessage | dict[str, Any]`
+deep_orderbook/feeds/coinbase_feed.py:286:30: error[invalid-argument-type] Argument to bound method `process_message` is incorrect: Expected `CoinbaseMessage | EndFeed`, found `CoinbaseMessage | dict[str, Any]`
+deep_orderbook/feeds/coinbase_feed.py:349:13: error[invalid-argument-type] Argument to bound method `make_one_second` is incorrect: Expected `datetime`, found `datetime | None`
+deep_orderbook/learn/attention_tcn.py:172:9: error[invalid-argument-type] Argument is incorrect: Expected `Path`, found `Literal["/media/photoDS216/crypto/"]`
+deep_orderbook/learn/pure_attention.py:177:9: error[invalid-argument-type] Argument is incorrect: Expected `Path`, found `Literal["/media/photoDS216/crypto/"]`
+deep_orderbook/learn/pure_attention.py:219:9: error[unknown-argument] Argument `gradient_accumulation_steps` does not match any known parameter of bound method `__init__`
+deep_orderbook/learn/test_learn.py:166:9: error[invalid-argument-type] Argument is incorrect: Expected `Path`, found `Literal["/media/photoDS216/crypto/"]`
+deep_orderbook/learn/trainer.py:415:31: error[invalid-argument-type] Argument is incorrect: Expected `Path`, found `Literal["/media/photoDS216/crypto/"]`
+deep_orderbook/marketdata.py:116:24: error[invalid-return-type] Return type does not match returned value: expected `list[OrderLevel]`, found `list[OrderLevel | dict[str, Unknown]]`
+deep_orderbook/readpolar.py:32:30: error[unresolved-attribute] Object of type `ExprCatNameSpace` has no attribute `set_ordering`
+deep_orderbook/readpolar.py:107:16: error[invalid-return-type] Return type does not match returned value: expected `DataFrame`, found `None | DataFrame`
+deep_orderbook/replayer.py:104:15: error[call-non-callable] Object of type `None` is not callable
+deep_orderbook/shaper.py:295:9: error[invalid-argument-type] Argument to bound method `__init__` is incorrect: Expected `ReplayerProtocol | None`, found `Iterator[CoinbaseMessage] | None`
+deep_orderbook/simple_shaper.py:31:26: error[unsupported-operator] Operator `-` is not supported between two objects of type `int | float | Decimal`
+deep_orderbook/simple_shaper.py:32:13: error[unsupported-operator] Operator `+` is not supported between two objects of type `int | float | Decimal`
+deep_orderbook/simple_shaper.py:151:9: error[invalid-argument-type] Argument to bound method `__init__` is incorrect: Expected `ReplayerProtocol | None`, found `Iterator[CoinbaseMessage] | None`
+deep_orderbook/simple_shaper.py:216:9: error[invalid-argument-type] Argument is incorrect: Expected `Path`, found `Literal["/media/photoDS216/crypto/"]`
+deep_orderbook/strategy.py:110:28: error[invalid-type-arguments] Type `dtype[float64]` is not assignable to upper bound `tuple[int, ...]` of type variable `_ShapeT_co@ndarray`
+deep_orderbook/strategy.py:111:42: error[invalid-type-arguments] Type `dtype[float64]` is not assignable to upper bound `tuple[int, ...]` of type variable `_ShapeT_co@ndarray`
+deep_orderbook/strategy.py:177:9: error[invalid-argument-type] Argument is incorrect: Expected `Path`, found `Literal["/media/photoDS216/crypto/"]`
+deep_orderbook/tests/test_cache.py:34:13: error[missing-argument] No argument provided for required parameter `replay_config` of bound method `_get_config_hash`
+deep_orderbook/tests/test_cache.py:35:13: error[missing-argument] No argument provided for required parameter `replay_config` of bound method `_get_config_hash`
+deep_orderbook/tests/test_cache.py:36:13: error[missing-argument] No argument provided for required parameter `replay_config` of bound method `_get_config_hash`
+deep_orderbook/tests/test_cache.py:47:18: error[missing-argument] No argument provided for required parameter `replay_config` of bound method `_get_cache_path`
+deep_orderbook/tests/test_cache.py:64:5: error[missing-argument] No argument provided for required parameter `prices_array` of bound method `save_to_cache`
+deep_orderbook/tests/test_cache.py:64:50: error[invalid-argument-type] Argument to bound method `save_to_cache` is incorrect: Expected `ReplayConfig`, found `ndarray[tuple[Any, ...], dtype[float64]]`
+deep_orderbook/tests/test_cache.py:67:14: error[missing-argument] No argument provided for required parameter `replay_config` of bound method `load_cached`
+deep_orderbook/tests/test_cache.py:86:9: error[missing-argument] No argument provided for required parameter `prices_array` of bound method `save_to_cache`
+deep_orderbook/tests/test_cache.py:86:54: error[invalid-argument-type] Argument to bound method `save_to_cache` is incorrect: Expected `ReplayConfig`, found `ndarray[tuple[Any, ...], dtype[float64]]`
+deep_orderbook/tests/test_cache.py:92:5: error[unresolved-attribute] Object of type `ArrayCache` has no attribute `clear_cache`
+deep_orderbook/tests/test_cache_performance.py:34:9: error[unresolved-attribute] Object of type `ArrayCache` has no attribute `clear_cache`
+dev_replay.ipynb:cell 2:3:5: error[invalid-argument-type] Argument is incorrect: Expected `Path`, found `Literal["data"]`
+dev_replay.ipynb:cell 5:11:5: error[invalid-assignment] Too many values to unpack: Expected 3
+dev_replay.ipynb:cell 8:1:1: error[unresolved-reference] Name `aaaaaaaaaa` used when not defined
+dev_replay.ipynb:cell 9:83:9: error[invalid-assignment] Too many values to unpack: Expected 3
+dev_replay.ipynb:cell 9:91:1: error[unresolved-reference] Name `display` used when not defined
+dev_replay.ipynb:cell 10:25:9: error[invalid-assignment] Too many values to unpack: Expected 3
+learn-100ms.ipynb:cell 1:12:5: error[invalid-argument-type] Argument is incorrect: Expected `Path`, found `Literal["/media/photoDS216/crypto/"]`
+learn-100ms.ipynb:cell 1:24:5: error[unknown-argument] Argument `randomize` does not match any known parameter
+learn.ipynb:cell 1:12:5: error[invalid-argument-type] Argument is incorrect: Expected `Path`, found `Literal["/media/photoDS216/crypto/"]`
+learn.ipynb:cell 1:24:5: error[unknown-argument] Argument `randomize` does not match any known parameter
+live.ipynb:cell 3:5:9: error[invalid-argument-type] Argument to function `iter_shapes_t2l` is incorrect: Expected `ReplayConfig`, found `FeedConfig`
+live.py:32:13: error[invalid-argument-type] Argument to function `iter_shapes_t2l` is incorrect: Expected `ReplayConfig`, found `FeedConfig`
+replay.ipynb:cell 1:8:5: error[invalid-argument-type] Argument is incorrect: Expected `Path`, found `Literal["/media/photoDS216/crypto/"]`
+scripts/exp16_batch_h64_tcn.py:579:9: error[invalid-assignment] Cannot assign to a subscript on an object of type `None`
+scripts/exp16_batch_h64_tcn.py:580:9: error[not-subscriptable] Cannot subscript object of type `None` with no `__getitem__` method
+Found 56 diagnostics

@@ -2,7 +2,6 @@
 **egg-info**
 build
 dist
-.vscode
 .ipynb_checkpoints
 /data/
 *.log
@@ -10,5 +9,11 @@ dist
 /cov.xml
 preprocessed_data
 cache
-checkpoints
+checkpoints*
 /1_checkpoints/
+/.cursor
+/experiments/pictures/
+/experiments/notes/
+/experiments/results/
+config.bat
+node_modules

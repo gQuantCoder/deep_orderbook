@@ -1,0 +1,25 @@
+# exp14 multifile btc precision
+
+- timestamp: 2026-04-14 04:27:53Z
+- train files:
+  - `2026-04-14T00-00-01.parquet`
+  - `2026-04-14T01-00-10.parquet`
+  - `2026-04-14T02-00-01.parquet`
+- test file: `2026-04-14T03-00-00.parquet`
+- symbol: `BTC-USD`
+- mutation: lower event-loss weight + lower pos_weight + higher trade threshold, with multi-file holdout and prediction cap
+- hypothesis: Reducing event-loss pressure and class weight should cut event spam and improve holdout precision while keeping capped image-to-image structure.
+- precheck image: `experiments/pictures/exp14_multifile_btc_precision_precheck_20260414T042753Z.png`
+- best-slice dashboard: `experiments/pictures/exp14_multifile_btc_precision_best_20260414T042753Z.png`
+- fixed-slice dashboard: `experiments/pictures/exp14_multifile_btc_precision_fixed_20260414T042753Z.png`
+- result json: `experiments/results/exp14_multifile_btc_precision_20260414T042753Z.json`
+- observations:
+  - Richness gate passed on holdout file: books_std=2.4432, target_active_ratio=0.036621
+  - Used different parquet files for training (3) and testing (1 holdout)
+  - Applied prediction cap at train q99.5=9.3100
+  - Holdout metrics: f1=0.1459, precision=0.0788, recall=0.9840, rmse=2.06836
+  - Zero baseline holdout rmse=0.44353
+  - Best-slice pnl: omniscient=15.06250, prediction=29.30469
+  - Fixed-slice pnl: omniscient=15.06250, prediction=29.30469
+- decision: not_promising_yet
+- next mutation: if precision is still weak, keep this multi-file split and change one factor that reduces event over-triggering rather than touching the split again.

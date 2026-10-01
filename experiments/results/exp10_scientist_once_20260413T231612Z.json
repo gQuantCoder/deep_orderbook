@@ -1,0 +1,76 @@
+{
+  "experiment": "exp10_scientist_once",
+  "timestamp_utc": "2026-04-13 23:16:12Z",
+  "git_commit": "c2a3be2",
+  "selected_parquet": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-13T22-51-51.parquet",
+  "replay_config": {
+    "markets": [
+      "ETH-USD"
+    ],
+    "max_samples": -1,
+    "freq": 1.0,
+    "data_dir": "/mnt/data/repos/gaelreinaudi/crypto",
+    "date_regexp": "2026-04-13T22-51-51",
+    "one_path": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-13T22-51-51.parquet",
+    "skip_until_time": "00:00:00",
+    "every": "100ms",
+    "randomize": false
+  },
+  "shaper_config": {
+    "view_bips": 5,
+    "num_side_lvl": 8,
+    "rolling_window_size": 256,
+    "window_stride": 8,
+    "only_full_arrays": true,
+    "for_image_display": false,
+    "look_ahead": 64,
+    "look_ahead_side_bips": 5,
+    "look_ahead_side_width": 4,
+    "use_cache": false,
+    "save_cache": false
+  },
+  "hypothesis": "A visually rich recent 100ms/h64 slice may support a quick TinyTCN learning pass with non-random map and trade structure.",
+  "richness_gate": {
+    "usable": true,
+    "reason": "ok",
+    "books_std": 2.7849390506744385,
+    "books_abs_peak": 12.118968963623047,
+    "target_active_ratio": 0.44091796875,
+    "target_peak": 2.2045412063598633
+  },
+  "metrics": {
+    "rmse": 0.20646624267101288,
+    "mae": 0.08850818127393723,
+    "precision": 0.47681458793361353,
+    "recall": 0.5438076282546,
+    "f1": 0.5081124162660828,
+    "event_rate_true": 0.40069986979166666,
+    "event_rate_pred": 0.45699869791666664
+  },
+  "zero_baseline": {
+    "rmse": 0.20621584355831146,
+    "mae": 0.08726072311401367,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "event_rate_true": 0.40069986979166666,
+    "event_rate_pred": 0.0
+  },
+  "pnl": {
+    "omniscient_final": 12.09033203125,
+    "prediction_final": 0.76025390625
+  },
+  "artifacts": {
+    "precheck_png": "experiments/pictures/exp10_scientist_once_precheck_20260413T231612Z.png",
+    "dashboard_png": "experiments/pictures/exp10_scientist_once_dashboard_20260413T231612Z.png",
+    "notes_md": "experiments/notes/exp10_scientist_once_20260413T231612Z.md"
+  },
+  "observations": [
+    "Richness gate passed: books_std=2.7849, target_active_ratio=0.440918",
+    "TinyTCN quick run metrics: f1=0.5081, precision=0.4768, recall=0.5438, rmse=0.20647",
+    "Zero baseline rmse=0.20622",
+    "Final omniscient pnl=12.09033, prediction pnl=0.76025"
+  ],
+  "decision": "not_promising_yet",
+  "experiment_db_row_id": 5
+}

@@ -11,7 +11,7 @@ from deep_orderbook.visu import Visualizer
 from deep_orderbook.strategy import Strategy
 from deep_orderbook.config import TrainConfig, ReplayConfig, ShaperConfig
 import torch.optim as optim
-from typing import AsyncGenerator, Tuple
+from typing import AsyncGenerator, Tuple, Optional
 import numpy as np
 from deep_orderbook.learn.trainer import Trainer
 
@@ -28,12 +28,13 @@ class TimeSeriesTransformer(nn.Module):
         self,
         input_channels: int,
         output_channels: int,
-        d_model: int = 128,
+        d_model: int = 32,
         nhead: int = 4,
         num_layers: int = 4,
         num_side_lvl: int = 4,
         target_side_width: int = 4,
-        dropout: float = 0.1
+        dropout: float = 0.1,
+        max_seq_len: int = 10000  # Added parameter for longer sequences
     ) -> None:
         """Initialize the TimeSeriesTransformer.
         
@@ -46,6 +47,7 @@ class TimeSeriesTransformer(nn.Module):
             num_side_lvl (int): Number of price levels per side
             target_side_width (int): Target number of price levels per side
             dropout (float): Dropout rate
+            max_seq_len (int): Maximum sequence length for positional encoding
         """
         super().__init__()
         
@@ -56,10 +58,11 @@ class TimeSeriesTransformer(nn.Module):
             input_channels, d_model, kernel_size=1
         )
         
-        # Positional encoding
+        # Positional encoding with specified max_seq_len
         self.pos_encoder = PositionalEncoding(
             d_model=d_model,
-            dropout=dropout
+            dropout=dropout,
+            max_len=max_seq_len  # Pass max_seq_len to PositionalEncoding
         )
         
         # Transformer encoder layers
@@ -111,11 +114,12 @@ class TimeSeriesTransformer(nn.Module):
             torch.Tensor: Output tensor with same shape as input
         """
         # Initial projection
-        x = self.input_projection(x)
+        x = self.input_projection(x)  # [batch, d_model, time, price]
         
-        # Reshape for transformer (batch, seq_len, d_model)
+        # Process each price level independently
         b, c, t, h = x.shape
-        x = x.permute(0, 2, 3, 1).reshape(b, t*h, c)
+        # Reshape to [batch * price, time, d_model]
+        x = x.permute(0, 3, 2, 1).reshape(b * h, t, c)
         
         # Add positional encoding
         x = self.pos_encoder(x)
@@ -124,13 +128,13 @@ class TimeSeriesTransformer(nn.Module):
         x = self.layer_norm(x)
         
         # Generate causal mask
-        mask = self.generate_causal_mask(x.size(1))
+        mask = self.generate_causal_mask(t)
         
         # Transformer encoding
         x = self.transformer_encoder(x, mask=mask)
         
-        # Reshape back
-        x = x.reshape(b, t, h, c).permute(0, 3, 1, 2)
+        # Reshape back to [batch, d_model, time, price]
+        x = x.reshape(b, h, t, c).permute(0, 3, 2, 1)
         
         # Final projection
         x = self.output_projection(x)
@@ -138,7 +142,7 @@ class TimeSeriesTransformer(nn.Module):
         # Ensure output size matches target width
         x = F.adaptive_avg_pool2d(x, (x.shape[2], 2 * self.target_side_width))
         
-        return x 
+        return x
 
 async def main() -> None:
     from tqdm.auto import tqdm
@@ -157,11 +161,13 @@ async def main() -> None:
     # Configuration
     train_config = TrainConfig(
         num_workers=1,
-        batch_size=16,
+        batch_size=8,
         data_queue_size=512,
-        num_levels=8,
+        num_levels=4,
         learning_rate=0.0001,
         epochs=10,
+        criterion="StructuredT2L",
+        loss_focus_last_step=True,
         save_checkpoint_mins=5.0,
         checkpoint_dir=Path("checkpoints_pure_attention"),
     )
@@ -191,12 +197,13 @@ async def main() -> None:
     model = TimeSeriesTransformer(
         input_channels=input_channels,
         output_channels=output_channels,
-        d_model=128,
+        d_model=64,
         nhead=4,
-        num_layers=train_config.num_levels,
+        num_layers=4,
         num_side_lvl=shaper_config.num_side_lvl,
         target_side_width=shaper_config.look_ahead_side_width,
-        dropout=0.1
+        dropout=0.1,
+        max_seq_len=10000
     )
     optimizer = optim.Adam(model.parameters(), lr=train_config.learning_rate)
     criterion = nn.MSELoss()
@@ -209,6 +216,7 @@ async def main() -> None:
         train_config=train_config,
         replay_config=replay_config,
         shaper_config=shaper_config.but(only_full_arrays=True),
+        gradient_accumulation_steps=4
     )
 
     # Try to load latest checkpoint
@@ -254,7 +262,18 @@ async def train_and_predict(
     trainer: Trainer,
     test_config: ReplayConfig,
     shaper_config: ShaperConfig,
-) -> AsyncGenerator[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float], None]:
+) -> AsyncGenerator[Tuple[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray], float, float], None]:
+    """Train the model and yield predictions.
+    
+    Args:
+        trainer: The trainer instance
+        test_config: Test configuration
+        shaper_config: Shaper configuration
+        
+    Yields:
+        Tuple of (books_array, time_levels, pxar, prediction, train_loss, test_loss)
+        where prediction may be None if test step fails
+    """
     from deep_orderbook.shaper import iter_shapes_t2l
     
     samples_processed = trainer.total_samples_processed

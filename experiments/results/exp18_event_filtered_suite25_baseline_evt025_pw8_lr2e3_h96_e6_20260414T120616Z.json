@@ -1,0 +1,304 @@
+{
+  "experiment": "exp18_event_filtered_suite25",
+  "variant_name": "baseline_evt025_pw8_lr2e3_h96_e6",
+  "timestamp_utc": "2026-04-14 12:06:16Z",
+  "git_commit": "7027592",
+  "train_files": [
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T07-00-00.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T08-00-00.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T09-00-00.parquet"
+  ],
+  "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T10-00-00.parquet",
+  "hypothesis": "Reference capped holdout TCN baseline.",
+  "config": {
+    "hidden_dim": 96,
+    "epochs": 6,
+    "lr": 0.002,
+    "weight_decay": 0.0001,
+    "reg_loss": "huber",
+    "event_loss_weight": 0.25,
+    "pos_weight": 8.0,
+    "trade_threshold": 0.04,
+    "prediction_cap_quantile": 99.5,
+    "active_reg_weight": 1.0,
+    "hypothesis": "Reference capped holdout TCN baseline."
+  },
+  "richness_gate": {
+    "usable": true,
+    "reason": "ok",
+    "books_std": 2.422539710998535,
+    "books_abs_peak": 13.386734008789062,
+    "target_active_ratio": 0.10986328125,
+    "target_peak": 23.277984619140625
+  },
+  "metrics": {
+    "rmse": 1.0967875719070435,
+    "mae": 0.231318861246109,
+    "precision": 0.1981470412432755,
+    "recall": 0.7152103559870547,
+    "f1": 0.3103206178325644,
+    "event_rate_true": 0.07987706801470588,
+    "event_rate_pred": 0.2883157169117647
+  },
+  "zero_baseline": {
+    "rmse": 1.1435900926589966,
+    "mae": 0.23609817028045654,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "event_rate_true": 0.07987706801470588,
+    "event_rate_pred": 0.0
+  },
+  "image_quality": {
+    "gray_mean": 0.7279289364814758,
+    "gray_std": 0.30479732155799866,
+    "near_black_fraction": 0.014198502930583999,
+    "near_white_fraction": 0.46182367064472846,
+    "edge_mean_abs_diff": 0.017352264374494553,
+    "usable": true,
+    "reason": "ok"
+  },
+  "pnl": {
+    "best_slice": {
+      "omniscient_final": 23.15625,
+      "prediction_final": -6.046875
+    },
+    "fixed_slice": {
+      "omniscient_final": 20.0625,
+      "prediction_final": -0.0078125
+    }
+  },
+  "train_losses": [
+    0.45397914733205524,
+    0.22654720502240316,
+    0.1633923351764679,
+    0.13382253795862198,
+    0.11270676340375628,
+    0.10252773974622999
+  ],
+  "test_losses": [
+    5.533388614654541,
+    4.586914539337158,
+    2.715982437133789,
+    4.655672073364258,
+    5.43984317779541,
+    6.884641170501709
+  ],
+  "artifacts": {
+    "precheck_png": "experiments/pictures/exp18_event_filtered_suite25_holdout_precheck_20260414T120616Z.png",
+    "dashboard_fixed_png": "experiments/pictures/exp18_event_filtered_suite25_baseline_evt025_pw8_lr2e3_h96_e6_fixed_20260414T120616Z.png",
+    "dashboard_best_png": "experiments/pictures/exp18_event_filtered_suite25_baseline_evt025_pw8_lr2e3_h96_e6_best_20260414T120616Z.png",
+    "notes_md": "experiments/notes/exp18_event_filtered_suite25_baseline_evt025_pw8_lr2e3_h96_e6_20260414T120616Z.md"
+  },
+  "observations": [
+    "Variant=baseline_evt025_pw8_lr2e3_h96_e6",
+    "Holdout metrics: f1=0.3103, precision=0.1981, recall=0.7152, rmse=1.09679",
+    "Zero baseline rmse=1.14359",
+    "Image QC: usable=True, reason=ok, gray_std=0.3048, near_black=0.014, near_white=0.462",
+    "Best-slice pnl: omniscient=23.15625, prediction=-6.04688",
+    "Fixed-slice pnl: omniscient=20.06250, prediction=-0.00781"
+  ],
+  "decision": "not_promising_yet",
+  "experiment_db_row_id": 29,
+  "event_filter": {
+    "enabled": true,
+    "top_fraction": 0.35,
+    "test": {
+      "top_fraction": 0.35,
+      "selected_count": 17,
+      "total_count": 48,
+      "selected_indices": [
+        32,
+        31,
+        33,
+        36,
+        37,
+        34,
+        35,
+        30,
+        6,
+        7,
+        5,
+        4,
+        3,
+        2,
+        29,
+        40,
+        44
+      ],
+      "top_ranked": [
+        {
+          "index": 32,
+          "score": 1.3995867341704489,
+          "features": {
+            "abs_return_bps": 5.06172940464291,
+            "range_bps": 5.2053617427614025,
+            "realized_vol_bps": 0.21338070416263225,
+            "book_std": 2.422539710998535,
+            "book_impulse": 0.2359696924686432
+          }
+        },
+        {
+          "index": 31,
+          "score": 1.3908297489312156,
+          "features": {
+            "abs_return_bps": 4.931648856536825,
+            "range_bps": 5.205279883653346,
+            "realized_vol_bps": 0.21357937762510673,
+            "book_std": 2.423060655593872,
+            "book_impulse": 0.2310660034418106
+          }
+        },
+        {
+          "index": 33,
+          "score": 1.3587225924957518,
+          "features": {
+            "abs_return_bps": 4.464204741975152,
+            "range_bps": 5.205443058691082,
+            "realized_vol_bps": 0.21684281194765884,
+            "book_std": 2.42177152633667,
+            "book_impulse": 0.2396177500486374
+          }
+        },
+        {
+          "index": 36,
+          "score": 1.2534928312207776,
+          "features": {
+            "abs_return_bps": 3.216681112724228,
+            "range_bps": 5.205613339203323,
+            "realized_vol_bps": 0.20927380178153465,
+            "book_std": 2.423234701156616,
+            "book_impulse": 0.2251620888710022
+          }
+        },
+        {
+          "index": 37,
+          "score": 1.2533849095702572,
+          "features": {
+            "abs_return_bps": 3.21671348969902,
+            "range_bps": 5.205665735448382,
+            "realized_vol_bps": 0.20927590819257375,
+            "book_std": 2.423588514328003,
+            "book_impulse": 0.22022612392902374
+          }
+        }
+      ]
+    },
+    "train": {
+      "top_fraction": 0.35,
+      "selected_count": 51,
+      "total_count": 144,
+      "selected_indices": [
+        74,
+        75,
+        72,
+        73,
+        104,
+        68,
+        67,
+        66,
+        84,
+        85,
+        83,
+        65,
+        82,
+        80,
+        79,
+        136,
+        86,
+        81,
+        69,
+        70,
+        71,
+        116,
+        118,
+        115,
+        123,
+        117,
+        99,
+        122,
+        87,
+        50,
+        105,
+        88,
+        91,
+        90,
+        76,
+        103,
+        95,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        93,
+        92,
+        94,
+        32,
+        31,
+        33,
+        34,
+        89
+      ],
+      "top_ranked": [
+        {
+          "index": 74,
+          "score": 1.3163665553758581,
+          "features": {
+            "abs_return_bps": 4.558807092590399,
+            "range_bps": 4.5629971726387355,
+            "realized_vol_bps": 0.12609545322099458,
+            "book_std": 2.4297783374786377,
+            "book_impulse": 0.19506753981113434
+          }
+        },
+        {
+          "index": 75,
+          "score": 1.1464696691697807,
+          "features": {
+            "abs_return_bps": 3.232689763393507,
+            "range_bps": 3.580471034115038,
+            "realized_vol_bps": 0.11228586973928452,
+            "book_std": 2.4308128356933594,
+            "book_impulse": 0.18984919786453247
+          }
+        },
+        {
+          "index": 72,
+          "score": 1.1230855209915918,
+          "features": {
+            "abs_return_bps": 2.8753855059201516,
+            "range_bps": 3.7584273935306025,
+            "realized_vol_bps": 0.11407235281755061,
+            "book_std": 2.428797721862793,
+            "book_impulse": 0.1969459503889084
+          }
+        },
+        {
+          "index": 73,
+          "score": 1.1230466659462444,
+          "features": {
+            "abs_return_bps": 2.875410806642293,
+            "range_bps": 3.7584604642012924,
+            "realized_vol_bps": 0.11407335654831881,
+            "book_std": 2.4291534423828125,
+            "book_impulse": 0.1949131339788437
+          }
+        },
+        {
+          "index": 104,
+          "score": 1.092227895176361,
+          "features": {
+            "abs_return_bps": 2.261282231627578,
+            "range_bps": 4.262490894813924,
+            "realized_vol_bps": 0.16205306897451321,
+            "book_std": 2.417389154434204,
+            "book_impulse": 0.18685992062091827
+          }
+        }
+      ],
+      "expanded_with_older_files": []
+    }
+  }
+}

@@ -1,10 +1,12 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
 import aiofiles
+import polars as pl
 from aiofiles.threadpool.text import AsyncTextIOWrapper
 from tqdm.auto import tqdm
-import polars as pl
+
 from deep_orderbook.feeds.base_feed import BaseFeed
 from deep_orderbook.utils import logger
 
@@ -14,14 +16,14 @@ class FeedConsumer:
         self.feed = feed
 
     async def sleep_until_midnight(self):
-        now = datetime.now()
+        now = datetime.now(tz=UTC)
         tomorrow = now.replace(hour=23, minute=59, second=59, microsecond=0)
         num_seconds = max(2, (tomorrow - now).total_seconds())
         logger.warning(f"Sleeping for {num_seconds} seconds")
         await asyncio.sleep(num_seconds)
 
     async def sleep_until_next_hour(self):
-        now = datetime.now()
+        now = datetime.now(tz=UTC)
         next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
         num_seconds = max(2, (next_hour - now).total_seconds())
         logger.warning(f"Sleeping for {num_seconds} seconds")
@@ -29,16 +31,12 @@ class FeedConsumer:
 
 
 class FeedWriter(FeedConsumer):
-    def __init__(
-        self, *, feed: BaseFeed, directory: str = "data/L2", save_path='data'
-    ) -> None:
+    def __init__(self, *, feed: BaseFeed, directory: str = "data/L2", save_path="data") -> None:
         super().__init__(feed=feed)
         self.directory = Path(directory)
         self.save_path = Path(save_path)
         self.files: dict[str, AsyncTextIOWrapper] = {}
-        timestamp = (
-            datetime.now(tz=timezone.utc).isoformat().replace(":", "-").split('.')[0]
-        )
+        timestamp = datetime.now(tz=UTC).isoformat().replace(":", "-").split(".")[0]
         self.directory.mkdir(parents=True, exist_ok=True)
         self.update_filename = self.directory / f"{timestamp}_update.jsonl"
         self.trade_filename = self.directory / f"{timestamp}_trades.jsonl"
@@ -63,18 +61,12 @@ class FeedWriter(FeedConsumer):
     async def post_process_file(self) -> None:
         try:
             with pl.StringCache():
-                df_books = await self.feed.polarize(
-                    jsonl_path=self.update_filename, explode=['updates']
-                )
-                df_trades = await self.feed.polarize(
-                    jsonl_path=self.trade_filename, explode=['trades']
-                )
+                df_books = await self.feed.polarize(jsonl_path=self.update_filename, explode=["updates"])
+                df_trades = await self.feed.polarize(jsonl_path=self.trade_filename, explode=["trades"])
                 df_all = df_books.merge_sorted(df_trades, key="timestamp")
                 df_all.write_parquet(self.output_parquet)
                 logger.info(f"Saved parquet file: {self.output_parquet}")
-                logger.info(
-                    f"Removing jsonl files: {self.update_filename}, {self.trade_filename}"
-                )
+                logger.info(f"Removing jsonl files: {self.update_filename}, {self.trade_filename}")
                 self.update_filename.unlink()
                 self.trade_filename.unlink()
         except Exception as e:
@@ -90,30 +82,35 @@ class FeedWriter(FeedConsumer):
                     continue
 
                 if msg.is_book_update():
-                    file = self.files['update']
+                    file = self.files["update"]
                 elif msg.is_trade_update():
-                    file = self.files['trades']
+                    file = self.files["trades"]
+                else:
+                    continue
                 await file.write(msg.model_dump_json() + "\n")
                 pbar.update()
 
 
-async def main():
-    from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
+# =============================================================================
+# CLI for testing: this makes local testing and debugging fast and easy
+# =============================================================================
+if __name__ == "__main__":  # pragma: no cover
 
-    MARKETS = ["BTC-USD", "ETH-USD", "ETH-BTC"]
+    async def main():
+        from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
 
-    while True:
-        try:
-            async with CoinbaseFeed(markets=MARKETS, feed_msg_queue=True) as feed:
-                async with FeedWriter(
-                    feed=feed, directory='data/L2', save_path='../crypto'
-                ) as recorder:
+        MARKETS = ["BTC-USD", "ETH-USD", "ETH-BTC"]
+
+        while True:
+            try:
+                async with (
+                    CoinbaseFeed(markets=MARKETS, feed_msg_queue=True) as feed,
+                    FeedWriter(feed=feed, directory="data/L2", save_path="../crypto") as recorder,
+                ):
                     await recorder.start_recording()
                     await recorder.sleep_until_next_hour()
-        except Exception as e:
-            logger.error(f"Error in main: {e}")
-            await asyncio.sleep(10)
+            except Exception as e:
+                logger.error(f"Error in main: {e}")
+                await asyncio.sleep(10)
 
-
-if __name__ == '__main__':
     asyncio.run(main())

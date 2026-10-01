@@ -1,0 +1,69 @@
+{
+  "experiment": "exp06_tcn_hurdle_map",
+  "timestamp_utc": "2026-04-12 19:43:04Z",
+  "look_ahead": 64,
+  "windows": {
+    "total": 120,
+    "train": 90,
+    "test": 30
+  },
+  "mutation": {
+    "mutation_name": "reg_weight_scale",
+    "gate_threshold": 0.7,
+    "pos_weight": 5.0,
+    "reg_weight_scale": 8.0,
+    "side_margin": 0.015,
+    "note": "Precision remained low (0.1371) but gate threshold is already capped at 0.70; reduce reg_weight_scale to 8.0 to soften conditional-map overshoot without changing event gating."
+  },
+  "results": {
+    "zero_baseline": {
+      "rmse": 0.01770420496977935,
+      "mae": 0.0023603322724343695,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.0,
+      "side_acc_on_signals": NaN
+    },
+    "single_stage_baseline": {
+      "rmse": 0.029201562427373016,
+      "mae": 0.004864679011439237,
+      "precision": 0.13119695407313395,
+      "recall": 0.9209354120267256,
+      "f1": 0.22967437339421334,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.20519205729166667,
+      "side_acc_on_signals": 0.5679029559397658
+    },
+    "hurdle_candidate": {
+      "rmse": 0.03547046284298367,
+      "mae": 0.00976648984244668,
+      "precision": 0.13254221816522133,
+      "recall": 0.8084632516703782,
+      "f1": 0.22774684338459047,
+      "event_rate_true": 0.029231770833333334,
+      "event_rate_pred": 0.17830403645833334,
+      "side_acc_on_signals": 0.3769358407079646
+    },
+    "delta_hurdle_vs_single_stage": {
+      "f1": -0.0019275300096228687,
+      "precision": 0.0013452640920873782,
+      "side_acc": -0.1909671152318012,
+      "rmse_delta": 0.006268900415610654
+    },
+    "event_gate": {
+      "positive_rate_train": 0.38702256944444446,
+      "predicted_event_rate_test": 0.4805989583333333,
+      "predicted_event_rate_after_side_filter": 0.4708333333333333,
+      "gate_threshold": 0.7,
+      "side_margin": 0.015,
+      "side_keep_rate_within_gated": 0.9796803034408019
+    },
+    "rows": {
+      "train": 23040,
+      "test": 7680,
+      "train_active_rows": 8917
+    }
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "experiment": "exp16_batch_h64_tcn",
+  "variant_name": "regonly_wd1e3",
+  "timestamp_utc": "2026-04-14 04:52:03Z",
+  "git_commit": "7027592",
+  "train_files": [
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+  ],
+  "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+  "hypothesis": "Stronger decay may improve generalization without killing map detail.",
+  "config": {
+    "hidden_dim": 96,
+    "epochs": 6,
+    "lr": 0.002,
+    "weight_decay": 0.001,
+    "reg_loss": "huber",
+    "event_loss_weight": 0.0,
+    "pos_weight": 1.0,
+    "trade_threshold": 0.1,
+    "prediction_cap_quantile": 99.5,
+    "active_reg_weight": 1.0,
+    "hypothesis": "Stronger decay may improve generalization without killing map detail."
+  },
+  "richness_gate": {
+    "usable": true,
+    "reason": "ok",
+    "books_std": 2.443171977996826,
+    "books_abs_peak": 13.38646411895752,
+    "target_active_ratio": 0.03662109375,
+    "target_peak": 30.975704193115234
+  },
+  "metrics": {
+    "rmse": 2.0222506523132324,
+    "mae": 0.7878434062004089,
+    "precision": 0.08342156879762545,
+    "recall": 0.9964752228903171,
+    "f1": 0.15395457603214752,
+    "event_rate_true": 0.049062093098958336,
+    "event_rate_pred": 0.5860493977864584
+  },
+  "zero_baseline": {
+    "rmse": 0.4435252249240875,
+    "mae": 0.07224328070878983,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "event_rate_true": 0.049062093098958336,
+    "event_rate_pred": 0.0
+  },
+  "image_quality": {
+    "gray_mean": 0.7299823760986328,
+    "gray_std": 0.3142780363559723,
+    "near_black_fraction": 0.0161272155921192,
+    "near_white_fraction": 0.4876193418543888,
+    "edge_mean_abs_diff": 0.017206402495503426,
+    "usable": true,
+    "reason": "ok"
+  },
+  "pnl": {
+    "best_slice": {
+      "omniscient_final": 15.0625,
+      "prediction_final": 5.21875
+    },
+    "fixed_slice": {
+      "omniscient_final": 15.0625,
+      "prediction_final": 5.21875
+    }
+  },
+  "train_losses": [
+    0.2984548956155777,
+    0.23162243515253067,
+    0.20189304567045635,
+    0.17441630901561844,
+    0.13389270421531466,
+    0.10755657508141464
+  ],
+  "test_losses": [
+    0.053779926151037216,
+    0.07798891514539719,
+    0.21330015361309052,
+    0.5937645435333252,
+    0.518554151058197,
+    0.6830499768257141
+  ],
+  "artifacts": {
+    "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+    "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_wd1e3_fixed_20260414T045203Z.png",
+    "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_wd1e3_best_20260414T045203Z.png",
+    "notes_md": "experiments/notes/exp16_batch_h64_tcn_regonly_wd1e3_20260414T045203Z.md"
+  },
+  "observations": [
+    "Variant=regonly_wd1e3",
+    "Holdout metrics: f1=0.1540, precision=0.0834, recall=0.9965, rmse=2.02225",
+    "Zero baseline rmse=0.44353",
+    "Image QC: usable=True, reason=ok, gray_std=0.3143, near_black=0.016, near_white=0.488",
+    "Best-slice pnl: omniscient=15.06250, prediction=5.21875",
+    "Fixed-slice pnl: omniscient=15.06250, prediction=5.21875"
+  ],
+  "decision": "not_promising_yet",
+  "experiment_db_row_id": 22
+}

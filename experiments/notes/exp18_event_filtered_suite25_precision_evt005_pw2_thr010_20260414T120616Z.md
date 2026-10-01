@@ -1,0 +1,22 @@
+# exp16 batch variant
+
+- timestamp: 2026-04-14 12:06:16Z
+- variant: `precision_evt005_pw2_thr010`
+- train files:
+  - `2026-04-14T07-00-00.parquet`
+  - `2026-04-14T08-00-00.parquet`
+  - `2026-04-14T09-00-00.parquet`
+- test file: `2026-04-14T10-00-00.parquet`
+- config: `{"active_reg_weight": 1.0, "epochs": 6, "event_loss_weight": 0.05, "hidden_dim": 96, "hypothesis": "Reduce event spam with weaker event pressure and higher trade threshold.", "lr": 0.002, "pos_weight": 2.0, "prediction_cap_quantile": 99.5, "reg_loss": "huber", "trade_threshold": 0.1, "weight_decay": 0.0001}`
+- precheck image: `experiments/pictures/exp18_event_filtered_suite25_holdout_precheck_20260414T120616Z.png`
+- fixed dashboard: `experiments/pictures/exp18_event_filtered_suite25_precision_evt005_pw2_thr010_fixed_20260414T120616Z.png`
+- best dashboard: `experiments/pictures/exp18_event_filtered_suite25_precision_evt005_pw2_thr010_best_20260414T120616Z.png`
+- result json: `experiments/results/exp18_event_filtered_suite25_precision_evt005_pw2_thr010_20260414T120616Z.json`
+- observations:
+  - Variant=precision_evt005_pw2_thr010
+  - Holdout metrics: f1=0.3660, precision=0.2744, recall=0.5494, rmse=1.09526
+  - Zero baseline rmse=1.14359
+  - Image QC: usable=True, reason=ok, gray_std=0.2905, near_black=0.014, near_white=0.454
+  - Best-slice pnl: omniscient=23.15625, prediction=-0.01562
+  - Fixed-slice pnl: omniscient=20.06250, prediction=0.00000
+- decision: not_promising_yet

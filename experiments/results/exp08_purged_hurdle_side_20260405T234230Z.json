@@ -1,0 +1,115 @@
+{
+  "experiment": "exp08_purged_hurdle_side",
+  "timestamp_utc": "2026-04-05 23:42:30Z",
+  "soundness": {
+    "split": "chronological windows with purge gap",
+    "split_meta": {
+      "windows_total": 240,
+      "windows_train": 180,
+      "windows_purged": 32,
+      "windows_test": 28,
+      "test_start_window": 212,
+      "rows_train": 46080,
+      "rows_test": 7168
+    },
+    "note": "Purged 32 windows between train and test to reduce overlap leakage risk from rolling windows (size=256, stride=8)."
+  },
+  "search_space": {
+    "evt_gates": [
+      0.45,
+      0.5,
+      0.55,
+      0.6
+    ],
+    "side_conf_gates": [
+      0.0,
+      0.1,
+      0.2,
+      0.3
+    ],
+    "row_gates": [
+      0.0001,
+      0.0002,
+      0.0003
+    ],
+    "opposite_dampens": [
+      0.0,
+      0.2,
+      0.5
+    ],
+    "num_candidates": 144
+  },
+  "best_unconstrained": {
+    "params": {
+      "evt_gate": 0.45,
+      "side_conf_gate": 0.1,
+      "row_gate": 0.0001,
+      "opposite_dampen": 0.2
+    },
+    "baseline_metrics": {
+      "rmse": 0.03635692657799549,
+      "mae": 0.013109131908320066,
+      "precision": 0.10604148592160265,
+      "recall": 0.6313688659309695,
+      "f1": 0.1815849005636191,
+      "event_rate_true": 0.07427106584821429,
+      "event_rate_pred": 0.4422084263392857,
+      "side_acc_on_signals": 0.48367745535714285
+    },
+    "candidate_metrics": {
+      "rmse": 0.03620871366725694,
+      "mae": 0.011335716034593718,
+      "precision": 0.12146709816612727,
+      "recall": 0.3965719652500586,
+      "f1": 0.1859722528073926,
+      "event_rate_true": 0.07427106584821429,
+      "event_rate_pred": 0.24248395647321427,
+      "side_acc_on_signals": 0.5599178855529895
+    },
+    "delta_vs_baseline": {
+      "f1": 0.004387352243773512,
+      "precision": 0.015425612244524628,
+      "recall": -0.2347969006809109,
+      "side_acc": 0.07624043019584664,
+      "rmse_delta": -0.0001482129107385488
+    }
+  },
+  "best_side_preserving": {
+    "params": {
+      "evt_gate": 0.45,
+      "side_conf_gate": 0.1,
+      "row_gate": 0.0001,
+      "opposite_dampen": 0.2
+    },
+    "baseline_metrics": {
+      "rmse": 0.03635692657799549,
+      "mae": 0.013109131908320066,
+      "precision": 0.10604148592160265,
+      "recall": 0.6313688659309695,
+      "f1": 0.1815849005636191,
+      "event_rate_true": 0.07427106584821429,
+      "event_rate_pred": 0.4422084263392857,
+      "side_acc_on_signals": 0.48367745535714285
+    },
+    "candidate_metrics": {
+      "rmse": 0.03620871366725694,
+      "mae": 0.011335716034593718,
+      "precision": 0.12146709816612727,
+      "recall": 0.3965719652500586,
+      "f1": 0.1859722528073926,
+      "event_rate_true": 0.07427106584821429,
+      "event_rate_pred": 0.24248395647321427,
+      "side_acc_on_signals": 0.5599178855529895
+    },
+    "delta_vs_baseline": {
+      "f1": 0.004387352243773512,
+      "precision": 0.015425612244524628,
+      "recall": -0.2347969006809109,
+      "side_acc": 0.07624043019584664,
+      "rmse_delta": -0.0001482129107385488
+    }
+  },
+  "artifacts": {
+    "preview_png": "experiments/results/exp08_purged_hurdle_side_preview.png"
+  }
+}
