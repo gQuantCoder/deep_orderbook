@@ -11,6 +11,8 @@ from pathlib import Path
 import torch.nn as nn
 import torch.optim as optim
 
+from deep_orderbook.learn.losses import StructuredT2LLoss
+
 
 class Trainer:
     """Trainer class to handle training and prediction."""
@@ -25,7 +27,7 @@ class Trainer:
         shaper_config: ShaperConfig,
     ):
         self.optimizer = optimizer
-        self.criterion = criterion
+        self.criterion = self._build_criterion(criterion, train_config)
         # Device configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f'{self.device=}')
@@ -55,6 +57,32 @@ class Trainer:
             if minutes_elapsed >= self.train_config.save_checkpoint_mins:
                 return True
         return False
+
+    def _build_criterion(
+        self,
+        criterion: nn.Module,
+        train_config: TrainConfig,
+    ) -> nn.Module:
+        if train_config.criterion == "StructuredT2L":
+            return StructuredT2LLoss(
+                base_loss=criterion,
+                pointwise_weight=train_config.loss_pointwise_weight,
+                updown_rank_weight=train_config.loss_updown_rank_weight,
+                monotonic_weight=train_config.loss_monotonic_weight,
+                rank_margin=train_config.loss_rank_margin,
+                focus_last_step=train_config.loss_focus_last_step,
+            )
+
+        if train_config.criterion == "L1Loss":
+            return nn.L1Loss()
+
+        if train_config.criterion == "MSELoss":
+            return nn.MSELoss()
+
+        logger.warning(
+            f"Unknown criterion '{train_config.criterion}', using provided criterion instance"
+        )
+        return criterion
 
     def start_data_loading(self) -> None:
         """Starts data loading workers."""

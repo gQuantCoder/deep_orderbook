@@ -1,0 +1,22 @@
+# exp16 batch variant
+
+- timestamp: 2026-04-14 12:06:16Z
+- variant: `l1_evt005_pw3_thr010`
+- train files:
+  - `2026-04-14T07-00-00.parquet`
+  - `2026-04-14T08-00-00.parquet`
+  - `2026-04-14T09-00-00.parquet`
+- test file: `2026-04-14T10-00-00.parquet`
+- config: `{"active_reg_weight": 1.0, "epochs": 6, "event_loss_weight": 0.05, "hidden_dim": 96, "hypothesis": "Higher positive-class weight may lift recall on violent windows without exploding RMSE.", "lr": 0.0015, "pos_weight": 3.0, "prediction_cap_quantile": 99.5, "reg_loss": "l1", "trade_threshold": 0.1, "weight_decay": 0.0001}`
+- precheck image: `experiments/pictures/exp18_event_filtered_suite25_holdout_precheck_20260414T120616Z.png`
+- fixed dashboard: `experiments/pictures/exp18_event_filtered_suite25_l1_evt005_pw3_thr010_fixed_20260414T120616Z.png`
+- best dashboard: `experiments/pictures/exp18_event_filtered_suite25_l1_evt005_pw3_thr010_best_20260414T120616Z.png`
+- result json: `experiments/results/exp18_event_filtered_suite25_l1_evt005_pw3_thr010_20260414T120616Z.json`
+- observations:
+  - Variant=l1_evt005_pw3_thr010
+  - Holdout metrics: f1=0.1978, precision=0.2451, recall=0.1658, rmse=1.14360
+  - Zero baseline rmse=1.14359
+  - Image QC: usable=True, reason=ok, gray_std=0.3116, near_black=0.014, near_white=0.464
+  - Best-slice pnl: omniscient=23.15625, prediction=-0.02344
+  - Fixed-slice pnl: omniscient=20.06250, prediction=-0.02344
+- decision: not_promising_yet

@@ -1,0 +1,22 @@
+# exp16 batch variant
+
+- timestamp: 2026-04-14 04:52:03Z
+- variant: `regonly_wd1e3`
+- train files:
+  - `2026-04-14T00-00-01.parquet`
+  - `2026-04-14T01-00-10.parquet`
+  - `2026-04-14T02-00-01.parquet`
+- test file: `2026-04-14T03-00-00.parquet`
+- config: `{"active_reg_weight": 1.0, "epochs": 6, "event_loss_weight": 0.0, "hidden_dim": 96, "hypothesis": "Stronger decay may improve generalization without killing map detail.", "lr": 0.002, "pos_weight": 1.0, "prediction_cap_quantile": 99.5, "reg_loss": "huber", "trade_threshold": 0.1, "weight_decay": 0.001}`
+- precheck image: `experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png`
+- fixed dashboard: `experiments/pictures/exp16_batch_h64_tcn_regonly_wd1e3_fixed_20260414T045203Z.png`
+- best dashboard: `experiments/pictures/exp16_batch_h64_tcn_regonly_wd1e3_best_20260414T045203Z.png`
+- result json: `experiments/results/exp16_batch_h64_tcn_regonly_wd1e3_20260414T045203Z.json`
+- observations:
+  - Variant=regonly_wd1e3
+  - Holdout metrics: f1=0.1540, precision=0.0834, recall=0.9965, rmse=2.02225
+  - Zero baseline rmse=0.44353
+  - Image QC: usable=True, reason=ok, gray_std=0.3143, near_black=0.016, near_white=0.488
+  - Best-slice pnl: omniscient=15.06250, prediction=5.21875
+  - Fixed-slice pnl: omniscient=15.06250, prediction=5.21875
+- decision: not_promising_yet

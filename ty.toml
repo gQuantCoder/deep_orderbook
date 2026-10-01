@@ -1,0 +1,14 @@
+[src]
+exclude = ["examples/playground/**", "commons-python/**"]
+
+[environment]
+python-version = "3.13"
+
+[terminal]
+output-format = "concise"  # or "full"
+error-on-warning = false
+
+[rules]
+unresolved-import = "ignore"           # matches mypy ignore_missing_imports = True
+# invalid-argument-type = "ignore"       # similar to mypy's permissive type checking
+# unresolved-attribute = "ignore"  # mypy is less strict about this

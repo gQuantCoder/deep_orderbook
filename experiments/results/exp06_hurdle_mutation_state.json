@@ -1,0 +1,30 @@
+{
+  "timestamp_utc": "2026-04-12 19:43:04Z",
+  "artifact": "experiments/results/exp06_tcn_hurdle_map_20260412T194304Z.json",
+  "mutation_name": "reg_weight_scale",
+  "gate_threshold": 0.7,
+  "pos_weight": 5.0,
+  "reg_weight_scale": 8.0,
+  "side_margin": 0.015,
+  "side_keep_rate_within_gated": 0.9796803034408019,
+  "hurdle_metrics": {
+    "rmse": 0.03547046284298367,
+    "mae": 0.00976648984244668,
+    "precision": 0.13254221816522133,
+    "recall": 0.8084632516703782,
+    "f1": 0.22774684338459047,
+    "event_rate_true": 0.029231770833333334,
+    "event_rate_pred": 0.17830403645833334,
+    "side_acc_on_signals": 0.3769358407079646
+  },
+  "single_stage_metrics": {
+    "rmse": 0.029201562427373016,
+    "mae": 0.004864679011439237,
+    "precision": 0.13119695407313395,
+    "recall": 0.9209354120267256,
+    "f1": 0.22967437339421334,
+    "event_rate_true": 0.029231770833333334,
+    "event_rate_pred": 0.20519205729166667,
+    "side_acc_on_signals": 0.5679029559397658
+  }
+}

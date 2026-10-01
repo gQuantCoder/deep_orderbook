@@ -1,7 +1,8 @@
 import datetime
-from pathlib import Path
 import random
-from typing import Self, Optional, Any
+from pathlib import Path
+from typing import Any, Self
+
 from pydantic import BaseModel
 
 
@@ -34,7 +35,7 @@ class ReplayConfig(FeedConfig):
         filename_regexp = f"{self.date_regexp}.parquet"
         # print(f"Searching for {filename_regexp} in {self.data_dir}")
         return sorted(self.data_dir.glob(filename_regexp))
-    
+
     def num_files(self) -> int:
         assert len(self.file_list()) > 0, f"No files found for {self.date_regexp}"
         return len(self.file_list())
@@ -62,6 +63,7 @@ class ShaperConfig(BaseConfig):
     use_cache: bool = True
     save_cache: bool = True
 
+
 class TrainConfig(BaseConfig):
     device: str = "cuda"  # "cpu" or "cuda"
     epochs: int = 10
@@ -72,8 +74,15 @@ class TrainConfig(BaseConfig):
     num_levels: int = 4
 
     batch_size: int = 4
-    criterion: str = "MSELoss"  # "MSELoss" or "L1Loss"
-    
+    criterion: str = "MSELoss"  # "MSELoss" | "L1Loss" | "StructuredT2L"
+
+    # StructuredT2L loss weights
+    loss_pointwise_weight: float = 1.0
+    loss_updown_rank_weight: float = 0.25
+    loss_monotonic_weight: float = 0.10
+    loss_rank_margin: float = 0.05
+    loss_focus_last_step: bool = False
+
     # Checkpoint settings
     checkpoint_dir: Path = Path("checkpoints")  # Directory to save checkpoints
     save_checkpoint_batches: int = 100  # Save checkpoint every N batches
@@ -84,7 +93,7 @@ class TrainConfig(BaseConfig):
 class CacheConfig(BaseConfig):
     enabled: bool = True
     cache_dir: Path = Path("cache")
-    max_age_days: Optional[int] = 7  # Auto-clear cache files older than this
+    max_age_days: int | None = 7  # Auto-clear cache files older than this
 
 
 class Fullconfig(BaseConfig):

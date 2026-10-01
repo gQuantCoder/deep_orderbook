@@ -1,0 +1,1308 @@
+{
+  "experiment": "exp16_batch_h64_tcn",
+  "timestamp_utc": "2026-04-14 04:52:03Z",
+  "git_commit": "7027592",
+  "replay_config_test": {
+    "markets": [
+      "BTC-USD"
+    ],
+    "max_samples": -1,
+    "freq": 1.0,
+    "data_dir": "/mnt/data/repos/gaelreinaudi/crypto",
+    "date_regexp": "2026-04-14T03-00-00",
+    "one_path": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+    "skip_until_time": "00:00:00",
+    "every": "100ms",
+    "randomize": false
+  },
+  "shaper_config": {
+    "view_bips": 5,
+    "num_side_lvl": 8,
+    "rolling_window_size": 256,
+    "window_stride": 8,
+    "only_full_arrays": true,
+    "for_image_display": false,
+    "look_ahead": 64,
+    "look_ahead_side_bips": 5,
+    "look_ahead_side_width": 4,
+    "use_cache": false,
+    "save_cache": false
+  },
+  "train_files": [
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+  ],
+  "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+  "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+  "richness_gate": {
+    "usable": true,
+    "reason": "ok",
+    "books_std": 2.443171977996826,
+    "books_abs_peak": 13.38646411895752,
+    "target_active_ratio": 0.03662109375,
+    "target_peak": 30.975704193115234
+  },
+  "ranked_results": [
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "l1_evt005_pw2",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "L1 can resist outlier explosions and keep maps less washed out.",
+      "config": {
+        "hidden_dim": 96,
+        "epochs": 6,
+        "lr": 0.0015,
+        "weight_decay": 0.0001,
+        "reg_loss": "l1",
+        "event_loss_weight": 0.05,
+        "pos_weight": 2.0,
+        "trade_threshold": 0.1,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "L1 can resist outlier explosions and keep maps less washed out."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 0.4434966742992401,
+        "mae": 0.07284148037433624,
+        "precision": 0.18293097585855145,
+        "recall": 0.11154882852996058,
+        "f1": 0.1385883565167885,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.029917399088541668
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.7420167922973633,
+        "gray_std": 0.30306655168533325,
+        "near_black_fraction": 0.014857884330202669,
+        "near_white_fraction": 0.5053020620012711,
+        "edge_mean_abs_diff": 0.015268957242369652,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 0.0
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 0.0
+        }
+      },
+      "train_losses": [
+        0.5706826166974174,
+        0.34727481255928677,
+        0.34203657259543735,
+        0.33929700156052905,
+        0.33573243849807316,
+        0.3316563011871444
+      ],
+      "test_losses": [
+        0.0852963775396347,
+        0.08651959151029587,
+        0.08704943209886551,
+        0.08965317904949188,
+        0.09347706288099289,
+        0.0996798425912857
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_l1_evt005_pw2_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_l1_evt005_pw2_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_l1_evt005_pw2_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=l1_evt005_pw2",
+        "Holdout metrics: f1=0.1386, precision=0.1829, recall=0.1115, rmse=0.44350",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3031, near_black=0.015, near_white=0.505",
+        "Best-slice pnl: omniscient=15.06250, prediction=0.00000",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=0.00000"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 13,
+      "route_score": 0.9559696406092314
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "regonly_short_e4",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "Earlier stop may help strict holdout if we are overfitting fast.",
+      "config": {
+        "hidden_dim": 96,
+        "epochs": 4,
+        "lr": 0.002,
+        "weight_decay": 0.0001,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.0,
+        "pos_weight": 1.0,
+        "trade_threshold": 0.1,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "Earlier stop may help strict holdout if we are overfitting fast."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 1.0142613649368286,
+        "mae": 0.31059178709983826,
+        "precision": 0.09112531871979297,
+        "recall": 0.9929504457806343,
+        "f1": 0.1669310002264176,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.53460693359375
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.7044032216072083,
+        "gray_std": 0.30882060527801514,
+        "near_black_fraction": 0.01584916319468964,
+        "near_white_fraction": 0.43471965256690914,
+        "edge_mean_abs_diff": 0.01894811913371086,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": -14.25
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": -14.25
+        }
+      },
+      "train_losses": [
+        0.3075701677136951,
+        0.2288149313794242,
+        0.17920364894800717,
+        0.14845531268252266
+      ],
+      "test_losses": [
+        0.05792797729372978,
+        0.11540775746107101,
+        0.14468435943126678,
+        0.2242211550474167
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_short_e4_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_short_e4_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_regonly_short_e4_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=regonly_short_e4",
+        "Holdout metrics: f1=0.1669, precision=0.0911, recall=0.9930, rmse=1.01426",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3088, near_black=0.016, near_white=0.435",
+        "Best-slice pnl: omniscient=15.06250, prediction=-14.25000",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=-14.25000"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 21,
+      "route_score": -0.07047770422056265
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "small_h64_regonly",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "Smaller TCN may reduce overfit on strict holdout.",
+      "config": {
+        "hidden_dim": 64,
+        "epochs": 6,
+        "lr": 0.002,
+        "weight_decay": 0.0001,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.0,
+        "pos_weight": 1.0,
+        "trade_threshold": 0.1,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "Smaller TCN may reduce overfit on strict holdout."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 1.1727063655853271,
+        "mae": 0.4004260301589966,
+        "precision": 0.08713189913595486,
+        "recall": 0.8196143479162346,
+        "f1": 0.15751828016957783,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.4615071614583333
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.7074938416481018,
+        "gray_std": 0.309830904006958,
+        "near_black_fraction": 0.01592436974789916,
+        "near_white_fraction": 0.444440717463456,
+        "edge_mean_abs_diff": 0.018878722563385963,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 12.328125
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 12.328125
+        }
+      },
+      "train_losses": [
+        0.31909317937162185,
+        0.22497032168838713,
+        0.19713574316766527,
+        0.17568837106227875,
+        0.15246542625957066,
+        0.12890948355197906
+      ],
+      "test_losses": [
+        0.06798748672008514,
+        0.052874479442834854,
+        0.07358714938163757,
+        0.0974179282784462,
+        0.16699360311031342,
+        0.30247095227241516
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_small_h64_regonly_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_small_h64_regonly_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_small_h64_regonly_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=small_h64_regonly",
+        "Holdout metrics: f1=0.1575, precision=0.0871, recall=0.8196, rmse=1.17271",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3098, near_black=0.016, near_white=0.444",
+        "Best-slice pnl: omniscient=15.06250, prediction=12.32812",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=12.32812"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 23,
+      "route_score": -0.24918215727411785
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "regonly_activew3",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "Weight active target pixels more in regression to preserve sparse structures.",
+      "config": {
+        "hidden_dim": 96,
+        "epochs": 6,
+        "lr": 0.002,
+        "weight_decay": 0.0001,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.0,
+        "pos_weight": 1.0,
+        "trade_threshold": 0.1,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 3.0,
+        "hypothesis": "Weight active target pixels more in regression to preserve sparse structures."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 1.8456573486328125,
+        "mae": 0.7744199633598328,
+        "precision": 0.06864144144144144,
+        "recall": 0.9873522703711382,
+        "f1": 0.12835925496631956,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.705718994140625
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.7131251096725464,
+        "gray_std": 0.32598286867141724,
+        "near_black_fraction": 0.01467057411199774,
+        "near_white_fraction": 0.4671615705105572,
+        "edge_mean_abs_diff": 0.017783192917704582,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 9.078125
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 9.078125
+        }
+      },
+      "train_losses": [
+        0.6679713593588935,
+        0.4536784440279007,
+        0.3425277728173468,
+        0.27395543042156434,
+        0.21777157402700847,
+        0.1824247973660628
+      ],
+      "test_losses": [
+        0.24518434703350067,
+        0.579961359500885,
+        0.6253931522369385,
+        0.8900747299194336,
+        0.930380642414093,
+        0.7459482550621033
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_activew3_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_activew3_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_regonly_activew3_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=regonly_activew3",
+        "Holdout metrics: f1=0.1284, precision=0.0686, recall=0.9874, rmse=1.84566",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3260, near_black=0.015, near_white=0.467",
+        "Best-slice pnl: omniscient=15.06250, prediction=9.07812",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=9.07812"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 18,
+      "route_score": -1.2814632682453646
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "medium_h128_regonly_lr1e3",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "More width plus lower LR may keep detail without spiky extrapolation.",
+      "config": {
+        "hidden_dim": 128,
+        "epochs": 6,
+        "lr": 0.001,
+        "weight_decay": 0.0001,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.0,
+        "pos_weight": 1.0,
+        "trade_threshold": 0.1,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "More width plus lower LR may keep detail without spiky extrapolation."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 1.813191533088684,
+        "mae": 0.704178512096405,
+        "precision": 0.06200137080191912,
+        "recall": 0.937798051005598,
+        "f1": 0.11631285921837851,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.7420857747395834
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.7384966611862183,
+        "gray_std": 0.3086951971054077,
+        "near_black_fraction": 0.018788397712025985,
+        "near_white_fraction": 0.493476272862086,
+        "edge_mean_abs_diff": 0.01716085895895958,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 7.9453125
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 7.9453125
+        }
+      },
+      "train_losses": [
+        0.32330647193723255,
+        0.237692063053449,
+        0.19071681797504425,
+        0.1587128018339475,
+        0.13481971414552796,
+        0.12073029743300544
+      ],
+      "test_losses": [
+        0.04648486152291298,
+        0.07209239155054092,
+        0.1252308040857315,
+        0.3049667775630951,
+        0.5711569786071777,
+        0.5979220271110535
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_medium_h128_regonly_lr1e3_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_medium_h128_regonly_lr1e3_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_medium_h128_regonly_lr1e3_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=medium_h128_regonly_lr1e3",
+        "Holdout metrics: f1=0.1163, precision=0.0620, recall=0.9378, rmse=1.81319",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3087, near_black=0.019, near_white=0.493",
+        "Best-slice pnl: omniscient=15.06250, prediction=7.94531",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=7.94531"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 15,
+      "route_score": -1.284388615298334
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "precision_evt005_pw2_thr010",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "Reduce event spam with weaker event pressure and higher trade threshold.",
+      "config": {
+        "hidden_dim": 96,
+        "epochs": 6,
+        "lr": 0.002,
+        "weight_decay": 0.0001,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.05,
+        "pos_weight": 2.0,
+        "trade_threshold": 0.1,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "Reduce event spam with weaker event pressure and higher trade threshold."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 1.8310916423797607,
+        "mae": 0.7495986819267273,
+        "precision": 0.0643377165754275,
+        "recall": 0.9454696247149076,
+        "f1": 0.12047715293452975,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.7209879557291666
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.6980255246162415,
+        "gray_std": 0.3236216604709625,
+        "near_black_fraction": 0.015956147164748254,
+        "near_white_fraction": 0.4457727208530471,
+        "edge_mean_abs_diff": 0.017825469374656677,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 8.1171875
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 8.1171875
+        }
+      },
+      "train_losses": [
+        0.32412363754378426,
+        0.22758996817800733,
+        0.18836044354571235,
+        0.15803770472606024,
+        0.13380391067928737,
+        0.11370822042226791
+      ],
+      "test_losses": [
+        0.07989441603422165,
+        0.11125820130109787,
+        0.2031618058681488,
+        0.4461382329463959,
+        0.5125802755355835,
+        0.6569424271583557
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_precision_evt005_pw2_thr010_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_precision_evt005_pw2_thr010_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_precision_evt005_pw2_thr010_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=precision_evt005_pw2_thr010",
+        "Holdout metrics: f1=0.1205, precision=0.0643, recall=0.9455, rmse=1.83109",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3236, near_black=0.016, near_white=0.446",
+        "Best-slice pnl: omniscient=15.06250, prediction=8.11719",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=8.11719"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 17,
+      "route_score": -1.2928365335918284
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "regonly_wd1e3",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "Stronger decay may improve generalization without killing map detail.",
+      "config": {
+        "hidden_dim": 96,
+        "epochs": 6,
+        "lr": 0.002,
+        "weight_decay": 0.001,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.0,
+        "pos_weight": 1.0,
+        "trade_threshold": 0.1,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "Stronger decay may improve generalization without killing map detail."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 2.0222506523132324,
+        "mae": 0.7878434062004089,
+        "precision": 0.08342156879762545,
+        "recall": 0.9964752228903171,
+        "f1": 0.15395457603214752,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.5860493977864584
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.7299823760986328,
+        "gray_std": 0.3142780363559723,
+        "near_black_fraction": 0.0161272155921192,
+        "near_white_fraction": 0.4876193418543888,
+        "edge_mean_abs_diff": 0.017206402495503426,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 5.21875
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 5.21875
+        }
+      },
+      "train_losses": [
+        0.2984548956155777,
+        0.23162243515253067,
+        0.20189304567045635,
+        0.17441630901561844,
+        0.13389270421531466,
+        0.10755657508141464
+      ],
+      "test_losses": [
+        0.053779926151037216,
+        0.07798891514539719,
+        0.21330015361309052,
+        0.5937645435333252,
+        0.518554151058197,
+        0.6830499768257141
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_wd1e3_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_wd1e3_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_regonly_wd1e3_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=regonly_wd1e3",
+        "Holdout metrics: f1=0.1540, precision=0.0834, recall=0.9965, rmse=2.02225",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3143, near_black=0.016, near_white=0.488",
+        "Best-slice pnl: omniscient=15.06250, prediction=5.21875",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=5.21875"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 22,
+      "route_score": -1.434475734755235
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "large_h160_evt002_lr8e4",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "Larger TCN with gentler optimization might capture richer motifs without event spam.",
+      "config": {
+        "hidden_dim": 160,
+        "epochs": 8,
+        "lr": 0.0008,
+        "weight_decay": 0.0002,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.02,
+        "pos_weight": 2.0,
+        "trade_threshold": 0.1,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "Larger TCN with gentler optimization might capture richer motifs without event spam."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 2.142547130584717,
+        "mae": 0.8818733096122742,
+        "precision": 0.06811954464563148,
+        "recall": 0.9999999999999998,
+        "f1": 0.12755041322302108,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.7202351888020834
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.7152076363563538,
+        "gray_std": 0.32142865657806396,
+        "near_black_fraction": 0.043598968999364454,
+        "near_white_fraction": 0.46383535767248074,
+        "edge_mean_abs_diff": 0.017565511167049408,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 16.890625
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 16.890625
+        }
+      },
+      "train_losses": [
+        0.3283146056863997,
+        0.2525152713060379,
+        0.20307955352796447,
+        0.17184944616423714,
+        0.15315905461708704,
+        0.13708211233218512,
+        0.11871951383848985,
+        0.10920061874720785
+      ],
+      "test_losses": [
+        0.052624884992837906,
+        0.0996662825345993,
+        0.16368748247623444,
+        0.2536987364292145,
+        0.39363014698028564,
+        0.5178477764129639,
+        0.6086180210113525,
+        0.7709499597549438
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_large_h160_evt002_lr8e4_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_large_h160_evt002_lr8e4_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_large_h160_evt002_lr8e4_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=large_h160_evt002_lr8e4",
+        "Holdout metrics: f1=0.1276, precision=0.0681, recall=1.0000, rmse=2.14255",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3214, near_black=0.044, near_white=0.464",
+        "Best-slice pnl: omniscient=15.06250, prediction=16.89062",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=16.89062"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 14,
+      "route_score": -1.6667472704452098
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "regonly_long_e10_lr8e4",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "Longer, gentler optimization may recover cleaner maps.",
+      "config": {
+        "hidden_dim": 96,
+        "epochs": 10,
+        "lr": 0.0008,
+        "weight_decay": 0.0001,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.0,
+        "pos_weight": 1.0,
+        "trade_threshold": 0.1,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "Longer, gentler optimization may recover cleaner maps."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 2.1609046459198,
+        "mae": 0.860075056552887,
+        "precision": 0.07035551130373667,
+        "recall": 0.9962678830603358,
+        "f1": 0.13142958738482458,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.6947428385416666
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.7029280066490173,
+        "gray_std": 0.3278650939464569,
+        "near_black_fraction": 0.04049802273850717,
+        "near_white_fraction": 0.4551403502577502,
+        "edge_mean_abs_diff": 0.017660118639469147,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 16.8359375
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 16.8359375
+        }
+      },
+      "train_losses": [
+        0.3526129465964105,
+        0.2532857159773509,
+        0.22358879198630652,
+        0.19347799569368362,
+        0.17279495009117657,
+        0.15459837640325227,
+        0.13599363880025017,
+        0.12094820290803909,
+        0.1114483272863759,
+        0.10348615650501516
+      ],
+      "test_losses": [
+        0.06230631098151207,
+        0.047821611166000366,
+        0.07197628915309906,
+        0.10411614179611206,
+        0.14871138334274292,
+        0.3009239733219147,
+        0.405165433883667,
+        0.6509689688682556,
+        0.7656529545783997,
+        0.7545062899589539
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_long_e10_lr8e4_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_long_e10_lr8e4_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_regonly_long_e10_lr8e4_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=regonly_long_e10_lr8e4",
+        "Holdout metrics: f1=0.1314, precision=0.0704, recall=0.9963, rmse=2.16090",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3279, near_black=0.040, near_white=0.455",
+        "Best-slice pnl: omniscient=15.06250, prediction=16.83594",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=16.83594"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 20,
+      "route_score": -1.6772517493867372
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "baseline_evt025_pw8_lr2e3_h96_e6",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "Reference capped holdout TCN baseline.",
+      "config": {
+        "hidden_dim": 96,
+        "epochs": 6,
+        "lr": 0.002,
+        "weight_decay": 0.0001,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.25,
+        "pos_weight": 8.0,
+        "trade_threshold": 0.04,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "Reference capped holdout TCN baseline."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 2.1491904258728027,
+        "mae": 0.9185296893119812,
+        "precision": 0.06955619767355709,
+        "recall": 0.9732531619324071,
+        "f1": 0.1298334900701305,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.686492919921875
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.712679922580719,
+        "gray_std": 0.31382331252098083,
+        "near_black_fraction": 0.017326459995763013,
+        "near_white_fraction": 0.458031212484994,
+        "edge_mean_abs_diff": 0.0178794227540493,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": -3.640625
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": -3.640625
+        }
+      },
+      "train_losses": [
+        0.5227914336654875,
+        0.3581724729802873,
+        0.2740237745973799,
+        0.22098813619878557,
+        0.17825777331988016,
+        0.14668997252980867
+      ],
+      "test_losses": [
+        0.2377755492925644,
+        0.48564577102661133,
+        0.536547839641571,
+        1.1022087335586548,
+        1.359865665435791,
+        1.5201023817062378
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_baseline_evt025_pw8_lr2e3_h96_e6_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_baseline_evt025_pw8_lr2e3_h96_e6_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_baseline_evt025_pw8_lr2e3_h96_e6_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=baseline_evt025_pw8_lr2e3_h96_e6",
+        "Holdout metrics: f1=0.1298, precision=0.0696, recall=0.9733, rmse=2.14919",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3138, near_black=0.017, near_white=0.458",
+        "Best-slice pnl: omniscient=15.06250, prediction=-3.64062",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=-3.64062"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 12,
+      "route_score": -1.7181863186887478
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "regonly_huber_thr010",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "Pure image-to-image regression may preserve geometry better.",
+      "config": {
+        "hidden_dim": 96,
+        "epochs": 6,
+        "lr": 0.002,
+        "weight_decay": 0.0001,
+        "reg_loss": "huber",
+        "event_loss_weight": 0.0,
+        "pos_weight": 1.0,
+        "trade_threshold": 0.1,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "Pure image-to-image regression may preserve geometry better."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 2.228571653366089,
+        "mae": 0.8362507820129395,
+        "precision": 0.06627965761902271,
+        "recall": 0.7883060335890523,
+        "f1": 0.12227832631124534,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.583526611328125
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.6963493227958679,
+        "gray_std": 0.33015307784080505,
+        "near_black_fraction": 0.023810994986229787,
+        "near_white_fraction": 0.44937274909963987,
+        "edge_mean_abs_diff": 0.018066518008708954,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 29.3984375
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 29.3984375
+        }
+      },
+      "train_losses": [
+        0.30094331088993287,
+        0.23334426763984892,
+        0.20547941823800406,
+        0.16200037259194586,
+        0.13189479832847914,
+        0.11109833584891425
+      ],
+      "test_losses": [
+        0.07875511050224304,
+        0.10574281215667725,
+        0.20462191104888916,
+        0.527283251285553,
+        0.5730611681938171,
+        0.7698429226875305
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_huber_thr010_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_regonly_huber_thr010_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_regonly_huber_thr010_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=regonly_huber_thr010",
+        "Holdout metrics: f1=0.1223, precision=0.0663, recall=0.7883, rmse=2.22857",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3302, near_black=0.024, near_white=0.449",
+        "Best-slice pnl: omniscient=15.06250, prediction=29.39844",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=29.39844"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 19,
+      "route_score": -1.7914114629977984
+    },
+    {
+      "experiment": "exp16_batch_h64_tcn",
+      "variant_name": "mse_evt010_pw4",
+      "timestamp_utc": "2026-04-14 04:52:03Z",
+      "git_commit": "7027592",
+      "train_files": [
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+        "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+      ],
+      "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+      "hypothesis": "MSE may sharpen dense structure if event term is kept moderate.",
+      "config": {
+        "hidden_dim": 96,
+        "epochs": 6,
+        "lr": 0.0015,
+        "weight_decay": 0.0001,
+        "reg_loss": "mse",
+        "event_loss_weight": 0.1,
+        "pos_weight": 4.0,
+        "trade_threshold": 0.08,
+        "prediction_cap_quantile": 99.5,
+        "active_reg_weight": 1.0,
+        "hypothesis": "MSE may sharpen dense structure if event term is kept moderate."
+      },
+      "richness_gate": {
+        "usable": true,
+        "reason": "ok",
+        "books_std": 2.443171977996826,
+        "books_abs_peak": 13.38646411895752,
+        "target_active_ratio": 0.03662109375,
+        "target_peak": 30.975704193115234
+      },
+      "metrics": {
+        "rmse": 2.515023708343506,
+        "mae": 1.0924016237258911,
+        "precision": 0.054858809190217454,
+        "recall": 0.9985486211901304,
+        "f1": 0.10400380080325289,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.893035888671875
+      },
+      "zero_baseline": {
+        "rmse": 0.4435252249240875,
+        "mae": 0.07224328070878983,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.049062093098958336,
+        "event_rate_pred": 0.0
+      },
+      "image_quality": {
+        "gray_mean": 0.7214055061340332,
+        "gray_std": 0.3196880519390106,
+        "near_black_fraction": 0.04166690205493962,
+        "near_white_fraction": 0.46417590565638017,
+        "edge_mean_abs_diff": 0.01776275783777237,
+        "usable": true,
+        "reason": "ok"
+      },
+      "pnl": {
+        "best_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 16.8359375
+        },
+        "fixed_slice": {
+          "omniscient_final": 15.0625,
+          "prediction_final": 16.8359375
+        }
+      },
+      "train_losses": [
+        1.9302502671877544,
+        1.27892138560613,
+        0.9219261093272103,
+        0.6528058383199904,
+        0.527403732140859,
+        0.4463600143790245
+      ],
+      "test_losses": [
+        0.597348153591156,
+        1.6948699951171875,
+        6.223087787628174,
+        9.896488189697266,
+        9.195714950561523,
+        9.777742385864258
+      ],
+      "artifacts": {
+        "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+        "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_mse_evt010_pw4_fixed_20260414T045203Z.png",
+        "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_mse_evt010_pw4_best_20260414T045203Z.png",
+        "notes_md": "experiments/notes/exp16_batch_h64_tcn_mse_evt010_pw4_20260414T045203Z.md"
+      },
+      "observations": [
+        "Variant=mse_evt010_pw4",
+        "Holdout metrics: f1=0.1040, precision=0.0549, recall=0.9985, rmse=2.51502",
+        "Zero baseline rmse=0.44353",
+        "Image QC: usable=True, reason=ok, gray_std=0.3197, near_black=0.042, near_white=0.464",
+        "Best-slice pnl: omniscient=15.06250, prediction=16.83594",
+        "Fixed-slice pnl: omniscient=15.06250, prediction=16.83594"
+      ],
+      "decision": "not_promising_yet",
+      "experiment_db_row_id": 16,
+      "route_score": -2.2576449585764657
+    }
+  ],
+  "best_variant": "l1_evt005_pw2",
+  "best_route_score": 0.9559696406092314,
+  "status": "not_promising_yet",
+  "next_step": "rerun the top variant with a fresh seed and compare image stability before trusting it"
+}

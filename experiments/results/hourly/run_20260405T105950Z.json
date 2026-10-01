@@ -1,0 +1,86 @@
+{
+  "timestamp_utc": "2026-04-05 10:59:31Z",
+  "zero": {
+    "rmse": 0.01722338849942114,
+    "mae": 0.0019442946634005281,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "event_rate_true": 0.01826171875,
+    "event_rate_pred": 0.0
+  },
+  "candidates": [
+    {
+      "cfg": {
+        "name": "hgb_d4_lr008",
+        "max_depth": 4,
+        "learning_rate": 0.08,
+        "max_iter": 140,
+        "weighted": false
+      },
+      "metrics": {
+        "rmse": 0.036147687449692684,
+        "mae": 0.007992173489326963,
+        "precision": 0.07239643825009678,
+        "recall": 0.9999999999999992,
+        "f1": 0.1350180505413903,
+        "event_rate_true": 0.01826171875,
+        "event_rate_pred": 0.25224609375
+      }
+    },
+    {
+      "cfg": {
+        "name": "hgb_d6_lr008",
+        "max_depth": 6,
+        "learning_rate": 0.08,
+        "max_iter": 120,
+        "weighted": false
+      },
+      "metrics": {
+        "rmse": 0.03796909962077114,
+        "mae": 0.005792798823312272,
+        "precision": 0.10548129727489378,
+        "recall": 0.9073083778966125,
+        "f1": 0.1889909960083532,
+        "event_rate_true": 0.01826171875,
+        "event_rate_pred": 0.157080078125
+      }
+    },
+    {
+      "cfg": {
+        "name": "hgb_d6_lr006_w",
+        "max_depth": 6,
+        "learning_rate": 0.06,
+        "max_iter": 160,
+        "weighted": true
+      },
+      "metrics": {
+        "rmse": 0.03948449786970686,
+        "mae": 0.008249477933355176,
+        "precision": 0.07816541984199118,
+        "recall": 0.9964349376114074,
+        "f1": 0.14495948136129133,
+        "event_rate_true": 0.01826171875,
+        "event_rate_pred": 0.23279622395833333
+      }
+    }
+  ],
+  "best": {
+    "cfg": {
+      "name": "hgb_d6_lr008",
+      "max_depth": 6,
+      "learning_rate": 0.08,
+      "max_iter": 120,
+      "weighted": false
+    },
+    "metrics": {
+      "rmse": 0.03796909962077114,
+      "mae": 0.005792798823312272,
+      "precision": 0.10548129727489378,
+      "recall": 0.9073083778966125,
+      "f1": 0.1889909960083532,
+      "event_rate_true": 0.01826171875,
+      "event_rate_pred": 0.157080078125
+    }
+  }
+}

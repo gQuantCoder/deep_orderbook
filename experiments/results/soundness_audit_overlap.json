@@ -1,0 +1,18 @@
+{
+  "windows_total": 120,
+  "windows_train": 90,
+  "windows_test": 30,
+  "rows_train": 23040,
+  "rows_test": 7680,
+  "duplicate_test_rows_seen_in_train": 3960,
+  "duplicate_rate_test_vs_train": 0.515625,
+  "train_unique_rows": 967,
+  "test_unique_rows": 488,
+  "boundary_similarity": {
+    "rows_compared": 256,
+    "exact_match_rows": 0,
+    "exact_match_rate": 0.0,
+    "near_match_rows": 0,
+    "near_match_rate": 0.0
+  }
+}

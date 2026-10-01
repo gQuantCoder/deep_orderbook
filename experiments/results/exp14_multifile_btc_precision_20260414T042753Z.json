@@ -1,0 +1,96 @@
+{
+  "experiment": "exp14_multifile_btc_precision",
+  "timestamp_utc": "2026-04-14 04:27:53Z",
+  "git_commit": "7027592",
+  "train_files": [
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+  ],
+  "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+  "replay_config_test": {
+    "markets": [
+      "BTC-USD"
+    ],
+    "max_samples": -1,
+    "freq": 1.0,
+    "data_dir": "/mnt/data/repos/gaelreinaudi/crypto",
+    "date_regexp": "2026-04-14T03-00-00",
+    "one_path": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+    "skip_until_time": "00:00:00",
+    "every": "100ms",
+    "randomize": false
+  },
+  "shaper_config": {
+    "view_bips": 5,
+    "num_side_lvl": 8,
+    "rolling_window_size": 256,
+    "window_stride": 8,
+    "only_full_arrays": true,
+    "for_image_display": false,
+    "look_ahead": 64,
+    "look_ahead_side_bips": 5,
+    "look_ahead_side_width": 4,
+    "use_cache": false,
+    "save_cache": false
+  },
+  "hypothesis": "Reducing event-loss pressure and class weight should cut event spam and improve holdout precision while keeping capped image-to-image structure.",
+  "richness_gate": {
+    "usable": true,
+    "reason": "ok",
+    "books_std": 2.443171977996826,
+    "books_abs_peak": 13.38646411895752,
+    "target_active_ratio": 0.03662109375,
+    "target_peak": 30.975704193115234
+  },
+  "mutation": {
+    "type": "walkforward_multifile_holdout_plus_precision_tuning",
+    "cap_value": 9.310028076171875,
+    "reference": "train_target_q99.5"
+  },
+  "metrics": {
+    "rmse": 2.0683648586273193,
+    "mae": 0.7682259678840637,
+    "precision": 0.0787639405204461,
+    "recall": 0.9840348330914367,
+    "f1": 0.14585350112925935,
+    "event_rate_true": 0.049062093098958336,
+    "event_rate_pred": 0.6129557291666666
+  },
+  "zero_baseline": {
+    "rmse": 0.4435252249240875,
+    "mae": 0.07224328070878983,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "event_rate_true": 0.049062093098958336,
+    "event_rate_pred": 0.0
+  },
+  "pnl": {
+    "best_slice": {
+      "omniscient_final": 15.0625,
+      "prediction_final": 29.3046875
+    },
+    "fixed_slice": {
+      "omniscient_final": 15.0625,
+      "prediction_final": 29.3046875
+    }
+  },
+  "artifacts": {
+    "precheck_png": "experiments/pictures/exp14_multifile_btc_precision_precheck_20260414T042753Z.png",
+    "dashboard_best_png": "experiments/pictures/exp14_multifile_btc_precision_best_20260414T042753Z.png",
+    "dashboard_fixed_png": "experiments/pictures/exp14_multifile_btc_precision_fixed_20260414T042753Z.png",
+    "notes_md": "experiments/notes/exp14_multifile_btc_precision_20260414T042753Z.md"
+  },
+  "observations": [
+    "Richness gate passed on holdout file: books_std=2.4432, target_active_ratio=0.036621",
+    "Used different parquet files for training (3) and testing (1 holdout)",
+    "Applied prediction cap at train q99.5=9.3100",
+    "Holdout metrics: f1=0.1459, precision=0.0788, recall=0.9840, rmse=2.06836",
+    "Zero baseline holdout rmse=0.44353",
+    "Best-slice pnl: omniscient=15.06250, prediction=29.30469",
+    "Fixed-slice pnl: omniscient=15.06250, prediction=29.30469"
+  ],
+  "decision": "not_promising_yet",
+  "experiment_db_row_id": 9
+}

@@ -1,25 +1,56 @@
 # visu.py
 
+import os
+import time
+
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from IPython.display import display
+from IPython.display import clear_output, display
+
+
+def _widget_env() -> bool:
+    """True when the notebook runtime supports ipywidgets (JupyterLab/classic).
+    VS Code and Cursor have VSCODE_* env vars and don't render FigureWidget."""
+    return not any(k.startswith("VSCODE_") for k in os.environ)
 
 
 class Visualizer:
-    """Visualizer class to encapsulate the figure and update methods."""
+    """Live-updating order-book visualiser.
 
-    def __init__(self) -> None:
-        self.fig_widget = self._create_figure()
+    JupyterLab  → FigureWidget + batch_update(): diff-only, smooth 10+ FPS.
+    Cursor/Code → go.Figure + clear_output(): throttled full redraw.
+
+    Run in JupyterLab for the best experience:  uv run jupyter lab
+    """
+
+    def __init__(self, refresh_interval: float = 0.1) -> None:
+        self._widgets = _widget_env()
+        self.fig: go.FigureWidget | go.Figure = self._create_figure()
         self._initialize_traces()
-        display(self.fig_widget)
+        display(self.fig)
         self.losses: list[float] = []
-        self.test_losses: list[float] = []  # New list for test losses
-        self._max_points = 605  # Limit the number of points to store
-        self._loss_max_points = 128  # Limit the number of points to store
+        self.test_losses: list[float] = []
+        self._max_points = 605
+        self._loss_max_points = 128
+        # fallback throttle used only in non-widget envs
+        self._refresh_interval = refresh_interval
+        self._last_refresh: float = 0.0
 
-    def _create_figure(self) -> go.FigureWidget:
-        """Creates and returns a Plotly figure widget with subplots."""
+    def _refresh(self) -> None:
+        """No-op in widget envs (batch_update pushes diffs automatically).
+        In Cursor/Code: throttled clear+redraw."""
+        if self._widgets:
+            return
+        now = time.monotonic()
+        if now - self._last_refresh < self._refresh_interval:
+            return
+        self._last_refresh = now
+        clear_output(wait=True)
+        display(self.fig)
+
+    def _create_figure(self) -> go.FigureWidget | go.Figure:
+        """Creates and returns a Plotly FigureWidget with subplots."""
         fig = make_subplots(
             rows=6,  # Added one more row for PnL
             cols=1,
@@ -106,8 +137,7 @@ class Visualizer:
             ),
             # Configure y-axes
             yaxis=dict(
-                title="Price",
-                titlefont=dict(color="black"),
+                title=dict(text="Price", font=dict(color="black")),
                 tickfont=dict(color="black"),
                 domain=[0.875, 1.0],
                 tickformat=".2f",
@@ -120,30 +150,26 @@ class Visualizer:
             ),
             # Add a secondary y-axis for test loss
             yaxis5=dict(
-                title="Training Loss",
-                titlefont=dict(color="blue"),
+                title=dict(text="Training Loss", font=dict(color="blue")),
                 tickfont=dict(color="blue"),
                 domain=[0.175, 0.3],
             ),
             yaxis6=dict(
-                title="Test Loss",
-                titlefont=dict(color="red"),
+                title=dict(text="Test Loss", font=dict(color="red")),
                 tickfont=dict(color="red"),
                 anchor="x5",
                 overlaying="y5",
                 side="right",
             ),
             yaxis7=dict(
-                title="Omniscient PnL",
-                titlefont=dict(color="green"),
+                title=dict(text="Omniscient PnL", font=dict(color="green")),
                 tickfont=dict(color="green"),
                 domain=[0.0, 0.16],
                 tickformat="02d",
                 fixedrange=True,
             ),
             yaxis8=dict(
-                title="Prediction PnL",
-                titlefont=dict(color="red"),
+                title=dict(text="Prediction PnL", font=dict(color="red")),
                 tickfont=dict(color="red"),
                 anchor="x6",
                 overlaying="y7",
@@ -153,11 +179,10 @@ class Visualizer:
             ),
         )
 
-        fig_widget = go.FigureWidget(fig)
-        return fig_widget
+        return go.FigureWidget(fig) if self._widgets else go.Figure(fig)
 
     def _initialize_traces(self) -> None:
-        """Initializes and adds traces to the figure widget."""
+        """Initializes and adds traces to the figure."""
         # Line traces for Bid and Ask Price Levels
         self.bid_trace = go.Scatter(
             x=[],
@@ -372,23 +397,23 @@ class Visualizer:
         )
 
         # Add all traces to the figure widget
-        self.fig_widget.add_trace(self.bid_trace, row=1, col=1)
-        self.fig_widget.add_trace(self.ask_trace, row=1, col=1)
-        self.fig_widget.add_trace(self.gt_entry_trace, row=1, col=1)
-        self.fig_widget.add_trace(self.gt_exit_trace, row=1, col=1)
-        self.fig_widget.add_trace(self.pred_entry_trace, row=1, col=1)
-        self.fig_widget.add_trace(self.pred_exit_trace, row=1, col=1)
-        self.fig_widget.add_trace(self.im_trace, row=2, col=1)
-        self.fig_widget.add_trace(self.feature2_trace, row=2, col=1)
-        self.fig_widget.add_trace(self.feature3_trace, row=2, col=1)
-        self.fig_widget.add_trace(self.t2l_trace, row=3, col=1)
-        self.fig_widget.add_trace(self.pred_trace, row=4, col=1)
-        self.fig_widget.add_trace(self.up_proximity_trace, row=4, col=1)
-        self.fig_widget.add_trace(self.down_proximity_trace, row=4, col=1)
-        self.fig_widget.add_trace(self.loss_trace, row=5, col=1)
-        self.fig_widget.add_trace(self.test_loss_trace, row=5, col=1)
-        self.fig_widget.add_trace(self.gt_pnl_trace, row=6, col=1)
-        self.fig_widget.add_trace(self.pred_pnl_trace, row=6, col=1)
+        self.fig.add_trace(self.bid_trace, row=1, col=1)
+        self.fig.add_trace(self.ask_trace, row=1, col=1)
+        self.fig.add_trace(self.gt_entry_trace, row=1, col=1)
+        self.fig.add_trace(self.gt_exit_trace, row=1, col=1)
+        self.fig.add_trace(self.pred_entry_trace, row=1, col=1)
+        self.fig.add_trace(self.pred_exit_trace, row=1, col=1)
+        self.fig.add_trace(self.im_trace, row=2, col=1)
+        self.fig.add_trace(self.feature2_trace, row=2, col=1)
+        self.fig.add_trace(self.feature3_trace, row=2, col=1)
+        self.fig.add_trace(self.t2l_trace, row=3, col=1)
+        self.fig.add_trace(self.pred_trace, row=4, col=1)
+        self.fig.add_trace(self.up_proximity_trace, row=4, col=1)
+        self.fig.add_trace(self.down_proximity_trace, row=4, col=1)
+        self.fig.add_trace(self.loss_trace, row=5, col=1)
+        self.fig.add_trace(self.test_loss_trace, row=5, col=1)
+        self.fig.add_trace(self.gt_pnl_trace, row=6, col=1)
+        self.fig.add_trace(self.pred_pnl_trace, row=6, col=1)
 
     def update(
         self,
@@ -405,9 +430,9 @@ class Visualizer:
         pred_up_proximity: np.ndarray | None = None,  # Predicted up proximity
         pred_down_proximity: np.ndarray | None = None,  # Predicted down proximity
     ) -> None:
-        """Updates the figure widget with new data."""
+        """Updates the figure with new data."""
         try:
-            with self.fig_widget.batch_update():
+            with self.fig.batch_update():
                 # Transform and clip all image data
                 books_z_data, level_reach_display, bidask, feature_points = (
                     self.for_image_display(
@@ -443,12 +468,12 @@ class Visualizer:
                     # Update x-axis range to match the data for all subplots
                     x_range = [times[0], times[-1]]
                     for i in range(1, 5):  # Update all 6 x-axes
-                        self.fig_widget.layout[f'xaxis{i}'].range = x_range
+                        self.fig.layout[f'xaxis{i}'].range = x_range
 
-                    self.fig_widget.data[0].x = times
-                    self.fig_widget.data[0].y = bid_data
-                    self.fig_widget.data[1].x = times
-                    self.fig_widget.data[1].y = ask_data
+                    self.fig.data[0].x = times
+                    self.fig.data[0].y = bid_data
+                    self.fig.data[1].x = times
+                    self.fig.data[1].y = ask_data
 
                     # Update ground truth position markers
                     if positions is not None:
@@ -465,12 +490,12 @@ class Visualizer:
                         )
 
                         # Update ground truth entry markers - place at ask price for buys
-                        self.fig_widget.data[2].x = times[entry_indices]
-                        self.fig_widget.data[2].y = ask_data[entry_indices]
+                        self.fig.data[2].x = times[entry_indices]
+                        self.fig.data[2].y = ask_data[entry_indices]
 
                         # Update ground truth exit markers - place at bid price for sells
-                        self.fig_widget.data[3].x = times[exit_indices]
-                        self.fig_widget.data[3].y = bid_data[exit_indices]
+                        self.fig.data[3].x = times[exit_indices]
+                        self.fig.data[3].y = bid_data[exit_indices]
 
                     # Update predicted position markers
                     if pred_positions is not None:
@@ -493,49 +518,49 @@ class Visualizer:
                         )
 
                         # Update predicted entry markers - place at ask price for buys
-                        self.fig_widget.data[4].x = times[pred_entry_indices]
-                        self.fig_widget.data[4].y = ask_data[pred_entry_indices]
+                        self.fig.data[4].x = times[pred_entry_indices]
+                        self.fig.data[4].y = ask_data[pred_entry_indices]
 
                         # Update predicted exit markers - place at bid price for sells
-                        self.fig_widget.data[5].x = times[pred_exit_indices]
-                        self.fig_widget.data[5].y = bid_data[pred_exit_indices]
+                        self.fig.data[5].x = times[pred_exit_indices]
+                        self.fig.data[5].y = bid_data[pred_exit_indices]
 
                 # Update heatmaps
                 if books_z_data is not None:
-                    self.fig_widget.data[6].z = books_z_data
+                    self.fig.data[6].z = books_z_data
 
                     # Update feature markers if available
                     if feature_points is not None:
                         feature2_points, feature3_points = feature_points
 
                         # Update feature 2 markers (up triangles)
-                        self.fig_widget.data[7].x = feature2_points[0]  # time dimension
-                        self.fig_widget.data[7].y = feature2_points[
+                        self.fig.data[7].x = feature2_points[0]  # time dimension
+                        self.fig.data[7].y = feature2_points[
                             1
                         ]  # price level dimension
 
                         # Update feature 3 markers (down triangles)
-                        self.fig_widget.data[8].x = feature3_points[0]  # time dimension
-                        self.fig_widget.data[8].y = feature3_points[
+                        self.fig.data[8].x = feature3_points[0]  # time dimension
+                        self.fig.data[8].y = feature3_points[
                             1
                         ]  # price level dimension
 
                 if level_reach_display is not None:
-                    self.fig_widget.data[9].z = level_reach_display
+                    self.fig.data[9].z = level_reach_display
                 if pred_t2l_display is not None:
-                    self.fig_widget.data[10].z = pred_t2l_display
+                    self.fig.data[10].z = pred_t2l_display
 
                     # Update ground truth proximity traces if available
                     if up_proximity is not None and down_proximity is not None:
                         times = np.arange(len(up_proximity))[: self._max_points]
                         up_prox_data = up_proximity[-self._max_points :]
                         down_prox_data = down_proximity[-self._max_points :]
-                        self.fig_widget.data[11].x = times
-                        self.fig_widget.data[11].y = np.clip(up_prox_data, 0, 1) * (
+                        self.fig.data[11].x = times
+                        self.fig.data[11].y = np.clip(up_prox_data, 0, 1) * (
                             pred_t2l_display.shape[0] - 1
                         )
-                        self.fig_widget.data[12].x = times
-                        self.fig_widget.data[12].y = np.clip(down_prox_data, 0, 1) * (
+                        self.fig.data[12].x = times
+                        self.fig.data[12].y = np.clip(down_prox_data, 0, 1) * (
                             pred_t2l_display.shape[0] - 1
                         )
 
@@ -547,50 +572,47 @@ class Visualizer:
                         times = np.arange(len(pred_up_proximity))[: self._max_points]
                         pred_up_prox_data = pred_up_proximity[-self._max_points :]
                         pred_down_prox_data = pred_down_proximity[-self._max_points :]
-                        self.fig_widget.data[11].x = times
-                        self.fig_widget.data[11].y = np.clip(
+                        self.fig.data[11].x = times
+                        self.fig.data[11].y = np.clip(
                             pred_up_prox_data, 0, 1
                         ) * (pred_t2l_display.shape[0] - 1)
-                        self.fig_widget.data[12].x = times
-                        self.fig_widget.data[12].y = np.clip(
+                        self.fig.data[12].x = times
+                        self.fig.data[12].y = np.clip(
                             pred_down_prox_data, 0, 1
                         ) * (pred_t2l_display.shape[0] - 1)
 
                 # Update loss traces
                 if self.losses:
                     loss_times = np.arange(len(self.losses))[-self._loss_max_points :]
-                    self.fig_widget.data[13].x = loss_times
-                    self.fig_widget.data[13].y = self.losses[-self._loss_max_points :]
+                    self.fig.data[13].x = loss_times
+                    self.fig.data[13].y = self.losses[-self._loss_max_points :]
 
                 if self.test_losses:
                     test_loss_times = np.arange(len(self.test_losses))[
                         -self._loss_max_points :
                     ]
-                    self.fig_widget.data[14].x = test_loss_times
-                    self.fig_widget.data[14].y = self.test_losses[
+                    self.fig.data[14].x = test_loss_times
+                    self.fig.data[14].y = self.test_losses[
                         -self._loss_max_points :
                     ]
 
                 # Update PnL traces
                 if gt_pnl is not None:
                     pnl_times = np.arange(len(gt_pnl))
-                    self.fig_widget.data[15].x = pnl_times
-                    self.fig_widget.data[15].y = gt_pnl[-self._max_points :]
-                    self.fig_widget.data[15].yaxis = "y7"
+                    self.fig.data[15].x = pnl_times
+                    self.fig.data[15].y = gt_pnl[-self._max_points :]
+                    self.fig.data[15].yaxis = "y7"
 
                 if pred_pnl is not None:
                     pred_pnl_times = np.arange(len(pred_pnl))
-                    self.fig_widget.data[16].x = pred_pnl_times
-                    self.fig_widget.data[16].y = pred_pnl[-self._max_points :]
-                    self.fig_widget.data[16].yaxis = "y8"
+                    self.fig.data[16].x = pred_pnl_times
+                    self.fig.data[16].y = pred_pnl[-self._max_points :]
+                    self.fig.data[16].yaxis = "y8"
+
+            self._refresh()
 
         except Exception as e:
             print(f"Error updating plot: {e}")
-        finally:
-            # Force garbage collection after update
-            import gc
-
-            gc.collect()
 
     def add_loss(self, train_loss: float | None, test_loss: float) -> None:
         """Adds loss values to the loss history.

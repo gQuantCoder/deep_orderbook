@@ -1,0 +1,347 @@
+{
+  "experiment": "exp04_multihorizon_actionable_screen",
+  "event_threshold": 0.0001,
+  "look_aheads": [
+    8,
+    16,
+    32,
+    64
+  ],
+  "results": [
+    {
+      "look_ahead": 8,
+      "windows": 120,
+      "train_windows": 90,
+      "test_windows": 30,
+      "zero": {
+        "rmse": 0.01215082350553969,
+        "mae": 0.0004914532307288507,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.001806640625,
+        "event_rate_pred": 0.0,
+        "side_acc_on_signals": NaN
+      },
+      "candidates": [
+        {
+          "cfg": {
+            "name": "hgb_d4_lr008",
+            "max_depth": 4,
+            "learning_rate": 0.08,
+            "max_iter": 140,
+            "weighted": false
+          },
+          "metrics": {
+            "rmse": 0.024011297084027276,
+            "mae": 0.0017858516259263851,
+            "precision": 0.013992367799382153,
+            "recall": 0.6936936936936875,
+            "f1": 0.027431421446345267,
+            "event_rate_true": 0.001806640625,
+            "event_rate_pred": 0.08956705729166667,
+            "side_acc_on_signals": 0.3734163624651063
+          }
+        },
+        {
+          "cfg": {
+            "name": "hgb_d6_lr006_w",
+            "max_depth": 6,
+            "learning_rate": 0.06,
+            "max_iter": 180,
+            "weighted": true
+          },
+          "metrics": {
+            "rmse": 0.03489051796893623,
+            "mae": 0.003081415912243654,
+            "precision": 0.012953367875647666,
+            "recall": 0.5855855855855804,
+            "f1": 0.025346071358897007,
+            "event_rate_true": 0.001806640625,
+            "event_rate_pred": 0.08167317708333334,
+            "side_acc_on_signals": 0.4862830784170915
+          }
+        }
+      ],
+      "best": {
+        "cfg": {
+          "name": "hgb_d4_lr008",
+          "max_depth": 4,
+          "learning_rate": 0.08,
+          "max_iter": 140,
+          "weighted": false
+        },
+        "metrics": {
+          "rmse": 0.024011297084027276,
+          "mae": 0.0017858516259263851,
+          "precision": 0.013992367799382153,
+          "recall": 0.6936936936936875,
+          "f1": 0.027431421446345267,
+          "event_rate_true": 0.001806640625,
+          "event_rate_pred": 0.08956705729166667,
+          "side_acc_on_signals": 0.3734163624651063
+        }
+      },
+      "delta_vs_zero": {
+        "f1_minus_zero": 0.027431421446345267,
+        "precision_minus_zero": 0.013992367799382153,
+        "side_acc_minus_zero": 0.3734163624651063,
+        "rmse_gain_pct": -97.61045061764057
+      }
+    },
+    {
+      "look_ahead": 16,
+      "windows": 120,
+      "train_windows": 90,
+      "test_windows": 30,
+      "zero": {
+        "rmse": 0.015213265897766818,
+        "mae": 0.0010560871634643196,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.005745442708333334,
+        "event_rate_pred": 0.0,
+        "side_acc_on_signals": NaN
+      },
+      "candidates": [
+        {
+          "cfg": {
+            "name": "hgb_d4_lr008",
+            "max_depth": 4,
+            "learning_rate": 0.08,
+            "max_iter": 140,
+            "weighted": false
+          },
+          "metrics": {
+            "rmse": 0.024974929534597474,
+            "mae": 0.003926337049803495,
+            "precision": 0.029306054741498475,
+            "recall": 0.9008498583569379,
+            "f1": 0.05676544091389826,
+            "event_rate_true": 0.005745442708333334,
+            "event_rate_pred": 0.176611328125,
+            "side_acc_on_signals": 0.38917921918229326
+          }
+        },
+        {
+          "cfg": {
+            "name": "hgb_d6_lr006_w",
+            "max_depth": 6,
+            "learning_rate": 0.06,
+            "max_iter": 180,
+            "weighted": true
+          },
+          "metrics": {
+            "rmse": 0.03450110467281565,
+            "mae": 0.005182740788087705,
+            "precision": 0.047376191115286535,
+            "recall": 0.9999999999999971,
+            "f1": 0.09046642747300432,
+            "event_rate_true": 0.005745442708333334,
+            "event_rate_pred": 0.12127278645833334,
+            "side_acc_on_signals": 0.24205144591787825
+          }
+        }
+      ],
+      "best": {
+        "cfg": {
+          "name": "hgb_d6_lr006_w",
+          "max_depth": 6,
+          "learning_rate": 0.06,
+          "max_iter": 180,
+          "weighted": true
+        },
+        "metrics": {
+          "rmse": 0.03450110467281565,
+          "mae": 0.005182740788087705,
+          "precision": 0.047376191115286535,
+          "recall": 0.9999999999999971,
+          "f1": 0.09046642747300432,
+          "event_rate_true": 0.005745442708333334,
+          "event_rate_pred": 0.12127278645833334,
+          "side_acc_on_signals": 0.24205144591787825
+        }
+      },
+      "delta_vs_zero": {
+        "f1_minus_zero": 0.09046642747300432,
+        "precision_minus_zero": 0.047376191115286535,
+        "side_acc_minus_zero": 0.24205144591787825,
+        "rmse_gain_pct": -126.78302544236932
+      }
+    },
+    {
+      "look_ahead": 32,
+      "windows": 120,
+      "train_windows": 90,
+      "test_windows": 30,
+      "zero": {
+        "rmse": 0.01722338849942114,
+        "mae": 0.0019442946634005281,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.01826171875,
+        "event_rate_pred": 0.0,
+        "side_acc_on_signals": NaN
+      },
+      "candidates": [
+        {
+          "cfg": {
+            "name": "hgb_d4_lr008",
+            "max_depth": 4,
+            "learning_rate": 0.08,
+            "max_iter": 140,
+            "weighted": false
+          },
+          "metrics": {
+            "rmse": 0.03658242713455905,
+            "mae": 0.008145918180406865,
+            "precision": 0.07444761462411252,
+            "recall": 0.9999999999999992,
+            "f1": 0.1385783980731125,
+            "event_rate_true": 0.01826171875,
+            "event_rate_pred": 0.24529622395833334,
+            "side_acc_on_signals": 0.40394438138479
+          }
+        },
+        {
+          "cfg": {
+            "name": "hgb_d6_lr006_w",
+            "max_depth": 6,
+            "learning_rate": 0.06,
+            "max_iter": 180,
+            "weighted": true
+          },
+          "metrics": {
+            "rmse": 0.037583152443819795,
+            "mae": 0.00738175675923455,
+            "precision": 0.08706448358811204,
+            "recall": 0.9999999999999992,
+            "f1": 0.16018273966720928,
+            "event_rate_true": 0.01826171875,
+            "event_rate_pred": 0.20974934895833333,
+            "side_acc_on_signals": 0.3384047948363301
+          }
+        }
+      ],
+      "best": {
+        "cfg": {
+          "name": "hgb_d6_lr006_w",
+          "max_depth": 6,
+          "learning_rate": 0.06,
+          "max_iter": 180,
+          "weighted": true
+        },
+        "metrics": {
+          "rmse": 0.037583152443819795,
+          "mae": 0.00738175675923455,
+          "precision": 0.08706448358811204,
+          "recall": 0.9999999999999992,
+          "f1": 0.16018273966720928,
+          "event_rate_true": 0.01826171875,
+          "event_rate_pred": 0.20974934895833333,
+          "side_acc_on_signals": 0.3384047948363301
+        }
+      },
+      "delta_vs_zero": {
+        "f1_minus_zero": 0.16018273966720928,
+        "precision_minus_zero": 0.08706448358811204,
+        "side_acc_minus_zero": 0.3384047948363301,
+        "rmse_gain_pct": -118.20997908687265
+      }
+    },
+    {
+      "look_ahead": 64,
+      "windows": 120,
+      "train_windows": 90,
+      "test_windows": 30,
+      "zero": {
+        "rmse": 0.01770420496977935,
+        "mae": 0.0023603322724343695,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "event_rate_true": 0.029231770833333334,
+        "event_rate_pred": 0.0,
+        "side_acc_on_signals": NaN
+      },
+      "candidates": [
+        {
+          "cfg": {
+            "name": "hgb_d4_lr008",
+            "max_depth": 4,
+            "learning_rate": 0.08,
+            "max_iter": 140,
+            "weighted": false
+          },
+          "metrics": {
+            "rmse": 0.03134815559310692,
+            "mae": 0.006162811558108927,
+            "precision": 0.09367828082620488,
+            "recall": 0.9999999999999994,
+            "f1": 0.17130866081632562,
+            "event_rate_true": 0.029231770833333334,
+            "event_rate_pred": 0.31204427083333336,
+            "side_acc_on_signals": 0.5245124593716143
+          }
+        },
+        {
+          "cfg": {
+            "name": "hgb_d6_lr006_w",
+            "max_depth": 6,
+            "learning_rate": 0.06,
+            "max_iter": 180,
+            "weighted": true
+          },
+          "metrics": {
+            "rmse": 0.02981459946872326,
+            "mae": 0.005048605489876662,
+            "precision": 0.12860747516164642,
+            "recall": 0.9081291759465474,
+            "f1": 0.22530736289521014,
+            "event_rate_true": 0.029231770833333334,
+            "event_rate_pred": 0.20641276041666667,
+            "side_acc_on_signals": 0.559977499648432
+          }
+        }
+      ],
+      "best": {
+        "cfg": {
+          "name": "hgb_d6_lr006_w",
+          "max_depth": 6,
+          "learning_rate": 0.06,
+          "max_iter": 180,
+          "weighted": true
+        },
+        "metrics": {
+          "rmse": 0.02981459946872326,
+          "mae": 0.005048605489876662,
+          "precision": 0.12860747516164642,
+          "recall": 0.9081291759465474,
+          "f1": 0.22530736289521014,
+          "event_rate_true": 0.029231770833333334,
+          "event_rate_pred": 0.20641276041666667,
+          "side_acc_on_signals": 0.559977499648432
+        }
+      },
+      "delta_vs_zero": {
+        "f1_minus_zero": 0.22530736289521014,
+        "precision_minus_zero": 0.12860747516164642,
+        "side_acc_minus_zero": 0.559977499648432,
+        "rmse_gain_pct": -68.40405722217983
+      }
+    }
+  ],
+  "actionable_summary": {
+    "short_horizon_f1_la8": 0.027431421446345267,
+    "mid_horizon_f1_la32": 0.16018273966720928,
+    "long_horizon_f1_la64": 0.22530736289521014,
+    "short_precision_la8": 0.013992367799382153,
+    "mid_precision_la32": 0.08706448358811204,
+    "long_precision_la64": 0.12860747516164642,
+    "short_side_acc_la8": 0.3734163624651063,
+    "mid_side_acc_la32": 0.3384047948363301,
+    "long_side_acc_la64": 0.559977499648432
+  }
+}

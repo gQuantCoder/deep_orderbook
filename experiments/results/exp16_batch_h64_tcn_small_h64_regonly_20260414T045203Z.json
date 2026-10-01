@@ -1,0 +1,103 @@
+{
+  "experiment": "exp16_batch_h64_tcn",
+  "variant_name": "small_h64_regonly",
+  "timestamp_utc": "2026-04-14 04:52:03Z",
+  "git_commit": "7027592",
+  "train_files": [
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T00-00-01.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T01-00-10.parquet",
+    "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T02-00-01.parquet"
+  ],
+  "test_file": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-14T03-00-00.parquet",
+  "hypothesis": "Smaller TCN may reduce overfit on strict holdout.",
+  "config": {
+    "hidden_dim": 64,
+    "epochs": 6,
+    "lr": 0.002,
+    "weight_decay": 0.0001,
+    "reg_loss": "huber",
+    "event_loss_weight": 0.0,
+    "pos_weight": 1.0,
+    "trade_threshold": 0.1,
+    "prediction_cap_quantile": 99.5,
+    "active_reg_weight": 1.0,
+    "hypothesis": "Smaller TCN may reduce overfit on strict holdout."
+  },
+  "richness_gate": {
+    "usable": true,
+    "reason": "ok",
+    "books_std": 2.443171977996826,
+    "books_abs_peak": 13.38646411895752,
+    "target_active_ratio": 0.03662109375,
+    "target_peak": 30.975704193115234
+  },
+  "metrics": {
+    "rmse": 1.1727063655853271,
+    "mae": 0.4004260301589966,
+    "precision": 0.08713189913595486,
+    "recall": 0.8196143479162346,
+    "f1": 0.15751828016957783,
+    "event_rate_true": 0.049062093098958336,
+    "event_rate_pred": 0.4615071614583333
+  },
+  "zero_baseline": {
+    "rmse": 0.4435252249240875,
+    "mae": 0.07224328070878983,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "event_rate_true": 0.049062093098958336,
+    "event_rate_pred": 0.0
+  },
+  "image_quality": {
+    "gray_mean": 0.7074938416481018,
+    "gray_std": 0.309830904006958,
+    "near_black_fraction": 0.01592436974789916,
+    "near_white_fraction": 0.444440717463456,
+    "edge_mean_abs_diff": 0.018878722563385963,
+    "usable": true,
+    "reason": "ok"
+  },
+  "pnl": {
+    "best_slice": {
+      "omniscient_final": 15.0625,
+      "prediction_final": 12.328125
+    },
+    "fixed_slice": {
+      "omniscient_final": 15.0625,
+      "prediction_final": 12.328125
+    }
+  },
+  "train_losses": [
+    0.31909317937162185,
+    0.22497032168838713,
+    0.19713574316766527,
+    0.17568837106227875,
+    0.15246542625957066,
+    0.12890948355197906
+  ],
+  "test_losses": [
+    0.06798748672008514,
+    0.052874479442834854,
+    0.07358714938163757,
+    0.0974179282784462,
+    0.16699360311031342,
+    0.30247095227241516
+  ],
+  "artifacts": {
+    "precheck_png": "experiments/pictures/exp16_batch_h64_tcn_holdout_precheck_20260414T045203Z.png",
+    "dashboard_fixed_png": "experiments/pictures/exp16_batch_h64_tcn_small_h64_regonly_fixed_20260414T045203Z.png",
+    "dashboard_best_png": "experiments/pictures/exp16_batch_h64_tcn_small_h64_regonly_best_20260414T045203Z.png",
+    "notes_md": "experiments/notes/exp16_batch_h64_tcn_small_h64_regonly_20260414T045203Z.md"
+  },
+  "observations": [
+    "Variant=small_h64_regonly",
+    "Holdout metrics: f1=0.1575, precision=0.0871, recall=0.8196, rmse=1.17271",
+    "Zero baseline rmse=0.44353",
+    "Image QC: usable=True, reason=ok, gray_std=0.3098, near_black=0.016, near_white=0.444",
+    "Best-slice pnl: omniscient=15.06250, prediction=12.32812",
+    "Fixed-slice pnl: omniscient=15.06250, prediction=12.32812"
+  ],
+  "decision": "not_promising_yet",
+  "experiment_db_row_id": 23
+}
