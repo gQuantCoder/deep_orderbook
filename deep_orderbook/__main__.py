@@ -1,3 +1,4 @@
+import utils.session
 import argparse
 import asyncio
 from importlib.metadata import PackageNotFoundError, version
