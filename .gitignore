@@ -2,7 +2,6 @@
 **egg-info**
 build
 dist
-.vscode
 .ipynb_checkpoints
 /data/
 *.log
@@ -16,3 +15,5 @@ checkpoints*
 /experiments/pictures/
 /experiments/notes/
 /experiments/results/
+config.bat
+node_modules
