@@ -1,0 +1,2000 @@
+{
+  "scope": "Descriptive audit only; sampled hours are not evidence of a trading edge.",
+  "inventory": [
+    {
+      "root": "/mnt/data/repos/gaelreinaudi/crypto",
+      "files": 1924,
+      "bytes": 30009282664,
+      "first": "2026-04-13T22-51-51.parquet",
+      "last": "2026-07-03T14-00-10.parquet",
+      "unique_hour_slots": 1922,
+      "expected_hour_slots": 1937,
+      "missing_hour_slots": 15,
+      "extra_files_in_same_hour": 2,
+      "monthly_files": {
+        "2026-04": 409,
+        "2026-05": 738,
+        "2026-06": 713,
+        "2026-07": 64
+      },
+      "nonstandard_names": []
+    },
+    {
+      "root": "/media/photoDS216/crypto",
+      "files": 6540,
+      "bytes": 110559524015,
+      "first": "2024-08-04T23-00-00.parquet",
+      "last": "2025-05-19T02-00-11.parquet",
+      "unique_hour_slots": 6528,
+      "expected_hour_slots": 6892,
+      "missing_hour_slots": 364,
+      "extra_files_in_same_hour": 11,
+      "monthly_files": {
+        "2024-08": 618,
+        "2024-09": 693,
+        "2024-10": 743,
+        "2024-11": 639,
+        "2024-12": 547,
+        "2025-01": 742,
+        "2025-02": 674,
+        "2025-03": 734,
+        "2025-04": 718,
+        "2025-05": 431,
+        "TOO_BIG": 1
+      },
+      "nonstandard_names": [
+        "TOO_BIG_2_024-08-05T00-00-00.parquet"
+      ]
+    }
+  ],
+  "sampled_files": [
+    {
+      "path": "/media/photoDS216/crypto/2024-09-15T12-00-00.parquet",
+      "bytes": 8517960,
+      "rows": 1557853,
+      "schema": {
+        "channel": "Categorical",
+        "timestamp": "Datetime(time_unit='us', time_zone=None)",
+        "sequence_num": "Int64",
+        "type": "Categorical",
+        "product_id": "Categorical",
+        "price": "Float64",
+        "size": "Float64",
+        "side": "Categorical"
+      },
+      "null_counts": {
+        "channel": 0,
+        "timestamp": 0,
+        "sequence_num": 0,
+        "type": 0,
+        "product_id": 0,
+        "price": 0,
+        "size": 0,
+        "side": 0
+      },
+      "timestamp_sorted": true,
+      "first_timestamp": "2024-09-15 12:00:00.897868",
+      "last_timestamp": "2024-09-15 12:59:59.975824",
+      "negative_size_rows": 0,
+      "nonpositive_price_rows": 0,
+      "channels": [
+        {
+          "channel": "l2_data",
+          "messages": 125649,
+          "seq_jumps_gt_one": 5711,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.024633,
+            "p90": 0.050011,
+            "p99": 0.10299535999999998,
+            "max": 1.110132
+          }
+        },
+        {
+          "channel": "market_trades",
+          "messages": 5831,
+          "seq_jumps_gt_one": 5710,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.29920250000000004,
+            "p90": 1.5999963,
+            "p99": 4.30026258,
+            "max": 9.099778
+          }
+        }
+      ],
+      "markets": [
+        {
+          "market": "BTC-USD",
+          "book_rows": 578711,
+          "book_messages": 55018,
+          "book_snapshots": 1,
+          "trade_update_rows": 7519,
+          "trade_volume_base": 67.54857412,
+          "trade_side_counts": [
+            {
+              "side": "SELL",
+              "len": 5918
+            },
+            {
+              "side": "BUY",
+              "len": 1601
+            }
+          ],
+          "book_zero_quantity_rows": 310277,
+          "duration_seconds": 3598.825651,
+          "occupied_100ms_buckets": 30786,
+          "possible_100ms_buckets": 35989,
+          "occupied_100ms_fraction": 0.8554280474589457,
+          "one_second_quote_samples": 3598,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.0407075,
+            "p90": 0.14262220000000003,
+            "p99": 0.39006935999999987,
+            "max": 0.731809
+          },
+          "spread_bps": {
+            "p50": 0.0016668190408342012,
+            "p90": 0.4722428365396161,
+            "p99": 1.0543350415201778,
+            "max": 1.6886125233765286
+          },
+          "mid_price_median": 60019.925,
+          "quote_change_fraction_1s": 0.31832082290797886,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 0.3120299817016559,
+                "p99": 1.2180279428644063,
+                "max": 5.765068745011703
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.008329974270360196,
+                "p90": 0.8723304164286463,
+                "p99": 2.6659555230312826,
+                "max": 6.469820174632712
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 0.6875835296604738,
+                "p90": 2.3500385798003176,
+                "p99": 5.157320007325927,
+                "max": 7.227449354778592
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 1.183591652211824,
+                "p90": 3.384074800758645,
+                "p99": 6.872176761989479,
+                "max": 10.486919948484719
+              },
+              "fraction_abs_return_gt_10bps": 0.0008479366873940079
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 2.460123554165472,
+                "p90": 7.068811461878877,
+                "p99": 11.741554435205826,
+                "max": 14.427272993040585
+              },
+              "fraction_abs_return_gt_10bps": 0.02152819890842935
+            }
+          }
+        },
+        {
+          "market": "ETH-BTC",
+          "book_rows": 31387,
+          "book_messages": 14880,
+          "book_snapshots": 1,
+          "trade_update_rows": 22,
+          "trade_volume_base": 8.841523290000001,
+          "trade_side_counts": [
+            {
+              "side": "SELL",
+              "len": 15
+            },
+            {
+              "side": "BUY",
+              "len": 7
+            }
+          ],
+          "book_zero_quantity_rows": 367,
+          "duration_seconds": 3599.077956,
+          "occupied_100ms_buckets": 13223,
+          "possible_100ms_buckets": 35992,
+          "occupied_100ms_fraction": 0.3673871971549233,
+          "one_second_quote_samples": 3599,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.172437,
+            "p90": 1.6736794000000002,
+            "p99": 4.0235221800000005,
+            "max": 4.823978
+          },
+          "spread_bps": {
+            "p50": 2.4915908807781393,
+            "p90": 4.982561036372493,
+            "p99": 4.986287708802324,
+            "max": 4.986287708802324
+          },
+          "mid_price_median": 0.040135000000000004,
+          "quote_change_fraction_1s": 0.042245692051139525,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 0.0,
+                "p99": 1.2464165524139759,
+                "max": 2.4934546814603387
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 1.2453300124548594,
+                "p99": 2.4915908807754406,
+                "max": 3.7378519810615796
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 2.489729864310064,
+                "p99": 3.7378519810615796,
+                "max": 4.976981460743657
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 2.4922118380077407,
+                "p99": 4.983181761556432,
+                "max": 6.229753301768559
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 2.4922118380077407,
+                "p90": 6.225874735399373,
+                "p99": 7.4784993144705325,
+                "max": 8.72382851445419
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            }
+          }
+        },
+        {
+          "market": "ETH-USD",
+          "book_rows": 936557,
+          "book_messages": 55751,
+          "book_snapshots": 1,
+          "trade_update_rows": 3357,
+          "trade_volume_base": 463.8197986,
+          "trade_side_counts": [
+            {
+              "side": "SELL",
+              "len": 2606
+            },
+            {
+              "side": "BUY",
+              "len": 751
+            }
+          ],
+          "book_zero_quantity_rows": 505704,
+          "duration_seconds": 3598.622164,
+          "occupied_100ms_buckets": 31599,
+          "possible_100ms_buckets": 35987,
+          "occupied_100ms_fraction": 0.878067079778809,
+          "one_second_quote_samples": 3598,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.013292499999999999,
+            "p90": 0.11434830000000001,
+            "p99": 0.41334345,
+            "max": 0.913258
+          },
+          "spread_bps": {
+            "p50": 0.4155844156486358,
+            "p90": 0.9954606992269617,
+            "p99": 1.41126340950478,
+            "max": 2.1591008175517534
+          },
+          "mid_price_median": 2409.2200000000003,
+          "quote_change_fraction_1s": 0.7517375590770086,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.10368517861847337,
+                "p90": 0.49850966428177657,
+                "p99": 1.494947636402965,
+                "max": 3.857600613896839
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.24886920056754747,
+                "p90": 1.2029536507047744,
+                "p99": 2.9876394314723753,
+                "max": 5.184581469476202
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 0.8724544325899863,
+                "p90": 3.152319678319637,
+                "p99": 4.93568061584182,
+                "max": 7.808946643710346
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 1.6083464165239647,
+                "p90": 3.9684493785498987,
+                "p99": 7.560638436283202,
+                "max": 10.386912490263356
+              },
+              "fraction_abs_return_gt_10bps": 0.0011305822498586771
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 4.65233167021073,
+                "p90": 11.631703706016294,
+                "p99": 15.21072852663496,
+                "max": 17.641228527673913
+              },
+              "fraction_abs_return_gt_10bps": 0.13887204366282596
+            }
+          }
+        }
+      ],
+      "all_recorded_channels_sequence": {
+        "messages": 131480,
+        "jumps_gt_one": 2,
+        "decreases": 0,
+        "note": "Sequence interleaves channels in these samples. Holes may reflect omitted subscription messages; these counts alone do not establish lost market data."
+      }
+    },
+    {
+      "path": "/media/photoDS216/crypto/2025-02-18T11-00-11.parquet",
+      "bytes": 12766181,
+      "rows": 1854448,
+      "schema": {
+        "channel": "Categorical",
+        "timestamp": "Datetime(time_unit='us', time_zone=None)",
+        "sequence_num": "Int64",
+        "type": "Categorical",
+        "product_id": "Categorical",
+        "price": "Float64",
+        "size": "Float64",
+        "side": "Categorical"
+      },
+      "null_counts": {
+        "channel": 0,
+        "timestamp": 0,
+        "sequence_num": 0,
+        "type": 0,
+        "product_id": 0,
+        "price": 0,
+        "size": 0,
+        "side": 0
+      },
+      "timestamp_sorted": true,
+      "first_timestamp": "2025-02-18 11:00:11.560109",
+      "last_timestamp": "2025-02-18 11:59:59.956472",
+      "negative_size_rows": 0,
+      "nonpositive_price_rows": 0,
+      "channels": [
+        {
+          "channel": "l2_data",
+          "messages": 142815,
+          "seq_jumps_gt_one": 9297,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.0218275,
+            "p90": 0.042008699999999996,
+            "p99": 0.07056730999999994,
+            "max": 0.301047
+          }
+        },
+        {
+          "channel": "market_trades",
+          "messages": 9507,
+          "seq_jumps_gt_one": 9295,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.2006735,
+            "p90": 0.9005335,
+            "p99": 2.373942800000055,
+            "max": 6.122565
+          }
+        }
+      ],
+      "markets": [
+        {
+          "market": "BTC-USD",
+          "book_rows": 963698,
+          "book_messages": 65090,
+          "book_snapshots": 1,
+          "trade_update_rows": 10549,
+          "trade_volume_base": 74.61840898,
+          "trade_side_counts": [
+            {
+              "side": "BUY",
+              "len": 3914
+            },
+            {
+              "side": "SELL",
+              "len": 6635
+            }
+          ],
+          "book_zero_quantity_rows": 481040,
+          "duration_seconds": 3588.396363,
+          "occupied_100ms_buckets": 34719,
+          "possible_100ms_buckets": 35885,
+          "occupied_100ms_fraction": 0.9675073150341368,
+          "one_second_quote_samples": 3588,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.042403,
+            "p90": 0.0464249,
+            "p99": 0.19220777000000006,
+            "max": 0.440526
+          },
+          "spread_bps": {
+            "p50": 0.0010459626854670508,
+            "p90": 0.4588609716379653,
+            "p99": 0.9589102258163562,
+            "max": 1.268951564075919
+          },
+          "mid_price_median": 95637.67499999999,
+          "quote_change_fraction_1s": 0.48731530526902705,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 0.4153280535041937,
+                "p99": 1.4940669281063383,
+                "max": 2.7028271833740014
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.17155105110910895,
+                "p90": 1.2510635067486404,
+                "p99": 2.7464489518447266,
+                "max": 4.4724532826978525
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 1.1906848412940318,
+                "p90": 3.0132096446340295,
+                "p99": 5.518481761574989,
+                "max": 6.917140191848858
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 1.9805514366133536,
+                "p90": 4.2860499061903035,
+                "p99": 7.382394137956405,
+                "max": 9.575836877455668
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 5.271570945255544,
+                "p90": 10.369860717693193,
+                "p99": 13.343034377960942,
+                "max": 14.793618947550602
+              },
+              "fraction_abs_return_gt_10bps": 0.13199513381995134
+            }
+          }
+        },
+        {
+          "market": "ETH-BTC",
+          "book_rows": 42008,
+          "book_messages": 16314,
+          "book_snapshots": 1,
+          "trade_update_rows": 73,
+          "trade_volume_base": 17.007477199999997,
+          "trade_side_counts": [
+            {
+              "side": "BUY",
+              "len": 46
+            },
+            {
+              "side": "SELL",
+              "len": 27
+            }
+          ],
+          "book_zero_quantity_rows": 1249,
+          "duration_seconds": 3587.846047,
+          "occupied_100ms_buckets": 12724,
+          "possible_100ms_buckets": 35880,
+          "occupied_100ms_fraction": 0.3546265328874025,
+          "one_second_quote_samples": 3588,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.1646845,
+            "p90": 0.9647774,
+            "p99": 2.4139195,
+            "max": 4.764384
+          },
+          "spread_bps": {
+            "p50": 3.5593521978998366,
+            "p90": 7.119971520113629,
+            "p99": 7.135212272564818,
+            "max": 7.140307033202136
+          },
+          "mid_price_median": 0.028124999999999997,
+          "quote_change_fraction_1s": 0.14942849177585726,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 1.7774617845722762,
+                "p99": 1.7838030681405215,
+                "max": 7.121239095602139
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 1.7822135091782876,
+                "p99": 3.566448297890945,
+                "max": 7.135212272564306
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 1.7777777777783221,
+                "p90": 3.564427018356575,
+                "p99": 8.900645721967459,
+                "max": 12.459950160199629
+              },
+              "fraction_abs_return_gt_10bps": 0.0070264193367060145
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 1.7825311942964994,
+                "p90": 5.345021148468021,
+                "p99": 12.461569487886038,
+                "max": 14.239943040228464
+              },
+              "fraction_abs_return_gt_10bps": 0.01899092970521542
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 7.108583614714448,
+                "p90": 14.222222222222136,
+                "p99": 19.58340751290755,
+                "max": 26.704646608509684
+              },
+              "fraction_abs_return_gt_10bps": 0.3220802919708029
+            }
+          }
+        },
+        {
+          "market": "ETH-USD",
+          "book_rows": 827864,
+          "book_messages": 61411,
+          "book_snapshots": 1,
+          "trade_update_rows": 9956,
+          "trade_volume_base": 2444.41369123,
+          "trade_side_counts": [
+            {
+              "side": "BUY",
+              "len": 3133
+            },
+            {
+              "side": "SELL",
+              "len": 6823
+            }
+          ],
+          "book_zero_quantity_rows": 291299,
+          "duration_seconds": 3588.193855,
+          "occupied_100ms_buckets": 34030,
+          "possible_100ms_buckets": 35883,
+          "occupied_100ms_fraction": 0.9483599476075022,
+          "one_second_quote_samples": 3588,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.0096785,
+            "p90": 0.0608046,
+            "p99": 0.11185258000000001,
+            "max": 0.461309
+          },
+          "spread_bps": {
+            "p50": 0.037215672270184075,
+            "p90": 0.5197979916546204,
+            "p99": 1.0395329396206725,
+            "max": 1.6030569924052045
+          },
+          "mid_price_median": 2689.825,
+          "quote_change_fraction_1s": 0.5425146361862281,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.037152001841622706,
+                "p90": 0.9298945112976575,
+                "p99": 2.4633342259944913,
+                "max": 8.824202889646804
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.6137616521717515,
+                "p90": 2.489378773593121,
+                "p99": 5.604230038197407,
+                "max": 10.68584906889769
+              },
+              "fraction_abs_return_gt_10bps": 0.0005581914596706671
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 2.460701805026555,
+                "p90": 6.299752268081327,
+                "p99": 10.770047346354591,
+                "max": 12.632666217092803
+              },
+              "fraction_abs_return_gt_10bps": 0.015739179314221474
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 4.002558312298787,
+                "p90": 9.138872684749341,
+                "p99": 13.360570014280972,
+                "max": 18.00569248290307
+              },
+              "fraction_abs_return_gt_10bps": 0.07341269841269842
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 11.264302520602731,
+                "p90": 21.785473366549457,
+                "p99": 28.585756080838404,
+                "max": 34.127602716846894
+              },
+              "fraction_abs_return_gt_10bps": 0.555352798053528
+            }
+          }
+        }
+      ],
+      "all_recorded_channels_sequence": {
+        "messages": 152322,
+        "jumps_gt_one": 2,
+        "decreases": 0,
+        "note": "Sequence interleaves channels in these samples. Holes may reflect omitted subscription messages; these counts alone do not establish lost market data."
+      }
+    },
+    {
+      "path": "/mnt/data/repos/gaelreinaudi/crypto/2026-04-23T12-00-10.parquet",
+      "bytes": 16163577,
+      "rows": 2619408,
+      "schema": {
+        "channel": "Enum(categories=['l2_data', 'market_trades', 'subscriptions'])",
+        "timestamp": "Datetime(time_unit='us', time_zone=None)",
+        "sequence_num": "Int64",
+        "type": "Enum(categories=['snapshot', 'update'])",
+        "product_id": "Categorical",
+        "price": "Float64",
+        "size": "Float64",
+        "side": "Enum(categories=['bid', 'offer', 'BUY', 'SELL'])"
+      },
+      "null_counts": {
+        "channel": 0,
+        "timestamp": 0,
+        "sequence_num": 0,
+        "type": 0,
+        "product_id": 0,
+        "price": 0,
+        "size": 0,
+        "side": 0
+      },
+      "timestamp_sorted": true,
+      "first_timestamp": "2026-04-23 12:00:12.885294",
+      "last_timestamp": "2026-04-23 12:59:59.948416",
+      "negative_size_rows": 0,
+      "nonpositive_price_rows": 0,
+      "channels": [
+        {
+          "channel": "l2_data",
+          "messages": 105990,
+          "seq_jumps_gt_one": 14161,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.016884,
+            "p90": 0.08573099999999999,
+            "p99": 0.23642771999999998,
+            "max": 0.993329
+          }
+        },
+        {
+          "channel": "market_trades",
+          "messages": 16116,
+          "seq_jumps_gt_one": 14161,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.136515,
+            "p90": 0.4990286,
+            "p99": 1.2009145,
+            "max": 3.161095
+          }
+        }
+      ],
+      "markets": [
+        {
+          "market": "BTC-USD",
+          "book_rows": 1397314,
+          "book_messages": 39429,
+          "book_snapshots": 1,
+          "trade_update_rows": 26676,
+          "trade_volume_base": 343.51334183000006,
+          "trade_side_counts": [
+            {
+              "side": "BUY",
+              "len": 15625
+            },
+            {
+              "side": "SELL",
+              "len": 11051
+            }
+          ],
+          "book_zero_quantity_rows": 697139,
+          "duration_seconds": 3587.063122,
+          "occupied_100ms_buckets": 22044,
+          "possible_100ms_buckets": 35872,
+          "occupied_100ms_fraction": 0.6145182872435325,
+          "one_second_quote_samples": 3587,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.138489,
+            "p90": 0.6413374,
+            "p99": 1.0104430599999994,
+            "max": 1.641365
+          },
+          "spread_bps": {
+            "p50": 0.0012856959822400782,
+            "p90": 0.0012873360452757665,
+            "p99": 0.23398443397376376,
+            "max": 1.8846553659713914
+          },
+          "mid_price_median": 77781.86499999999,
+          "quote_change_fraction_1s": 0.4230340211935304,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 1.0021119795217137,
+                "p99": 2.7514744914815554,
+                "max": 11.806395919073953
+              },
+              "fraction_abs_return_gt_10bps": 0.0005577244841048522
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.7142647092028831,
+                "p90": 2.393253248788363,
+                "p99": 5.705570730112642,
+                "max": 24.019978697481513
+              },
+              "fraction_abs_return_gt_10bps": 0.002512562814070352
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 2.1267216405995715,
+                "p90": 5.821105425695361,
+                "p99": 11.003222050591788,
+                "max": 34.66131945596085
+              },
+              "fraction_abs_return_gt_10bps": 0.011807703120607253
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 3.189523643549741,
+                "p90": 7.673045270085055,
+                "p99": 22.135997954947126,
+                "max": 28.95335832678647
+              },
+              "fraction_abs_return_gt_10bps": 0.04026084491068897
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 5.72133818128151,
+                "p90": 18.207022877602785,
+                "p99": 26.334310307014213,
+                "max": 30.8084920682139
+              },
+              "fraction_abs_return_gt_10bps": 0.27228475813811986
+            }
+          }
+        },
+        {
+          "market": "ETH-BTC",
+          "book_rows": 163351,
+          "book_messages": 25506,
+          "book_snapshots": 1,
+          "trade_update_rows": 168,
+          "trade_volume_base": 44.14338661,
+          "trade_side_counts": [
+            {
+              "side": "SELL",
+              "len": 88
+            },
+            {
+              "side": "BUY",
+              "len": 80
+            }
+          ],
+          "book_zero_quantity_rows": 34901,
+          "duration_seconds": 3586.374844,
+          "occupied_100ms_buckets": 17642,
+          "possible_100ms_buckets": 35865,
+          "occupied_100ms_fraction": 0.49190018123518753,
+          "one_second_quote_samples": 3586,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.11103350000000001,
+            "p90": 0.554648,
+            "p99": 1.354335750000003,
+            "max": 4.307321
+          },
+          "spread_bps": {
+            "p50": 1.3352471876357883,
+            "p90": 2.336799588656829,
+            "p99": 5.008932596464069,
+            "max": 7.686009791308855
+          },
+          "mid_price_median": 0.029964499999999998,
+          "quote_change_fraction_1s": 0.5815899581589958,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.16682236754217428,
+                "p90": 0.5014441594806129,
+                "p99": 1.4993442935330226,
+                "max": 6.1819153912989755
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.3338619480852678,
+                "p90": 1.333533363339079,
+                "p99": 3.041485796741542,
+                "max": 8.677513558615901
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 1.1681073323766,
+                "p90": 3.004331244419456,
+                "p99": 6.010764277440961,
+                "max": 8.345155637151658
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 1.6683906703596207,
+                "p90": 4.4997750724895536,
+                "p99": 7.252886701038797,
+                "max": 12.356192289068035
+              },
+              "fraction_abs_return_gt_10bps": 0.005104934770277935
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 3.1695721077651395,
+                "p90": 12.187181755953791,
+                "p99": 15.355496441912752,
+                "max": 18.860051739963968
+              },
+              "fraction_abs_return_gt_10bps": 0.18381010346926355
+            }
+          }
+        },
+        {
+          "market": "ETH-USD",
+          "book_rows": 1013553,
+          "book_messages": 41055,
+          "book_snapshots": 2,
+          "trade_update_rows": 18046,
+          "trade_volume_base": 8528.35789506,
+          "trade_side_counts": [
+            {
+              "side": "BUY",
+              "len": 8085
+            },
+            {
+              "side": "SELL",
+              "len": 9961
+            }
+          ],
+          "book_zero_quantity_rows": 371156,
+          "duration_seconds": 3586.349811,
+          "occupied_100ms_buckets": 20025,
+          "possible_100ms_buckets": 35865,
+          "occupied_100ms_fraction": 0.5583437892095358,
+          "one_second_quote_samples": 3586,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.101872,
+            "p90": 0.350263,
+            "p99": 0.9276920000000001,
+            "max": 1.294328
+          },
+          "spread_bps": {
+            "p50": 0.04291081202368796,
+            "p90": 0.08581867802545287,
+            "p99": 0.687763527361527,
+            "max": 3.6598099051674757
+          },
+          "mid_price_median": 2330.645,
+          "quote_change_fraction_1s": 0.5285913528591353,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.04289185462358347,
+                "p90": 1.158900246717387,
+                "p99": 3.766954019021184,
+                "max": 14.823662862641918
+              },
+              "fraction_abs_return_gt_10bps": 0.0005578800557880056
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.8153579099356989,
+                "p90": 3.095143419058477,
+                "p99": 7.908557470513081,
+                "max": 27.780222799964616
+              },
+              "fraction_abs_return_gt_10bps": 0.006702038536721586
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 2.6189814065769035,
+                "p90": 6.73881924726949,
+                "p99": 14.765449503608387,
+                "max": 41.76036666802552
+              },
+              "fraction_abs_return_gt_10bps": 0.028683914510686165
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 3.6036422550939085,
+                "p90": 9.3530727836294,
+                "p99": 25.36234214877059,
+                "max": 37.70258706659702
+              },
+              "fraction_abs_return_gt_10bps": 0.08281338627339761
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 6.658747768781836,
+                "p90": 20.015862638060877,
+                "p99": 36.1351688347943,
+                "max": 43.67121021537912
+              },
+              "fraction_abs_return_gt_10bps": 0.3295800365185636
+            }
+          }
+        }
+      ],
+      "all_recorded_channels_sequence": {
+        "messages": 122106,
+        "jumps_gt_one": 2,
+        "decreases": 0,
+        "note": "Sequence interleaves channels in these samples. Holes may reflect omitted subscription messages; these counts alone do not establish lost market data."
+      }
+    },
+    {
+      "path": "/mnt/data/repos/gaelreinaudi/crypto/2026-05-15T12-00-00.parquet",
+      "bytes": 15080934,
+      "rows": 2242094,
+      "schema": {
+        "channel": "Enum(categories=['l2_data', 'market_trades', 'subscriptions'])",
+        "timestamp": "Datetime(time_unit='us', time_zone=None)",
+        "sequence_num": "Int64",
+        "type": "Enum(categories=['snapshot', 'update'])",
+        "product_id": "Categorical",
+        "price": "Float64",
+        "size": "Float64",
+        "side": "Enum(categories=['bid', 'offer', 'BUY', 'SELL'])"
+      },
+      "null_counts": {
+        "channel": 0,
+        "timestamp": 0,
+        "sequence_num": 0,
+        "type": 0,
+        "product_id": 0,
+        "price": 0,
+        "size": 0,
+        "side": 0
+      },
+      "timestamp_sorted": true,
+      "first_timestamp": "2026-05-15 12:00:01.622125",
+      "last_timestamp": "2026-05-15 12:59:59.981665",
+      "negative_size_rows": 0,
+      "nonpositive_price_rows": 0,
+      "channels": [
+        {
+          "channel": "l2_data",
+          "messages": 162399,
+          "seq_jumps_gt_one": 12549,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.017392499999999998,
+            "p90": 0.047676,
+            "p99": 0.08409692999999997,
+            "max": 0.66853
+          }
+        },
+        {
+          "channel": "market_trades",
+          "messages": 12885,
+          "seq_jumps_gt_one": 12548,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.18226949999999997,
+            "p90": 0.6987833,
+            "p99": 1.30032399,
+            "max": 4.00063
+          }
+        }
+      ],
+      "markets": [
+        {
+          "market": "BTC-USD",
+          "book_rows": 1171767,
+          "book_messages": 69756,
+          "book_snapshots": 1,
+          "trade_update_rows": 16541,
+          "trade_volume_base": 203.45868061,
+          "trade_side_counts": [
+            {
+              "side": "BUY",
+              "len": 7225
+            },
+            {
+              "side": "SELL",
+              "len": 9316
+            }
+          ],
+          "book_zero_quantity_rows": 531612,
+          "duration_seconds": 3598.35954,
+          "occupied_100ms_buckets": 31627,
+          "possible_100ms_buckets": 35984,
+          "occupied_100ms_fraction": 0.878918408181414,
+          "one_second_quote_samples": 3598,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.018102,
+            "p90": 0.3625772000000001,
+            "p99": 0.66755168,
+            "max": 1.00702
+          },
+          "spread_bps": {
+            "p50": 0.001243121808199429,
+            "p90": 0.0012443792161992925,
+            "p99": 0.2374529969707037,
+            "max": 2.54772957812281
+          },
+          "mid_price_median": 80452.17499999999,
+          "quote_change_fraction_1s": 0.40144564915207115,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 0.6640017025265624,
+                "p99": 1.9526771877654585,
+                "max": 7.872331556362244
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.4052578350433045,
+                "p90": 1.735706574941709,
+                "p99": 4.385682320820993,
+                "max": 8.311564432790242
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 1.6994629659705662,
+                "p90": 4.927606741978674,
+                "p99": 10.507622341252576,
+                "max": 15.89691046217423
+              },
+              "fraction_abs_return_gt_10bps": 0.014573991031390135
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 2.6761751642356835,
+                "p90": 7.832802403653916,
+                "p99": 13.870065265959642,
+                "max": 20.67276134258389
+              },
+              "fraction_abs_return_gt_10bps": 0.046636517806670434
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 5.8178069987024905,
+                "p90": 14.555436209488848,
+                "p99": 22.022166659445805,
+                "max": 26.322472500667217
+              },
+              "fraction_abs_return_gt_10bps": 0.2644026682838084
+            }
+          }
+        },
+        {
+          "market": "ETH-BTC",
+          "book_rows": 156665,
+          "book_messages": 30590,
+          "book_snapshots": 1,
+          "trade_update_rows": 98,
+          "trade_volume_base": 27.71897698,
+          "trade_side_counts": [
+            {
+              "side": "SELL",
+              "len": 55
+            },
+            {
+              "side": "BUY",
+              "len": 43
+            }
+          ],
+          "book_zero_quantity_rows": 22719,
+          "duration_seconds": 3595.928182,
+          "occupied_100ms_buckets": 21748,
+          "possible_100ms_buckets": 35961,
+          "occupied_100ms_fraction": 0.6047662745752342,
+          "one_second_quote_samples": 3596,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.085964,
+            "p90": 0.3364935,
+            "p99": 1.1389852500000086,
+            "max": 3.334672
+          },
+          "spread_bps": {
+            "p50": 1.070415499616267,
+            "p90": 1.4280614066394364,
+            "p99": 2.139571372535938,
+            "max": 2.853881278537954
+          },
+          "mid_price_median": 0.028027,
+          "quote_change_fraction_1s": 0.5421418636995827,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.17828489926818847,
+                "p90": 0.5346411845201793,
+                "p99": 1.0707662267284812,
+                "max": 3.9240167662546455
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.3567351598166013,
+                "p90": 1.0704345964440698,
+                "p99": 2.3183526334812354,
+                "max": 3.9244367541335645
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 1.0693566929209641,
+                "p90": 2.8540594538539743,
+                "p99": 5.350741077639887,
+                "max": 8.20827608357999
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 1.4281888779810181,
+                "p90": 4.634457322093,
+                "p99": 6.895095173260495,
+                "max": 9.456180416784754
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 3.389890988241273,
+                "p90": 10.69852449601283,
+                "p99": 15.88760858193894,
+                "max": 18.032816154545106
+              },
+              "fraction_abs_return_gt_10bps": 0.12105582524271845
+            }
+          }
+        },
+        {
+          "market": "ETH-USD",
+          "book_rows": 882569,
+          "book_messages": 62053,
+          "book_snapshots": 1,
+          "trade_update_rows": 14154,
+          "trade_volume_base": 3646.5694410200003,
+          "trade_side_counts": [
+            {
+              "side": "BUY",
+              "len": 7424
+            },
+            {
+              "side": "SELL",
+              "len": 6730
+            }
+          ],
+          "book_zero_quantity_rows": 274948,
+          "duration_seconds": 3597.292864,
+          "occupied_100ms_buckets": 29915,
+          "possible_100ms_buckets": 35974,
+          "occupied_100ms_fraction": 0.8315728025796408,
+          "one_second_quote_samples": 3597,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.028964,
+            "p90": 0.1790608,
+            "p99": 0.32995255999999995,
+            "max": 0.509889
+          },
+          "spread_bps": {
+            "p50": 0.04436409613594726,
+            "p90": 0.08865924182209332,
+            "p99": 0.39935212776732026,
+            "max": 2.9241579754187064
+          },
+          "mid_price_median": 2254.295,
+          "quote_change_fraction_1s": 0.575083426028921,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.04438427908981524,
+                "p90": 0.8436757651153481,
+                "p99": 2.215748306030829,
+                "max": 6.950700936130261
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.6214254167563604,
+                "p90": 1.99666070101856,
+                "p99": 4.174118383843175,
+                "max": 7.804964578319584
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 1.9072584490453792,
+                "p90": 5.104135532315368,
+                "p99": 9.783413293745202,
+                "max": 13.240311656566028
+              },
+              "fraction_abs_return_gt_10bps": 0.00897112419400056
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 2.882515327221613,
+                "p90": 7.8979101124694315,
+                "p99": 13.904541338335408,
+                "max": 18.023084604433805
+              },
+              "fraction_abs_return_gt_10bps": 0.04749787955894826
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 7.1907479043642475,
+                "p90": 17.723622941801185,
+                "p99": 27.56804101868883,
+                "max": 33.42499683727462
+              },
+              "fraction_abs_return_gt_10bps": 0.3172581134364574
+            }
+          }
+        }
+      ],
+      "all_recorded_channels_sequence": {
+        "messages": 175284,
+        "jumps_gt_one": 2,
+        "decreases": 0,
+        "note": "Sequence interleaves channels in these samples. Holes may reflect omitted subscription messages; these counts alone do not establish lost market data."
+      }
+    },
+    {
+      "path": "/mnt/data/repos/gaelreinaudi/crypto/2026-06-15T12-00-10.parquet",
+      "bytes": 18351104,
+      "rows": 2707567,
+      "schema": {
+        "channel": "Enum(categories=['l2_data', 'market_trades', 'subscriptions'])",
+        "timestamp": "Datetime(time_unit='us', time_zone=None)",
+        "sequence_num": "Int64",
+        "type": "Enum(categories=['snapshot', 'update'])",
+        "product_id": "Categorical",
+        "price": "Float64",
+        "size": "Float64",
+        "side": "Enum(categories=['bid', 'offer', 'BUY', 'SELL'])"
+      },
+      "null_counts": {
+        "channel": 0,
+        "timestamp": 0,
+        "sequence_num": 0,
+        "type": 0,
+        "product_id": 0,
+        "price": 0,
+        "size": 0,
+        "side": 0
+      },
+      "timestamp_sorted": true,
+      "first_timestamp": "2026-06-15 12:00:11.551472",
+      "last_timestamp": "2026-06-15 12:59:59.971637",
+      "negative_size_rows": 0,
+      "nonpositive_price_rows": 0,
+      "channels": [
+        {
+          "channel": "l2_data",
+          "messages": 174450,
+          "seq_jumps_gt_one": 16563,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.008088,
+            "p90": 0.047682200000000015,
+            "p99": 0.053712,
+            "max": 0.325159
+          }
+        },
+        {
+          "channel": "market_trades",
+          "messages": 17559,
+          "seq_jumps_gt_one": 16562,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.131402,
+            "p90": 0.4684631,
+            "p99": 0.90017773,
+            "max": 1.698989
+          }
+        }
+      ],
+      "markets": [
+        {
+          "market": "BTC-USD",
+          "book_rows": 1343052,
+          "book_messages": 69228,
+          "book_snapshots": 1,
+          "trade_update_rows": 29767,
+          "trade_volume_base": 494.24255307,
+          "trade_side_counts": [
+            {
+              "side": "SELL",
+              "len": 13232
+            },
+            {
+              "side": "BUY",
+              "len": 16535
+            }
+          ],
+          "book_zero_quantity_rows": 602350,
+          "duration_seconds": 3588.203309,
+          "occupied_100ms_buckets": 34573,
+          "possible_100ms_buckets": 35883,
+          "occupied_100ms_fraction": 0.9634924616113479,
+          "one_second_quote_samples": 3577,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.035553,
+            "p90": 0.07683760000000003,
+            "p99": 0.24196867999999724,
+            "max": 0.526066
+          },
+          "spread_bps": {
+            "p50": 0.001509661948911879,
+            "p90": 0.001511952474912938,
+            "p99": 0.2596439195012614,
+            "max": 2.811633909627634
+          },
+          "mid_price_median": 66243.125,
+          "quote_change_fraction_1s": 0.491331096196868,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.0,
+                "p90": 0.9765449867532583,
+                "p99": 2.688641324354313,
+                "max": 10.731709600678707
+              },
+              "fraction_abs_return_gt_10bps": 0.0002796420581655481
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.6749622598678506,
+                "p90": 2.402584286047005,
+                "p99": 6.104580011032023,
+                "max": 12.626292198480993
+              },
+              "fraction_abs_return_gt_10bps": 0.0022396416573348264
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 2.19800557304084,
+                "p90": 6.518447712744457,
+                "p99": 12.399561548601667,
+                "max": 15.062267979595312
+              },
+              "fraction_abs_return_gt_10bps": 0.028474767409078096
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 2.9555132027359043,
+                "p90": 9.40567381360724,
+                "p99": 16.902765504665023,
+                "max": 21.831236005123156
+              },
+              "fraction_abs_return_gt_10bps": 0.08700597099800966
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 7.824606304692727,
+                "p90": 16.001398468461936,
+                "p99": 23.67883697490728,
+                "max": 26.5500250760331
+              },
+              "fraction_abs_return_gt_10bps": 0.3698504729935917
+            }
+          }
+        },
+        {
+          "market": "ETH-BTC",
+          "book_rows": 266750,
+          "book_messages": 41867,
+          "book_snapshots": 1,
+          "trade_update_rows": 480,
+          "trade_volume_base": 169.79833476000005,
+          "trade_side_counts": [
+            {
+              "side": "BUY",
+              "len": 189
+            },
+            {
+              "side": "SELL",
+              "len": 291
+            }
+          ],
+          "book_zero_quantity_rows": 29456,
+          "duration_seconds": 3588.236851,
+          "occupied_100ms_buckets": 27174,
+          "possible_100ms_buckets": 35883,
+          "occupied_100ms_fraction": 0.7572945405902517,
+          "one_second_quote_samples": 3588,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.028608,
+            "p90": 0.22833130000000001,
+            "p99": 0.7283421600000001,
+            "max": 2.228462
+          },
+          "spread_bps": {
+            "p50": 1.1269933695221663,
+            "p90": 1.8733959047571258,
+            "p99": 2.9969573409647823,
+            "max": 4.871011859040082
+          },
+          "mid_price_median": 0.026644,
+          "quote_change_fraction_1s": 0.7011430164482855,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.18779342722874404,
+                "p90": 0.7514700633115545,
+                "p99": 2.0632495886933278,
+                "max": 8.615361564250357
+              },
+              "fraction_abs_return_gt_10bps": 0.0
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.5635284394012174,
+                "p90": 1.877405425703138,
+                "p99": 4.873789563814901,
+                "max": 11.80991658074726
+              },
+              "fraction_abs_return_gt_10bps": 0.0008372871895060006
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 1.8754161120709822,
+                "p90": 5.074234166508873,
+                "p99": 10.503060464978352,
+                "max": 14.619335007683976
+              },
+              "fraction_abs_return_gt_10bps": 0.012366498032602586
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 2.6252871797838306,
+                "p90": 6.557536764845828,
+                "p99": 16.88783159608409,
+                "max": 23.2510172320044
+              },
+              "fraction_abs_return_gt_10bps": 0.030045351473922902
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 5.433153484846187,
+                "p90": 14.654767496478094,
+                "p99": 30.46904355751387,
+                "max": 35.855750999642666
+              },
+              "fraction_abs_return_gt_10bps": 0.2305352798053528
+            }
+          }
+        },
+        {
+          "market": "ETH-USD",
+          "book_rows": 1049584,
+          "book_messages": 63355,
+          "book_snapshots": 1,
+          "trade_update_rows": 17634,
+          "trade_volume_base": 7869.088304420001,
+          "trade_side_counts": [
+            {
+              "side": "SELL",
+              "len": 11970
+            },
+            {
+              "side": "BUY",
+              "len": 5664
+            }
+          ],
+          "book_zero_quantity_rows": 324345,
+          "duration_seconds": 3588.260108,
+          "occupied_100ms_buckets": 33554,
+          "possible_100ms_buckets": 35883,
+          "occupied_100ms_fraction": 0.9350946130479614,
+          "one_second_quote_samples": 3588,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.037615499999999996,
+            "p90": 0.0897926,
+            "p99": 0.18970878,
+            "max": 0.389369
+          },
+          "spread_bps": {
+            "p50": 0.05670236080274046,
+            "p90": 0.11338806953705806,
+            "p99": 0.6198424919331456,
+            "max": 2.4819774591322927
+          },
+          "mid_price_median": 1764.065,
+          "quote_change_fraction_1s": 0.6685252299972122,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.22686990428955056,
+                "p90": 1.3974206991922438,
+                "p99": 3.695438396776104,
+                "max": 14.504572891123058
+              },
+              "fraction_abs_return_gt_10bps": 0.001115137998327293
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 1.013910285837527,
+                "p90": 3.3458909793653295,
+                "p99": 7.296518755443098,
+                "max": 17.721540419504134
+              },
+              "fraction_abs_return_gt_10bps": 0.0027909572983533353
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 3.118214341010228,
+                "p90": 8.162131676723305,
+                "p99": 14.505296893867554,
+                "max": 20.74987914750359
+              },
+              "fraction_abs_return_gt_10bps": 0.055368184373243395
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 4.111992661134378,
+                "p90": 11.115616590624544,
+                "p99": 19.892624469958275,
+                "max": 25.602175052039655
+              },
+              "fraction_abs_return_gt_10bps": 0.13095238095238096
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 7.781639204731405,
+                "p90": 23.55381416679238,
+                "p99": 44.606213939874536,
+                "max": 50.81050121497288
+              },
+              "fraction_abs_return_gt_10bps": 0.39172749391727496
+            }
+          }
+        }
+      ],
+      "all_recorded_channels_sequence": {
+        "messages": 192009,
+        "jumps_gt_one": 2,
+        "decreases": 0,
+        "note": "Sequence interleaves channels in these samples. Holes may reflect omitted subscription messages; these counts alone do not establish lost market data."
+      }
+    },
+    {
+      "path": "/mnt/data/repos/gaelreinaudi/crypto/2026-07-02T12-00-10.parquet",
+      "bytes": 25278942,
+      "rows": 4111814,
+      "schema": {
+        "channel": "Enum(categories=['l2_data', 'market_trades', 'subscriptions'])",
+        "timestamp": "Datetime(time_unit='us', time_zone=None)",
+        "sequence_num": "Int64",
+        "type": "Enum(categories=['snapshot', 'update'])",
+        "product_id": "Categorical",
+        "price": "Float64",
+        "size": "Float64",
+        "side": "Enum(categories=['bid', 'offer', 'BUY', 'SELL'])"
+      },
+      "null_counts": {
+        "channel": 0,
+        "timestamp": 0,
+        "sequence_num": 0,
+        "type": 0,
+        "product_id": 0,
+        "price": 0,
+        "size": 0,
+        "side": 0
+      },
+      "timestamp_sorted": true,
+      "first_timestamp": "2026-07-02 12:00:11.023236",
+      "last_timestamp": "2026-07-02 12:59:59.984402",
+      "negative_size_rows": 0,
+      "nonpositive_price_rows": 0,
+      "channels": [
+        {
+          "channel": "l2_data",
+          "messages": 177798,
+          "seq_jumps_gt_one": 19804,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.016219,
+            "p90": 0.042206,
+            "p99": 0.057698040000000006,
+            "max": 0.21637
+          }
+        },
+        {
+          "channel": "market_trades",
+          "messages": 20279,
+          "seq_jumps_gt_one": 19802,
+          "seq_decreases": 0,
+          "message_gap_seconds": {
+            "p50": 0.1018705,
+            "p90": 0.3997885,
+            "p99": 0.79978653,
+            "max": 1.304562
+          }
+        }
+      ],
+      "markets": [
+        {
+          "market": "BTC-USD",
+          "book_rows": 1906214,
+          "book_messages": 68293,
+          "book_snapshots": 1,
+          "trade_update_rows": 42161,
+          "trade_volume_base": 700.98932449,
+          "trade_side_counts": [
+            {
+              "side": "BUY",
+              "len": 23587
+            },
+            {
+              "side": "SELL",
+              "len": 18574
+            }
+          ],
+          "book_zero_quantity_rows": 896236,
+          "duration_seconds": 3588.542506,
+          "occupied_100ms_buckets": 34251,
+          "possible_100ms_buckets": 35886,
+          "occupied_100ms_fraction": 0.9544390570138773,
+          "one_second_quote_samples": 3588,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.0214,
+            "p90": 0.07061360000000001,
+            "p99": 0.2605653800000008,
+            "max": 0.474938
+          },
+          "spread_bps": {
+            "p50": 0.001632629337859399,
+            "p90": 0.011915167941120117,
+            "p99": 0.4604717650340618,
+            "max": 3.103177727295451
+          },
+          "mid_price_median": 61266.774999999994,
+          "quote_change_fraction_1s": 0.6899916364650125,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.24817787234732158,
+                "p90": 1.5978279285593375,
+                "p99": 4.270262119810186,
+                "max": 15.13976558619401
+              },
+              "fraction_abs_return_gt_10bps": 0.0013939224979091162
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.9979727247499959,
+                "p90": 3.717130775219514,
+                "p99": 10.106595300609182,
+                "max": 28.614944159484068
+              },
+              "fraction_abs_return_gt_10bps": 0.010605637733742674
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 2.9118519344750737,
+                "p90": 8.923047900941675,
+                "p99": 25.378139762159712,
+                "max": 38.56530054998086
+              },
+              "fraction_abs_return_gt_10bps": 0.08291174817313098
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 3.9839493399351777,
+                "p90": 13.634722738091966,
+                "p99": 30.95896893138727,
+                "max": 44.41676362714419
+              },
+              "fraction_abs_return_gt_10bps": 0.17006802721088435
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 7.930271440985681,
+                "p90": 25.192497303521804,
+                "p99": 50.69138381726481,
+                "max": 58.137000422597836
+              },
+              "fraction_abs_return_gt_10bps": 0.42700729927007297
+            }
+          }
+        },
+        {
+          "market": "ETH-BTC",
+          "book_rows": 280887,
+          "book_messages": 46002,
+          "book_snapshots": 1,
+          "trade_update_rows": 281,
+          "trade_volume_base": 68.69311413999999,
+          "trade_side_counts": [
+            {
+              "side": "BUY",
+              "len": 139
+            },
+            {
+              "side": "SELL",
+              "len": 142
+            }
+          ],
+          "book_zero_quantity_rows": 62829,
+          "duration_seconds": 3588.836461,
+          "occupied_100ms_buckets": 28318,
+          "possible_100ms_buckets": 35890,
+          "occupied_100ms_fraction": 0.789022011702424,
+          "one_second_quote_samples": 3588,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.004902500000000001,
+            "p90": 0.1048949,
+            "p99": 0.49725349000000074,
+            "max": 1.254655
+          },
+          "spread_bps": {
+            "p50": 1.4863810337782064,
+            "p90": 3.3253893476689367,
+            "p99": 8.132993882468455,
+            "max": 16.61773666426629
+          },
+          "mid_price_median": 0.0270145,
+          "quote_change_fraction_1s": 0.8229718427655422,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.36992509016897657,
+                "p90": 1.112227458754722,
+                "p99": 2.9660201360822027,
+                "max": 10.522040906741914
+              },
+              "fraction_abs_return_gt_10bps": 0.00027878449958182325
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 0.9243169297901144,
+                "p90": 2.594024114730642,
+                "p99": 7.562988645546562,
+                "max": 14.560869965900558
+              },
+              "fraction_abs_return_gt_10bps": 0.004186435947530003
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 2.5876329682728016,
+                "p90": 6.849569451256255,
+                "p99": 17.07556196152563,
+                "max": 28.38448069302446
+              },
+              "fraction_abs_return_gt_10bps": 0.04525014052838673
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 3.882023458846029,
+                "p90": 10.36030204962213,
+                "p99": 25.03138570678475,
+                "max": 33.10156076632875
+              },
+              "fraction_abs_return_gt_10bps": 0.10600907029478458
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 8.554479016589234,
+                "p90": 23.301401782742648,
+                "p99": 37.84331072214199,
+                "max": 45.910465373552036
+              },
+              "fraction_abs_return_gt_10bps": 0.42670316301703165
+            }
+          }
+        },
+        {
+          "market": "ETH-USD",
+          "book_rows": 1855872,
+          "book_messages": 63503,
+          "book_snapshots": 1,
+          "trade_update_rows": 26009,
+          "trade_volume_base": 8577.6890667,
+          "trade_side_counts": [
+            {
+              "side": "SELL",
+              "len": 16837
+            },
+            {
+              "side": "BUY",
+              "len": 9172
+            }
+          ],
+          "book_zero_quantity_rows": 597400,
+          "duration_seconds": 3588.961166,
+          "occupied_100ms_buckets": 32954,
+          "possible_100ms_buckets": 35890,
+          "occupied_100ms_fraction": 0.9181944831429367,
+          "one_second_quote_samples": 3588,
+          "crossed_or_locked_quote_samples": 0,
+          "book_age_seconds": {
+            "p50": 0.013895999999999999,
+            "p90": 0.1331469,
+            "p99": 0.2534235300000001,
+            "max": 1.065174
+          },
+          "spread_bps": {
+            "p50": 0.06053360371670822,
+            "p90": 0.2406832999339133,
+            "p99": 0.8422001483404584,
+            "max": 4.150263601887795
+          },
+          "mid_price_median": 1654.33,
+          "quote_change_fraction_1s": 0.8307778087538333,
+          "forward_returns": {
+            "1": {
+              "abs_return_bps": {
+                "p50": 0.4854707701107408,
+                "p90": 2.105981469959106,
+                "p99": 5.996619330368512,
+                "max": 22.76139571196878
+              },
+              "fraction_abs_return_gt_10bps": 0.002509060496236409
+            },
+            "5": {
+              "abs_return_bps": {
+                "p50": 1.4141505318110426,
+                "p90": 5.154899906165689,
+                "p99": 13.812777175079779,
+                "max": 30.240115544322155
+              },
+              "fraction_abs_return_gt_10bps": 0.025118615685180017
+            },
+            "30": {
+              "abs_return_bps": {
+                "p50": 4.091271917296413,
+                "p90": 12.668752347107405,
+                "p99": 29.750119377731878,
+                "max": 49.744494188939115
+              },
+              "fraction_abs_return_gt_10bps": 0.1523327712197864
+            },
+            "60": {
+              "abs_return_bps": {
+                "p50": 6.116634433017687,
+                "p90": 19.782364640032917,
+                "p99": 44.287260439185616,
+                "max": 72.82396845301741
+              },
+              "fraction_abs_return_gt_10bps": 0.28061224489795916
+            },
+            "300": {
+              "abs_return_bps": {
+                "p50": 14.02924125383398,
+                "p90": 41.06529741284715,
+                "p99": 66.07664289742982,
+                "max": 90.87524179413276
+              },
+              "fraction_abs_return_gt_10bps": 0.6487226277372263
+            }
+          }
+        }
+      ],
+      "all_recorded_channels_sequence": {
+        "messages": 198077,
+        "jumps_gt_one": 2,
+        "decreases": 0,
+        "note": "Sequence interleaves channels in these samples. Holes may reflect omitted subscription messages; these counts alone do not establish lost market data."
+      }
+    }
+  ],
+  "total_sampled_rows": 15093184,
+  "method": {
+    "quote_sampling": "At each whole-second boundary, use book messages strictly earlier than that boundary. Reset on snapshots, replace level size on updates, remove zero sizes. Carry quote across idle seconds and retain book message age. No crossed-book repair.",
+    "coverage": "All filenames inventoried; content audited in six chosen hours across all three markets. Not a full corpus integrity scan.",
+    "quote_columns": [
+      "timestamp_us",
+      "bid",
+      "ask",
+      "bid_size",
+      "ask_size",
+      "book_age_seconds"
+    ],
+    "source_code_commit": "4a26077ad4c8377438788e60f59a8c5812648bdb",
+    "working_tree": "Existing local modifications inspected; left unchanged.",
+    "audit_date": "2026-11-18"
+  }
+}

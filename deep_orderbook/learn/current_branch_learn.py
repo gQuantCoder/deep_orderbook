@@ -109,6 +109,8 @@ async def train_and_predict(
     replay_config: ReplayConfig,
     shaper_config: ShaperConfig,
     test_config: ReplayConfig,
+    *,
+    variant: BatchVariantConfig | None = None,
     variant_name: str = "regonly_l1_2d_h8",
     test_top_fraction: float = 0.35,
     test_n_samples_per_file: int | None = None,
@@ -131,8 +133,13 @@ async def train_and_predict(
     * Normalisation: ``mu``/``sd`` computed from a warmup pass over training data (not test).
     * Calibration: rolling deque of recent train predictions seeds
       ``build_train_calibrated_strategy_grid`` — same routes as exp63/exp64.
+
+    Batch variants:
+      Use ``variant_name`` to pick a registered experiment, **or** pass ``variant`` as a
+      fork from ``extend_batch_variant("…", …)``. When ``variant`` is set, ``variant_name``
+      is only used for logs (defaults stay sensible).
     """
-    cfg: BatchVariantConfig = get_batch_variant(variant_name)
+    cfg: BatchVariantConfig = variant if variant is not None else get_batch_variant(variant_name)
 
     if replay_config.markets[:1] != test_config.markets[:1]:
         logger.warning(
@@ -157,7 +164,11 @@ async def train_and_predict(
     # TrainConfig is the user-facing knob for SGD step size; BatchVariantConfig.lr is ignored here
     # so notebooks and scripts that pass TrainConfig(learning_rate=...) get predictable behavior.
     opt = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=cfg.weight_decay)
-    logger.info(f"[train] AdamW lr={config.learning_rate} weight_decay={cfg.weight_decay} variant={variant_name}")
+    fork_note = " forked BatchVariantConfig" if variant is not None else ""
+    logger.info(
+        f"[train] AdamW lr={config.learning_rate} weight_decay={cfg.weight_decay} "
+        f"variant_name={variant_name!r}{fork_note}"
+    )
     bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(cfg.pos_weight, device=device))
 
     windows: queue.Queue = queue.Queue(maxsize=config.data_queue_size)

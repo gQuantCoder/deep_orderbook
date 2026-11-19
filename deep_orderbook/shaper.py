@@ -349,6 +349,7 @@ async def iter_shapes_t2l(
 # =============================================================================
 # CLI for testing: this makes local testing and debugging fast and easy
 # =============================================================================
+
 if __name__ == "__main__":  # pragma: no cover
 
     async def main() -> None:
@@ -357,19 +358,29 @@ if __name__ == "__main__":  # pragma: no cover
         import matplotlib.pyplot as plt
 
         replay_config = ReplayConfig(
-            markets=["ETH-USD"],
-            date_regexp="2024-08-06*",
-            every="1s",
-            # max_samples=300,
+            markets=["BTC-USD"],
+            date_regexp="2026-05-05T2*",
+            data_dir=Path("../crypto"),
+            every="1000ms",
+            randomize=True,
         )
         shaper_config = ShaperConfig(
-            window_stride=1,
-            rolling_window_size=1024,
             only_full_arrays=True,
+            view_bips=5,
+            num_side_lvl=8,
+            look_ahead=32,
+            look_ahead_side_bips=5,
+            look_ahead_side_width=4,
+            rolling_window_size=1024 * 8,
+            window_stride=8,
         )
         out_path = Path("tests/shaper_main_preview.png")
 
-        books_array, *_ = await iter_shapes_t2l(replay_config, shaper_config).__anext__()
+        books_array = None
+        async for books_array, time_levels, prices_array in iter_shapes_t2l(replay_config, shaper_config):
+            break
+
+        assert books_array is not None
 
         fig, ax = plt.subplots(figsize=(10, 5))
         books_show = books_array[:, :, 0].T

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import struct
-from typing import Literal
 import zlib
+from pathlib import Path
+from typing import Any, Literal
 
 import numpy as np
 
@@ -26,6 +26,9 @@ class BatchVariantConfig(BaseConfig):
     hypothesis: str = ""
 
 
+# Registry entries are plain dicts for historical sweep scripts; optional "extends": "<parent_key>"
+# merges the parent row first (multi-level chains allowed). At import, everything is validated
+# into ``BatchVariantConfig`` — runtime forks use ``extend_batch_variant`` (Pydantic ``.but()``).
 _RAW_VARIANTS: dict[str, dict] = {
     "baseline_evt025_pw8_lr2e3_h96_e6": {
         "hidden_dim": 96,
@@ -497,16 +500,8 @@ _RAW_VARIANTS: dict[str, dict] = {
         "hypothesis": "2D L1 loss promotes sparsity; compare vs Huber for event localization.",
     },
     "regonly_l1_2d_h16": {
+        "extends": "regonly_l1_2d_h8",
         "hidden_dim": 16,
-        "epochs": 4,
-        "lr": 2e-3,
-        "weight_decay": 1e-4,
-        "reg_loss": "l1",
-        "event_loss_weight": 0.0,
-        "pos_weight": 1.0,
-        "trade_threshold": 0.10,
-        "prediction_cap_quantile": 99.5,
-        "active_reg_weight": 1.0,
         "hypothesis": "Single-factor capacity bump from regonly_l1_2d_h8: keep L1 sparse geometry, raise 2D hidden width 8→16.",
     },
     "precision_evt_2d_h8": {
@@ -524,8 +519,34 @@ _RAW_VARIANTS: dict[str, dict] = {
     },
 }
 
+
+def _resolve_variant_raw(
+    name: str,
+    raw_by_name: dict[str, dict[str, Any]],
+    chain: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Flatten optional ``extends`` parent chain into one dict (validated next)."""
+    if name in chain:
+        raise ValueError(f"circular variant extends: {' -> '.join(chain + (name,))}")
+    data = raw_by_name[name]
+    if "extends" not in data:
+        return dict(data)
+    parent_name = data["extends"]
+    if parent_name not in raw_by_name:
+        raise KeyError(f"variant {name!r} extends unknown parent {parent_name!r}")
+    parent_flat = _resolve_variant_raw(parent_name, raw_by_name, chain + (name,))
+    delta = {k: v for k, v in data.items() if k != "extends"}
+    return {**parent_flat, **delta}
+
+
+def _flatten_raw_variant_registry(raw: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {name: _resolve_variant_raw(name, raw) for name in raw}
+
+
+_MERGED_RAW_VARIANTS: dict[str, dict[str, Any]] = _flatten_raw_variant_registry(_RAW_VARIANTS)
+
 BATCH_VARIANTS: dict[str, BatchVariantConfig] = {
-    name: BatchVariantConfig.model_validate(data) for name, data in _RAW_VARIANTS.items()
+    name: BatchVariantConfig.model_validate(data) for name, data in _MERGED_RAW_VARIANTS.items()
 }
 
 
@@ -533,6 +554,18 @@ def get_batch_variant(name: str) -> BatchVariantConfig:
     if name not in BATCH_VARIANTS:
         raise KeyError(f"Unknown batch variant: {name!r}. Available: {sorted(BATCH_VARIANTS)}")
     return BATCH_VARIANTS[name]
+
+
+def extend_batch_variant(base: str | BatchVariantConfig, **overrides: Any) -> BatchVariantConfig:
+    """Fork a registered variant or tweak an existing config — Pydantic-validated, not dict hacks.
+
+    Examples:
+
+        extend_batch_variant("regonly_l1_2d_h8", hidden_dim=16, n_blocks=12)
+        extend_batch_variant(get_batch_variant("regonly_l1_2d_h8"), event_loss_weight=0.05)
+    """
+    cfg = get_batch_variant(base) if isinstance(base, str) else base
+    return cfg.but(**overrides)
 
 
 def list_batch_variant_names() -> list[str]:
@@ -568,12 +601,8 @@ EVENT_FILTERED_SUITE_25: list[str] = [
 ]
 
 
-
 def list_event_filtered_suite_25() -> list[str]:
     return list(EVENT_FILTERED_SUITE_25)
-
-
-
 
 
 def _read_chunks(raw: bytes) -> tuple[int, int, int, int, bytes]:
@@ -723,5 +752,8 @@ def rank_variant_results(results: list[dict]) -> list[dict]:
         enriched = dict(item)
         enriched["route_score"] = score_holdout_route(item)
         ranked.append(enriched)
-    ranked.sort(key=lambda x: (x["route_score"], x.get("metrics", {}).get("precision", 0.0), x.get("metrics", {}).get("f1", 0.0)), reverse=True)
+    ranked.sort(
+        key=lambda x: (x["route_score"], x.get("metrics", {}).get("precision", 0.0), x.get("metrics", {}).get("f1", 0.0)),
+        reverse=True,
+    )
     return ranked

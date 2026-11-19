@@ -1,14 +1,11 @@
 import asyncio
-import torch.nn as nn
-import torch.optim as optim
-from typing import AsyncGenerator, Tuple
-import numpy as np
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
+import numpy as np
+from torch import nn, optim
+
 from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
-from deep_orderbook.learn.tcn import TCNModel as OriginalTCNModel
-from deep_orderbook.learn.attention_tcn import AttentionTCN
-from deep_orderbook.learn.pure_attention import TimeSeriesTransformer
 from deep_orderbook.learn.trainer import Trainer
 from deep_orderbook.utils import logger
 
@@ -20,9 +17,7 @@ async def train_and_predict(
     shaper_config: ShaperConfig,
     test_config: ReplayConfig,
     resume_from_checkpoint: bool = True,
-) -> AsyncGenerator[
-    Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float], None
-]:
+) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float], None]:
     from deep_orderbook.shaper import iter_shapes_t2l
 
     logger.warning(f"[Training] Starting training with {replay_config.num_files()=}")
@@ -32,13 +27,17 @@ async def train_and_predict(
     output_channels = 1  # ValueDimension of time_levels
 
     # Initialize model with reduced memory footprint
-    # model = OriginalTCNModel(
-    #     input_channels,
-    #     output_channels,
-    #     num_levels=config.num_levels,
-    #     num_side_lvl=shaper_config.num_side_lvl,
-    #     target_side_width=shaper_config.look_ahead_side_width,
-    # )
+    from deep_orderbook.learn.tcn import TCNModel as OriginalTCNModel
+
+    model = OriginalTCNModel(
+        input_channels,
+        output_channels,
+        num_levels=config.num_levels,
+        num_side_lvl=shaper_config.num_side_lvl,
+        target_side_width=shaper_config.look_ahead_side_width,
+    )
+
+    # from deep_orderbook.learn.pure_attention import TimeSeriesTransformer
     # model = TimeSeriesTransformer(
     #     input_channels=input_channels,
     #     output_channels=output_channels,
@@ -50,13 +49,16 @@ async def train_and_predict(
     #     dropout=0.1,
     #     max_seq_len=shaper_config.rolling_window_size  # Match the rolling window size
     # )
-    model = AttentionTCN(
-        input_channels=input_channels,
-        output_channels=output_channels,
-        num_levels=config.num_levels,
-        num_side_lvl=shaper_config.num_side_lvl,
-        target_side_width=shaper_config.look_ahead_side_width,
-    )
+
+    # from deep_orderbook.learn.attention_tcn import AttentionTCN
+    #
+    # model = AttentionTCN(
+    #     input_channels=input_channels,
+    #     output_channels=output_channels,
+    #     num_levels=config.num_levels,
+    #     num_side_lvl=shaper_config.num_side_lvl,
+    #     target_side_width=shaper_config.look_ahead_side_width,
+    # )
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.MSELoss()
 
@@ -87,25 +89,19 @@ async def train_and_predict(
     while epoch_left > 0:
         epoch_left -= 1
         trainer.current_epoch = config.epochs - epoch_left
-        logger.info(
-            f"[Training] Starting epoch {trainer.current_epoch}/{config.epochs}"
-        )
+        logger.info(f"[Training] Starting epoch {trainer.current_epoch}/{config.epochs}")
         epoch_samples = 0
 
         async for books_array, time_levels, pxar in iter_shapes_t2l(
             replay_config=test_config,
             shaper_config=shaper_config.but(only_full_arrays=False),
         ):
-            logger.debug(
-                f"[Training] Queue size before train step: {trainer.data_queue.qsize()}"
-            )
+            logger.debug(f"[Training] Queue size before train step: {trainer.data_queue.qsize()}")
             try:
                 # Get training loss, test loss and prediction using the test data
                 result = trainer.train_step(test_data=(books_array, time_levels, pxar))
                 if result is None:
-                    logger.warning(
-                        "[Training] train_step returned None, queue might be empty"
-                    )
+                    logger.warning("[Training] train_step returned None, queue might be empty")
                     continue
                 train_loss, test_loss, prediction = result
                 if test_loss is None:
@@ -123,9 +119,7 @@ async def train_and_predict(
                 logger.error(f"[Training] Exception in training: {e}")
                 continue
 
-        logger.info(
-            f"[Training] Completed epoch {trainer.current_epoch} with {epoch_samples} samples"
-        )
+        logger.info(f"[Training] Completed epoch {trainer.current_epoch} with {epoch_samples} samples")
         # Save checkpoint at the end of each epoch
         trainer.save_checkpoint()
 
@@ -133,16 +127,17 @@ async def train_and_predict(
 # Main function to run the script
 async def main() -> None:
     from tqdm.auto import tqdm
+
+    from deep_orderbook.strategy import Strategy
     from deep_orderbook.utils import make_handlers
     from deep_orderbook.visu import Visualizer
-    from deep_orderbook.strategy import Strategy
 
     # logger.setLevel('DEBUG')
     # change logging file to train.log
-    line_handler, noline_handler = make_handlers('train.log')
+    line_handler, noline_handler = make_handlers("train.log")
     logger.addHandler(line_handler)
     # clear the log file
-    with open('train.log', 'w') as f:
+    with open("train.log", "w") as f:
         f.truncate()
 
     train_config = TrainConfig(
@@ -162,8 +157,8 @@ async def main() -> None:
     )
     replay_config = ReplayConfig(
         markets=["ETH-USD"],  # , "BTC-USD", "ETH-BTC"],
-        date_regexp='2024-11-06T0*',  # 1-06T',
-        data_dir='/media/photoDS216/crypto/',
+        date_regexp="2024-11-06T0*",  # 1-06T',
+        data_dir="/media/photoDS216/crypto/",
         every="1000ms",
     )
     shaper_config = ShaperConfig(
@@ -177,7 +172,7 @@ async def main() -> None:
         window_stride=8,
         # use_cache=False,
     )
-    test_config = replay_config.but(date_regexp='2024-11-06T0*')
+    test_config = replay_config.but(date_regexp="2024-11-06T0*")
 
     # Define your asynchronous function to update the figure
     bar = tqdm(
@@ -192,18 +187,16 @@ async def main() -> None:
     vis = Visualizer()
     strategy = Strategy(threshold=0.3)
     async for books_arr, t2l, pxar, pred_t2l, train_loss, test_loss in bar:
-        bar.set_description(f'{train_loss=:.4f}, {test_loss=:.4f}')
+        bar.set_description(f"{train_loss=:.4f}, {test_loss=:.4f}")
         print(f"t2l shape: {t2l.shape}")
         print(f"pred_t2l shape: {pred_t2l.shape}")
         print(f"pxar shape: {pxar.shape}")
         # Transpose prediction if needed to match t2l shape
         if pred_t2l.shape != t2l.shape:
-            print(f"error")
+            print("error")
             break
         gt_pnl, pos, gt_up_prox, gt_down_prox = strategy.compute_pnl(pxar, t2l)
-        pred_pnl, pred_pos, pred_up_prox, pred_down_prox = strategy.compute_pnl(
-            pxar, pred_t2l
-        )
+        pred_pnl, pred_pos, pred_up_prox, pred_down_prox = strategy.compute_pnl(pxar, pred_t2l)
 
         vis.add_loss(train_loss, test_loss)
         vis.update(
@@ -222,6 +215,6 @@ async def main() -> None:
         )
 
 
-if __name__ == '__main__':
-    logger.setLevel('INFO')
+if __name__ == "__main__":
+    logger.setLevel("INFO")
     asyncio.run(main())

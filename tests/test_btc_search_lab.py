@@ -1,11 +1,12 @@
-from pathlib import Path
 import struct
 import zlib
+from pathlib import Path
 
 import numpy as np
 
 from deep_orderbook.btc_search_lab import (
     compute_png_quality_stats,
+    extend_batch_variant,
     get_batch_variant,
     list_batch_variant_names,
     list_event_filtered_suite_25,
@@ -66,7 +67,19 @@ def test_exp24_smallnet_variants_are_registered_with_expected_training_knobs() -
     assert get_batch_variant("regonly_huber_thr010_h32").weight_decay == 1e-3
 
 
-def test_l1_2d_h16_variant_is_registered_as_single_factor_capacity_bump() -> None:
+def test_extend_batch_variant_forks_via_pydantic_but() -> None:
+    base = get_batch_variant("regonly_l1_2d_h8")
+    fork = extend_batch_variant(base, hidden_dim=32, n_blocks=6)
+    assert fork.hidden_dim == 32
+    assert fork.n_blocks == 6
+    assert fork.reg_loss == base.reg_loss
+    assert fork.event_loss_weight == base.event_loss_weight
+
+    fork2 = extend_batch_variant("regonly_l1_2d_h8", hidden_dim=24)
+    assert fork2.hidden_dim == 24
+
+
+def test_registry_extends_parent_into_same_fields_as_before() -> None:
     cfg = get_batch_variant("regonly_l1_2d_h16")
 
     assert cfg.hidden_dim == 16
@@ -104,28 +117,25 @@ def test_compute_png_quality_stats_flags_flat_black_image(tmp_path: Path) -> Non
 
 
 def test_rank_variant_results_prefers_balanced_metrics() -> None:
-    ranked = rank_variant_results(
-        [
-            {
-                "variant_name": "pretty_but_bad",
-                "metrics": {"f1": 0.20, "precision": 0.08, "rmse": 1.2},
-                "zero_baseline": {"rmse": 0.5},
-                "image_quality": {"usable": True, "gray_std": 0.22},
-                "pnl": {"fixed_slice": {"prediction_final": 12.0}},
-            },
-            {
-                "variant_name": "balanced",
-                "metrics": {"f1": 0.18, "precision": 0.12, "rmse": 0.55},
-                "zero_baseline": {"rmse": 0.5},
-                "image_quality": {"usable": True, "gray_std": 0.18},
-                "pnl": {"fixed_slice": {"prediction_final": 4.0}},
-            },
-        ]
-    )
+    ranked = rank_variant_results([
+        {
+            "variant_name": "pretty_but_bad",
+            "metrics": {"f1": 0.20, "precision": 0.08, "rmse": 1.2},
+            "zero_baseline": {"rmse": 0.5},
+            "image_quality": {"usable": True, "gray_std": 0.22},
+            "pnl": {"fixed_slice": {"prediction_final": 12.0}},
+        },
+        {
+            "variant_name": "balanced",
+            "metrics": {"f1": 0.18, "precision": 0.12, "rmse": 0.55},
+            "zero_baseline": {"rmse": 0.5},
+            "image_quality": {"usable": True, "gray_std": 0.18},
+            "pnl": {"fixed_slice": {"prediction_final": 4.0}},
+        },
+    ])
 
     assert ranked[0]["variant_name"] == "balanced"
     assert ranked[0]["route_score"] > ranked[1]["route_score"]
-
 
 
 def test_score_window_eventfulness_prefers_large_move_and_activity() -> None:
@@ -148,17 +158,18 @@ def test_score_window_eventfulness_prefers_large_move_and_activity() -> None:
     assert moving["features"]["abs_return_bps"] > 100.0
 
 
-
 def test_select_eventful_window_indices_returns_top_scored_windows() -> None:
     prices = []
     books = []
     for idx in range(5):
         base = 100.0 + idx
         move = idx * 0.4
-        prices.append(np.column_stack([
-            np.linspace(base, base + move, 16),
-            np.linspace(base + 0.2, base + 0.2 + move, 16),
-        ]))
+        prices.append(
+            np.column_stack([
+                np.linspace(base, base + move, 16),
+                np.linspace(base + 0.2, base + 0.2 + move, 16),
+            ])
+        )
         arr = np.zeros((16, 8, 3), dtype=np.float32)
         arr[:, :, 0] = np.linspace(-idx, idx, 16, dtype=np.float32)[:, None]
         books.append(arr)
