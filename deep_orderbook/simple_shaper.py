@@ -1,5 +1,4 @@
 import asyncio
-import random
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
@@ -111,9 +110,7 @@ async def iter_shapes_t2l(
                 books_array, time_levels, prices_array = cached_data
                 total_length = len(books_array)
 
-                end_indexes = list(range(1, 1 + total_length, shaper_config.window_stride))
-                if replay_config.randomize:
-                    end_indexes = random.sample(end_indexes, len(end_indexes))
+                end_indexes = range(1, 1 + total_length, shaper_config.window_stride)
                 for end_idx in end_indexes:
                     start_idx = max(0, end_idx - shaper_config.rolling_window_size)
                     window_books = books_array[start_idx:end_idx]

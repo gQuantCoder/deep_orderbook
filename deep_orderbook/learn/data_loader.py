@@ -1,16 +1,30 @@
-# data_loader.py
-
-import threading
 import asyncio
 import queue
+import random
+import threading
+from contextlib import aclosing
+from pathlib import Path
+
+import numpy as np
+
 from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.utils import logger
-import numpy as np
+
+
 class DataLoaderWorker:
-    """Data loading worker that reads data from files and puts it into a queue."""
+    """Streams windows from every matched file.
+
+    ``replay_config.randomize`` is honored inside ``iter_shapes_t2l`` (reservoir shuffle).
+    Each cycle walks the full ``replay_config.file_list()`` — shuffled per cycle when
+    ``randomize`` is True — so cross-file diversity emerges quickly.
+    """
 
     def __init__(
-        self, *, data_queue: queue.Queue, replay_config: ReplayConfig, shaper_config: ShaperConfig
+        self,
+        *,
+        data_queue: queue.Queue,
+        replay_config: ReplayConfig,
+        shaper_config: ShaperConfig,
     ) -> None:
         self.data_queue = data_queue
         self.replay_config = replay_config
@@ -19,63 +33,60 @@ class DataLoaderWorker:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-        """Starts the data loading worker in a separate thread."""
         self._thread = threading.Thread(target=self.run)
         self._thread.start()
 
-    def stop(self) -> None:
-        """Stop the worker thread gracefully."""
+    def stop(self, timeout: float = 5.0) -> None:
         self._running = False
         if self._thread is not None:
-            self._thread.join(timeout=1.0)
+            self._thread.join(timeout=timeout)
+            if self._thread.is_alive():
+                logger.warning(f"[DataLoader] worker thread did not exit within {timeout}s")
 
-    def run(self) -> None:
-        """Worker function to load data and put it into the queue."""
+    async def _stream_file(self, file_path: Path) -> None:
         from deep_orderbook.shaper import iter_shapes_t2l
 
-        while self._running:
-            try:
-                rand_replay_config = self.replay_config.but_random_file()
-                logger.debug(f"Loading data from {rand_replay_config.file_list()}")
+        cfg = self.replay_config.but(one_path=file_path)
+        stream = iter_shapes_t2l(replay_config=cfg, shaper_config=self.shaper_config)
+        async with aclosing(stream) as guarded:
+            async for item in guarded:
+                while self._running:
+                    try:
+                        self.data_queue.put(item, timeout=0.5)
+                        break
+                    except queue.Full:
+                        continue
+                if not self._running:
+                    return
+                await asyncio.sleep(0)
 
-                # Create a new event loop for this thread
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+    def _file_order(self) -> list:
+        files = list(self.replay_config.file_list())
+        if self.replay_config.randomize:
+            random.shuffle(files)
+        return files
 
-                async def load_data() -> None:
-                    # probability_of_skipping = 0.9
-                    async for books_array, time_levels, pxar in iter_shapes_t2l(
-                        replay_config=rand_replay_config,
-                        shaper_config=self.shaper_config,
-                    ):
-                        # if random.random() < probability_of_skipping:
-                        #     # logger.warning(f"[DataLoader] Skipping data {probability_of_skipping=}")
-                        #     continue
-                        
-                        try:
-                            self.data_queue.put(
-                                (books_array, time_levels, pxar),
-                                # block=False,
-                            )
-                        except queue.Full:
-                            # logger.warning(f"[DataLoader] Queue is full, skipping data {probability_of_skipping=}")
-                            # probability_of_skipping *= 1.1
-                            pass
-                        # Optional sleep interval
-                        await asyncio.sleep(0.001)
-                    logger.debug("load_data completed")
-
-                loop.run_until_complete(load_data())
-                logger.debug(
-                    f"Data loading completed for {rand_replay_config.file_list()}"
-                )
-            except Exception as e:
-                logger.error(f"Exception in data loading worker: {e}")
-                print(
-                    f"Exception in data loading worker: {e}\n with :{rand_replay_config.file_list()}"
-                )
-            finally:
-                loop.close()
+    def run(self) -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            while self._running:
+                files = self._file_order()
+                if not files:
+                    logger.error(
+                        f"[DataLoader] no files match {self.replay_config.date_regexp!r} "
+                        f"in {self.replay_config.data_dir} — worker exiting"
+                    )
+                    return
+                for f in files:
+                    if not self._running:
+                        break
+                    try:
+                        loop.run_until_complete(self._stream_file(f))
+                    except Exception as e:  # noqa: BLE001 — worker must survive bad files
+                        logger.error(f"[DataLoader] {f}: {e}")
+        finally:
+            loop.close()
 
 
 async def main() -> None:

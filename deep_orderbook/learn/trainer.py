@@ -1,17 +1,17 @@
 # trainer.py
 
-import torch
-import numpy as np
-from queue import Queue
-from deep_orderbook.learn.data_loader import DataLoaderWorker
-from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
-from deep_orderbook.utils import logger
 import time
 from pathlib import Path
-import torch.nn as nn
-import torch.optim as optim
+from queue import Queue
 
+import numpy as np
+import torch
+from torch import nn, optim
+
+from deep_orderbook.config import ReplayConfig, ShaperConfig, TrainConfig
+from deep_orderbook.learn.data_loader import DataLoaderWorker
 from deep_orderbook.learn.losses import StructuredT2LLoss
+from deep_orderbook.utils import logger
 
 
 class Trainer:
@@ -29,8 +29,8 @@ class Trainer:
         self.optimizer = optimizer
         self.criterion = self._build_criterion(criterion, train_config)
         # Device configuration
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f'{self.device=}')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"{self.device=}")
         self.model = model.to(self.device)
         self.data_queue: Queue = Queue(maxsize=train_config.data_queue_size)
         self.train_config = train_config
@@ -49,10 +49,7 @@ class Trainer:
     def should_save_checkpoint(self) -> bool:
         """Determines if we should save a checkpoint based on batch count and time elapsed."""
         # Always allow checkpoints at end of epoch
-        if (
-            self.batches_since_last_checkpoint
-            >= self.train_config.save_checkpoint_batches
-        ):
+        if self.batches_since_last_checkpoint >= self.train_config.save_checkpoint_batches:
             minutes_elapsed = (time.time() - self.last_checkpoint_time) / 60
             if minutes_elapsed >= self.train_config.save_checkpoint_mins:
                 return True
@@ -79,9 +76,7 @@ class Trainer:
         if train_config.criterion == "MSELoss":
             return nn.MSELoss()
 
-        logger.warning(
-            f"Unknown criterion '{train_config.criterion}', using provided criterion instance"
-        )
+        logger.warning(f"Unknown criterion '{train_config.criterion}', using provided criterion instance")
         return criterion
 
     def start_data_loading(self) -> None:
@@ -99,20 +94,19 @@ class Trainer:
     def save_checkpoint(self) -> None:
         """Saves a checkpoint of the current training state."""
         checkpoint = {
-            'epoch': self.current_epoch,
-            'total_batches_processed': self.total_batches_processed,
-            'total_samples_processed': self.total_samples_processed,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'train_config': self.train_config.model_dump(),
-            'replay_config': self.replay_config.model_dump(),
-            'shaper_config': self.shaper_config.model_dump(),
+            "epoch": self.current_epoch,
+            "total_batches_processed": self.total_batches_processed,
+            "total_samples_processed": self.total_samples_processed,
+            "model_state_dict": self.model.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "train_config": self.train_config.model_dump(),
+            "replay_config": self.replay_config.model_dump(),
+            "shaper_config": self.shaper_config.model_dump(),
         }
 
         # Create checkpoint filename with timestamp
         checkpoint_path = (
-            self.train_config.checkpoint_dir
-            / f'checkpoint_e{self.current_epoch}_b{self.total_batches_processed}.pt'
+            self.train_config.checkpoint_dir / f"checkpoint_e{self.current_epoch}_b{self.total_batches_processed}.pt"
         )
         torch.save(checkpoint, checkpoint_path)
         logger.warning(f"=== Saved checkpoint to {checkpoint_path} ===")
@@ -125,11 +119,9 @@ class Trainer:
         self.batches_since_last_checkpoint = 0
 
         # Remove old checkpoints if we have more than keep_last_n_checkpoints
-        checkpoints = sorted(self.train_config.checkpoint_dir.glob('checkpoint_*.pt'))
+        checkpoints = sorted(self.train_config.checkpoint_dir.glob("checkpoint_*.pt"))
         if len(checkpoints) > self.train_config.keep_last_n_checkpoints:
-            for checkpoint_to_remove in checkpoints[
-                : -self.train_config.keep_last_n_checkpoints
-            ]:
+            for checkpoint_to_remove in checkpoints[: -self.train_config.keep_last_n_checkpoints]:
                 checkpoint_to_remove.unlink()
                 logger.warning(f"Removed old checkpoint: {checkpoint_to_remove}")
 
@@ -143,6 +135,7 @@ class Trainer:
         try:
             # Add PosixPath to safe globals for PyTorch 2.6+ compatibility
             from pathlib import PosixPath
+
             import torch.serialization
 
             torch.serialization.add_safe_globals([PosixPath])
@@ -155,9 +148,7 @@ class Trainer:
                     logger.warning(
                         "Attempting to load checkpoint with weights_only=False (only do this for trusted checkpoints)"
                     )
-                    checkpoint = torch.load(
-                        checkpoint_path, map_location=self.device, weights_only=False
-                    )
+                    checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
                 else:
                     raise e
 
@@ -165,29 +156,27 @@ class Trainer:
             logger.info("Checkpoint contains:")
             logger.info(f"  - Epoch: {checkpoint['epoch']}")
             logger.info(f"  - Total samples: {checkpoint['total_samples_processed']}")
-            logger.info(
-                f"  - Total batches: {checkpoint.get('total_batches_processed', 0)}"
-            )
+            logger.info(f"  - Total batches: {checkpoint.get('total_batches_processed', 0)}")
 
             # Restore model and optimizer states
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.model.load_state_dict(checkpoint["model_state_dict"])
+            self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
             # Restore training state
-            self.current_epoch = checkpoint['epoch']
-            self.total_batches_processed = checkpoint.get('total_batches_processed', 0)
-            self.total_samples_processed = checkpoint['total_samples_processed']
+            self.current_epoch = checkpoint["epoch"]
+            self.total_batches_processed = checkpoint.get("total_batches_processed", 0)
+            self.total_samples_processed = checkpoint["total_samples_processed"]
             self.batches_since_last_checkpoint = 0
             self.last_checkpoint_time = time.time()
 
-            logger.warning(f"=== Successfully resumed training from:")
+            logger.warning("=== Successfully resumed training from:")
             logger.warning(f"    - Epoch {self.current_epoch}")
             logger.warning(f"    - Samples processed: {self.total_samples_processed}")
             logger.warning(f"    - Batches processed: {self.total_batches_processed}")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to load checkpoint: {str(e)}")
+            logger.error(f"Failed to load checkpoint: {e!s}")
             logger.error("Starting training from scratch")
             return False
 
@@ -198,12 +187,10 @@ class Trainer:
             Path to the latest checkpoint or None if no checkpoints exist
         """
         if not self.train_config.checkpoint_dir.exists():
-            logger.warning(
-                f"Checkpoint directory {self.train_config.checkpoint_dir} does not exist"
-            )
+            logger.warning(f"Checkpoint directory {self.train_config.checkpoint_dir} does not exist")
             return None
 
-        checkpoints = sorted(self.train_config.checkpoint_dir.glob('checkpoint_*.pt'))
+        checkpoints = sorted(self.train_config.checkpoint_dir.glob("checkpoint_*.pt"))
         if not checkpoints:
             logger.warning("No checkpoints found")
             return None
@@ -251,39 +238,27 @@ class Trainer:
                     logger.warning(f"Data queue is empty. Waiting for data... {e}")
                     return None
                 else:
-                    logger.warning(
-                        "Not enough samples for a full batch. Proceeding with available samples."
-                    )
+                    logger.warning("Not enough samples for a full batch. Proceeding with available samples.")
                     break
 
-        time_steps_used = (
-            self.shaper_config.rolling_window_size - self.shaper_config.look_ahead
-        )
+        time_steps_used = self.shaper_config.rolling_window_size - self.shaper_config.look_ahead
 
         # Training step
         self.model.train()
 
         # Stack samples into batches
         books_tensor = torch.stack(
-            [
-                torch.tensor(books_array[:time_steps_used], dtype=torch.float32)
-                for books_array in books_array_list
-            ],
+            [torch.tensor(books_array[:time_steps_used], dtype=torch.float32) for books_array in books_array_list],
             dim=0,
         ).to(self.device)
 
         time_levels_tensor = torch.stack(
-            [
-                torch.tensor(time_levels[:time_steps_used], dtype=torch.float32)
-                for time_levels in time_levels_list
-            ],
+            [torch.tensor(time_levels[:time_steps_used], dtype=torch.float32) for time_levels in time_levels_list],
             dim=0,
         ).to(self.device)
 
         # Rearrange dimensions to match PyTorch convention
-        books_tensor = books_tensor.permute(
-            0, 3, 1, 2
-        )  # (BatchSize, Channels, Time, Price)
+        books_tensor = books_tensor.permute(0, 3, 1, 2)  # (BatchSize, Channels, Time, Price)
         time_levels_tensor = time_levels_tensor.permute(0, 3, 1, 2)
 
         # Forward pass
@@ -310,9 +285,7 @@ class Trainer:
         prediction = None
         if test_data is not None:
             test_books_array, test_time_levels, _ = test_data
-            test_loss, prediction = self.compute_test_loss(
-                test_books_array, test_time_levels
-            )
+            test_loss, prediction = self.compute_test_loss(test_books_array, test_time_levels)
 
         # Return losses and prediction
         return (
@@ -321,9 +294,7 @@ class Trainer:
             reshaped_output.cpu().numpy() if prediction is None else prediction,
         )
 
-    def compute_test_loss(
-        self, books_array: np.ndarray, time_levels: np.ndarray
-    ) -> tuple[float, np.ndarray]:
+    def compute_test_loss(self, books_array: np.ndarray, time_levels: np.ndarray) -> tuple[float, np.ndarray]:
         """Computes test loss and predictions on test data.
 
         Args:
@@ -352,9 +323,7 @@ class Trainer:
             test_loss = self.criterion(test_prediction, test_target).item()
 
             # Get prediction in numpy format and reshape to match time_levels
-            prediction = (
-                test_prediction[0].permute(1, 2, 0).cpu().numpy()
-            )  # Reshape to (time, features, channels)
+            prediction = test_prediction[0].permute(1, 2, 0).cpu().numpy()  # Reshape to (time, features, channels)
 
         return test_loss, prediction
 
@@ -366,19 +335,17 @@ class Trainer:
         """
         self.model.eval()
         with torch.no_grad():
-            books_tensor = torch.tensor(
-                books_array, dtype=torch.float32, device=self.device
-            )
+            books_tensor = torch.tensor(books_array, dtype=torch.float32, device=self.device)
             books_tensor = books_tensor.permute(2, 0, 1).unsqueeze(0)
             output = self.model(books_tensor)
             predictions = output.detach().cpu().numpy()
         return predictions.squeeze()
 
-    def save_model(self, filepath: str = 'trained_model.pth') -> None:
+    def save_model(self, filepath: str = "trained_model.pth") -> None:
         """Saves the trained model."""
         torch.save(self.model.state_dict(), filepath)
 
-    def load_model(self, filepath: str = 'trained_model.pth') -> None:
+    def load_model(self, filepath: str = "trained_model.pth") -> None:
         """Loads a trained model."""
         self.model.load_state_dict(torch.load(filepath, map_location=self.device))
         self.model.to(self.device)
@@ -393,10 +360,10 @@ class Trainer:
 
 def main() -> None:
     # Example usage of Trainer
-    from deep_orderbook.learn.tcn import TCNModel
-    import torch.optim as optim
-    import torch.nn as nn
+    from torch import nn, optim
+
     from deep_orderbook.config import ReplayConfig, ShaperConfig
+    from deep_orderbook.learn.tcn import TCNModel
 
     # Model parameters
     input_channels = 3
@@ -408,12 +375,8 @@ def main() -> None:
     criterion = nn.MSELoss()
 
     # Configurations
-    train_config = TrainConfig(
-        num_workers=8, batch_size=32, data_queue_size=512, num_levels=8
-    )
-    replay_config = ReplayConfig(
-        date_regexp='2024-0', data_dir='/media/photoDS216/crypto/'
-    )
+    train_config = TrainConfig(num_workers=8, batch_size=32, data_queue_size=512, num_levels=8)
+    replay_config = ReplayConfig(date_regexp="2024-0", data_dir="/media/photoDS216/crypto/")
     shaper_config = ShaperConfig(only_full_arrays=True)
 
     # Create the trainer
@@ -448,10 +411,10 @@ def main() -> None:
             time.sleep(1)
 
     # Save the trained model
-    trainer.save_model('trained_model.pth')
+    trainer.save_model("trained_model.pth")
     print("Model training completed and saved.")
 
 
-if __name__ == '__main__':
-    logger.setLevel('INFO')
+if __name__ == "__main__":
+    logger.setLevel("INFO")
     main()

@@ -35,10 +35,13 @@ SHAPER = DEFAULT_SHAPER_CONFIG_2026.but(
 )
 
 # Streaming hyperparameters (kept here, not in TrainConfig, to limit blast radius).
-TRAIN_TOP_FRACTION = 0.35  # online eventfulness filter — match old filter_event_windows
-SHUFFLE_BUFFER_SIZE = 2048  # ~ 2 minutes at 16 batches/s × 16/batch
-WARMUP_WINDOWS = 256  # for normalization stats; large enough to be representative
-EVENT_SCORE_WINDOW = 512  # rolling percentile horizon for the online filter
+TRAIN_TOP_FRACTION = 0.35       # online eventfulness filter — match old filter_event_windows
+SHUFFLE_BUFFER_SIZE = 2048      # cross-file mixing deque in the training loop
+WARMUP_WINDOWS = 256            # for normalization stats; large enough to be representative
+EVENT_SCORE_WINDOW = 512        # rolling percentile horizon for the online filter
+
+
+TEST_SET_TARGET_WINDOWS = 256  # post-filter; matches the original ~1-file test set size
 
 
 async def _load_test_reference(
@@ -46,40 +49,59 @@ async def _load_test_reference(
     shaper_config: ShaperConfig,
     test_top_fraction: float,
     test_n_samples_per_file: int | None,
+    max_files: int = 8,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, Path]:
-    """Stream ONE test file via ``iter_shapes_t2l``, honoring every field of ``test_config``.
+    """Build a pinned test set from up to ``max_files`` matched files.
 
-    Iterates ``test_config.file_list()`` in order, picking the first file that yields windows
-    after the eventfulness filter. The replay config is forwarded as-is (only ``one_path`` is
-    bound per file) so ``markets``, ``every``, ``freq``, ``max_samples``, ``skip_until_time``
-    and ``randomize`` all reach the replayer / feed exactly as the caller specified.
+    Walks ``test_config.file_list()`` (shuffled iff ``test_config.randomize``), draws roughly
+    ``TEST_SET_TARGET_WINDOWS / max_files`` windows from each file so the *total* size stays
+    bounded, then applies the eventfulness filter once on the combined set. The set is held
+    on GPU for the entire training run so test-loss is comparable across yields.
     """
-    test_files = test_config.file_list()
+    test_files = list(test_config.file_list())
     if not test_files:
         raise RuntimeError(f"No test files resolved from {test_config}")
+    if test_config.randomize:
+        random.shuffle(test_files)
+    test_files = test_files[:max_files]
 
+    # Cap pre-filter windows so post-filter total ≈ TEST_SET_TARGET_WINDOWS.
+    # We need MORE raw windows than the target because the eventfulness filter rejects (1 - top_fraction).
+    fraction = max(0.01, test_top_fraction)
+    per_file_cap = test_n_samples_per_file or max(32, int(TEST_SET_TARGET_WINDOWS / fraction / max_files))
+
+    xw: list[np.ndarray] = []
+    yw: list[np.ndarray] = []
+    pxw: list[np.ndarray] = []
+    files_used: list[Path] = []
     for test_file in test_files:
+        n_before = len(xw)
         per_file_config = test_config.but(one_path=test_file)
-        xw: list[np.ndarray] = []
-        yw: list[np.ndarray] = []
-        pxw: list[np.ndarray] = []
         async for books, level_prox, pxar in iter_shapes_t2l(per_file_config, shaper_config, live=False):
             xw.append(books.astype(np.float32))
             yw.append(level_prox[:, :, 0].astype(np.float32))
             pxw.append(pxar.astype(np.float32))
-            if test_n_samples_per_file is not None and len(xw) >= test_n_samples_per_file:
+            if len(xw) - n_before >= per_file_cap:
                 break
-        if not xw:
-            continue
-        xw, yw, pxw, _ = filter_event_windows(xw, yw, pxw, top_fraction=test_top_fraction, min_count=32)
-        if xw:
-            return (
-                np.stack(xw).astype(np.float32),
-                np.stack(yw).astype(np.float32),
-                np.stack(pxw).astype(np.float32),
-                test_file,
-            )
-    raise RuntimeError(f"No test windows produced from any of {len(test_files)} test files")
+        if len(xw) > n_before:
+            files_used.append(test_file)
+
+    if not xw:
+        raise RuntimeError(f"No test windows produced from any of {len(test_files)} test files")
+    xw, yw, pxw, _ = filter_event_windows(xw, yw, pxw, top_fraction=test_top_fraction, min_count=32)
+    if not xw:
+        raise RuntimeError(f"Eventfulness filter rejected all windows from {len(files_used)} files")
+
+    logger.info(
+        f"[test] pinned {len(xw)} windows from {len(files_used)} files "
+        f"(per_file_cap={per_file_cap}, randomize={test_config.randomize}, first={files_used[0].name})"
+    )
+    return (
+        np.stack(xw).astype(np.float32),
+        np.stack(yw).astype(np.float32),
+        np.stack(pxw).astype(np.float32),
+        files_used[0],
+    )
 
 
 async def train_and_predict(
@@ -97,9 +119,10 @@ async def train_and_predict(
     """Stream training data via ``DataLoaderWorker`` — preserves the four pieces that make SGD work.
 
     Architecture:
-    * Test set: ONE filtered file pinned on GPU as the reference for test-loss + display.
-    * Training stream: workers pick a random file each iteration AND set ``randomize=True`` so
-      windows within a file arrive in shuffled order (cache-hit path only — see iter_shapes_t2l).
+    * Test set: up to ``max_files`` filtered files pinned on GPU; ``move_test_window`` cycles
+      through ALL pinned windows so the visualization spans many files.
+    * Training stream: each worker walks every matched file per cycle (file order shuffled when
+      ``randomize``); ``iter_shapes_t2l`` applies reservoir shuffle when ``replay_config.randomize``.
     * Online eventfulness filter: each incoming window is scored; only top ``TRAIN_TOP_FRACTION``
       relative to a rolling percentile reach the buffer. Same effect as exp16's
       ``filter_event_windows`` but stream-friendly.
@@ -131,20 +154,17 @@ async def train_and_predict(
         num_levels=cfg.n_blocks,
     ).to(device)
     assert_min_receptive_field_2d(model)
-    opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    # TrainConfig is the user-facing knob for SGD step size; BatchVariantConfig.lr is ignored here
+    # so notebooks and scripts that pass TrainConfig(learning_rate=...) get predictable behavior.
+    opt = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=cfg.weight_decay)
+    logger.info(f"[train] AdamW lr={config.learning_rate} weight_decay={cfg.weight_decay} variant={variant_name}")
     bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(cfg.pos_weight, device=device))
 
-    # SGD's IID assumption demands shuffled batches. iter_shapes_t2l yields chronologically
-    # within a file unless replay_config.randomize=True. We force it on for training (the user's
-    # original randomize stays in effect for the test stream where determinism is the priority).
-    train_stream_config = replay_config.but(randomize=True)
-    if not replay_config.randomize:
-        logger.info("[config] forcing replay_config.randomize=True on the training stream (SGD IID)")
     windows: queue.Queue = queue.Queue(maxsize=config.data_queue_size)
     workers = [
         DataLoaderWorker(
             data_queue=windows,
-            replay_config=train_stream_config,
+            replay_config=replay_config,
             shaper_config=shaper_config,
         )
         for _ in range(max(1, config.num_workers))

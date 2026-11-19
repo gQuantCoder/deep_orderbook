@@ -1,6 +1,7 @@
 import asyncio
 import random
 from collections.abc import AsyncGenerator
+from contextlib import aclosing
 
 import numpy as np
 import polars as pl
@@ -11,6 +12,32 @@ from deep_orderbook.config import ReplayConfig, ShaperConfig
 from deep_orderbook.feeds.coinbase_feed import CoinbaseFeed
 from deep_orderbook.replayer import ParquetReplayer
 from deep_orderbook.utils import logger
+
+# Streaming shuffle buffer when ``ReplayConfig.randomize`` is True — applies to cache-hit,
+# cache-miss, and live paths uniformly (single source of truth for config-driven shuffle).
+DEFAULT_STREAM_SHUFFLE_SIZE = 512
+
+
+async def reservoir_shuffle[T](source: AsyncGenerator[T, None], *, size: int) -> AsyncGenerator[T, None]:
+    """Reservoir-style streaming shuffle.
+
+    Maintains a buffer of ``size`` items; for each incoming item, emits a random
+    item from the buffer and replaces it — identical to TF Dataset's .shuffle().
+    Works on any async generator, cache-hit or live path, zero extra state.
+    Propagates ``aclose()`` to the source so caller cleanup is a one-liner.
+    """
+    async with aclosing(source) as src:
+        buf: list[T] = []
+        async for item in src:
+            if len(buf) < size:
+                buf.append(item)
+            else:
+                i = random.randrange(size)
+                yield buf[i]
+                buf[i] = item
+        random.shuffle(buf)
+        for item in buf:
+            yield item
 
 
 class ArrayShaper:
@@ -229,6 +256,10 @@ async def iter_shapes_t2l(
 ) -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray], None]:
     """Yield (books, time_to_level, prices) frames from market data, using cache when available.
 
+    ``replay_config.randomize`` controls whether windows are emitted in **chronological order**
+    (False) or via a streaming reservoir shuffle (True). Same mechanism on cache-hit and live
+    paths — callers never need to duplicate shuffle logic.
+
     Each yielded tuple is one rolling-window frame of length ``rolling_window_size``.
     Consumers may break early — the cache is saved via finally, not via exhaustion.
 
@@ -237,75 +268,82 @@ async def iter_shapes_t2l(
     - On cache miss the file is replayed, shaped, and the raw arrays are saved on exit
       (whether the consumer consumed all frames or broke early).
     """
-    cache = ArrayCache()
-    shaper = ArrayShaper(config=shaper_config)
-    collector = cache.create_collector()
-    replayer = ParquetReplayer(config=replay_config) if not live else None
 
-    current_file_idx = 0
-    if shaper_config.use_cache and not live and replayer is not None:
-        for current_file_idx, current_file in enumerate(replay_config.file_list()):
-            cached_data = cache.load_cached(current_file, shaper_config, replay_config)
-            if cached_data is None:
-                logger.info(f"Cache miss for {current_file}, switching to live processing")
-                break
+    async def _raw() -> AsyncGenerator[tuple[np.ndarray, np.ndarray, np.ndarray], None]:
+        cache = ArrayCache()
+        shaper = ArrayShaper(config=shaper_config)
+        collector = cache.create_collector()
+        replayer = ParquetReplayer(config=replay_config) if not live else None
 
-            logger.debug(f"Using cached data from {current_file}")
-            books_array, time_levels, prices_array = cached_data
-            end_indexes = list(range(1, 1 + len(books_array), shaper_config.window_stride))
-            if replay_config.randomize:
-                end_indexes = random.sample(end_indexes, len(end_indexes))
-            for end_idx in end_indexes:
-                start = max(0, end_idx - shaper_config.rolling_window_size)
-                frame = books_array[start:end_idx], time_levels[start:end_idx], prices_array[start:end_idx]
-                if not shaper_config.only_full_arrays or (
-                    not np.isnan(frame[2]).any() and len(frame[0]) >= shaper_config.rolling_window_size
-                ):
-                    yield frame
-        else:
-            return  # all files were cache hits
+        current_file_idx = 0
+        if shaper_config.use_cache and not live and replayer is not None:
+            for current_file_idx, current_file in enumerate(replay_config.file_list()):
+                cached_data = cache.load_cached(current_file, shaper_config, replay_config)
+                if cached_data is None:
+                    logger.info(f"Cache miss for {current_file}, switching to live processing")
+                    break
 
-    try:
-        async with CoinbaseFeed(
-            config=replay_config,
-            replayer=replayer,
-        ) as feed:
-            if replayer is not None:
-                replayer.skip_n_files(current_file_idx)
-            async for onesec in feed.one_second_iterator():
-                if not live and replayer is not None and replayer.current_file != collector.current_file:
-                    if shaper_config.save_cache:
-                        await collector.cache_arrays(shaper_config, shaper, replay_config)
-                    collector.reset(replayer.current_file)
+                logger.debug(f"Using cached data from {current_file}")
+                books_array, time_levels, prices_array = cached_data
+                end_indexes = range(1, 1 + len(books_array), shaper_config.window_stride)
+                for end_idx in end_indexes:
+                    start = max(0, end_idx - shaper_config.rolling_window_size)
+                    frame = books_array[start:end_idx], time_levels[start:end_idx], prices_array[start:end_idx]
+                    if not shaper_config.only_full_arrays or (
+                        not np.isnan(frame[2]).any() and len(frame[0]) >= shaper_config.rolling_window_size
+                    ):
+                        yield frame
+            else:
+                return  # all files were cache hits
 
-                new_books = onesec.symbols[replay_config.markets[0]]
-                if new_books.no_bbo():
-                    continue
+        try:
+            async with CoinbaseFeed(
+                config=replay_config,
+                replayer=replayer,
+            ) as feed:
+                if replayer is not None:
+                    replayer.skip_n_files(current_file_idx)
+                async for onesec in feed.one_second_iterator():
+                    if not live and replayer is not None and replayer.current_file != collector.current_file:
+                        if shaper_config.save_cache:
+                            await collector.cache_arrays(shaper_config, shaper, replay_config)
+                        collector.reset(replayer.current_file)
 
-                image_col, price_col = await shaper.make_arr3d(new_books)
-                if not collector.add_arrays(image_col, price_col, shaper_config.window_stride):
-                    continue
+                    new_books = onesec.symbols[replay_config.markets[0]]
+                    if new_books.no_bbo():
+                        continue
 
-                if shaper_config.only_full_arrays and not collector.has_full_window(shaper_config.rolling_window_size):
-                    continue
-                window_size = (
-                    shaper_config.rolling_window_size
-                    if shaper_config.only_full_arrays
-                    else min(len(collector.all_books), shaper_config.rolling_window_size)
-                )
+                    image_col, price_col = await shaper.make_arr3d(new_books)
+                    if not collector.add_arrays(image_col, price_col, shaper_config.window_stride):
+                        continue
 
-                window_books, window_prices = collector.get_window(window_size)
-                shaper.prices_array = window_prices
-                window_times = await shaper.build_time_level_trade()
+                    if shaper_config.only_full_arrays and not collector.has_full_window(shaper_config.rolling_window_size):
+                        continue
+                    window_size = (
+                        shaper_config.rolling_window_size
+                        if shaper_config.only_full_arrays
+                        else min(len(collector.all_books), shaper_config.rolling_window_size)
+                    )
 
-                if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
-                    yield window_books, window_times, window_prices
-    finally:
-        # Runs whether the consumer exhausted the generator, broke early, or raised.
-        # The collector holds the full raw arrays for the current file regardless of
-        # how many frames were yielded — so the cache is always warm after first pass.
-        if shaper_config.save_cache and not live and replayer is not None:
-            await collector.cache_arrays(shaper_config, shaper, replay_config)
+                    window_books, window_prices = collector.get_window(window_size)
+                    shaper.prices_array = window_prices
+                    window_times = await shaper.build_time_level_trade()
+
+                    if not shaper_config.only_full_arrays or not np.isnan(window_prices).any():
+                        yield window_books, window_times, window_prices
+        finally:
+            if shaper_config.save_cache and not live and replayer is not None:
+                await collector.cache_arrays(shaper_config, shaper, replay_config)
+
+    base = _raw()
+    if replay_config.randomize:
+        async with aclosing(reservoir_shuffle(base, size=DEFAULT_STREAM_SHUFFLE_SIZE)) as shuffled:
+            async for item in shuffled:
+                yield item
+    else:
+        async with aclosing(base) as chronological:
+            async for item in chronological:
+                yield item
 
 
 # =============================================================================

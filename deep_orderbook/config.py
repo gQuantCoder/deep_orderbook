@@ -1,5 +1,4 @@
 import datetime
-import random
 from pathlib import Path
 from typing import Any, Self
 
@@ -39,11 +38,6 @@ class ReplayConfig(FeedConfig):
     def num_files(self) -> int:
         assert len(self.file_list()) > 0, f"No files found for {self.date_regexp}"
         return len(self.file_list())
-
-    def but_random_file(self) -> Self:
-        list_of_all_files = self.file_list()
-        random_file = random.choice(list_of_all_files)
-        return self.but(one_path=random_file)
 
 
 class ShaperConfig(BaseConfig):
